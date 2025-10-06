@@ -9,7 +9,8 @@ import StorageIcon from "@mui/icons-material/Storage";
 import LanIcon from "@mui/icons-material/Lan";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import FolderIcon from "@mui/icons-material/Folder";
-import { Avatar, Box, Divider, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
+import { Avatar, Divider, List, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
 
 const navigationItems = [
   { label: "Overview", href: "/", icon: <DashboardIcon /> },
@@ -21,76 +22,108 @@ const navigationItems = [
   { label: "File Browser", href: "/files", icon: <FolderIcon /> }
 ];
 
+const SidebarRoot = styled("nav")(({ theme }) => ({
+  width: 280,
+  flexShrink: 0,
+  position: "sticky",
+  top: 0,
+  alignSelf: "flex-start",
+  height: "100vh",
+  padding: theme.spacing(3),
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(2),
+  borderRight: `1px solid ${theme.palette.divider}`,
+  background: theme.palette.mode === "dark"
+    ? "linear-gradient(180deg, #0b1120 0%, #111827 100%)"
+    : theme.palette.background.paper
+}));
+
+const NavList = styled(List)(({ theme }) => ({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(0.5),
+  padding: 0
+}));
+
+const NavItem = styled(ListItemButton)(({ theme }) => ({
+  borderRadius: theme.shape.borderRadius,
+  color: theme.palette.text.secondary,
+  transition: theme.transitions.create(["background-color", "color"], {
+    duration: theme.transitions.duration.shortest
+  }),
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover
+  },
+  '&.Mui-selected': {
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
+    '&:hover': {
+      backgroundColor: theme.palette.primary.main
+    }
+  },
+  '& .MuiListItemIcon-root': {
+    minWidth: theme.spacing(4),
+    color: "inherit"
+  }
+}));
+
+const BrandAvatar = styled(Avatar)(({ theme }) => ({
+  backgroundColor: theme.palette.primary.main
+}));
+
+const Note = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(2),
+  borderRadius: theme.shape.borderRadius * 1.5,
+  backgroundColor: theme.palette.mode === "dark" ? "rgba(148, 163, 184, 0.08)" : theme.palette.background.default
+}));
+
 const Sidebar = () => {
   const pathname = usePathname();
 
   return (
-    <Box
-      component="nav"
-      sx={{
-        width: 280,
-        flexShrink: 0,
-        position: "sticky",
-        top: 0,
-        alignSelf: "flex-start",
-        height: "100vh",
-        background: "linear-gradient(180deg, #0b1120 0%, #111827 100%)",
-        borderRight: "1px solid",
-        borderColor: "divider",
-        p: 3,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2
-      }}
-    >
-      <Box display="flex" alignItems="center" gap={1.5}>
-        <Avatar sx={{ bgcolor: "primary.main" }}>DG</Avatar>
-        <Box>
+    <SidebarRoot>
+      <Stack direction="row" alignItems="center" spacing={1.5}>
+        <BrandAvatar>DG</BrandAvatar>
+        <Stack spacing={0.5}>
           <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
             Docker GUI
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Control Center
           </Typography>
-        </Box>
-      </Box>
-      <Divider flexItem sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
-      <List disablePadding sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+        </Stack>
+      </Stack>
+      <Divider flexItem />
+      <NavList disablePadding>
         {navigationItems.map((item) => {
           const isActive = item.href === "/" ? pathname === item.href : pathname?.startsWith(item.href);
 
           return (
-            <ListItemButton
+            <NavItem
               key={item.href}
               component={Link}
               href={item.href}
-              selected={isActive}
-              sx={{
-                borderRadius: 2,
-                color: isActive ? "primary.contrastText" : "text.secondary",
-                backgroundColor: isActive ? "primary.main" : "transparent",
-                '&:hover': {
-                  backgroundColor: isActive ? "primary.main" : "rgba(148, 163, 184, 0.08)"
-                }
-              }}
+              selected={Boolean(isActive)}
             >
-              <ListItemIcon sx={{ color: isActive ? "primary.contrastText" : "text.secondary" }}>
+              <ListItemIcon>
                 {item.icon}
               </ListItemIcon>
               <ListItemText primary={item.label} />
-            </ListItemButton>
+            </NavItem>
           );
         })}
-      </List>
-      <Box sx={{ p: 2, borderRadius: 3, backgroundColor: "rgba(148, 163, 184, 0.08)" }}>
+      </NavList>
+      <Note variant="outlined">
         <Typography variant="subtitle2" gutterBottom fontWeight={600}>
           Docker Engine
         </Typography>
         <Typography variant="caption" color="text.secondary" display="block">
           Configure your remote Docker Engine address in the settings to start managing resources.
         </Typography>
-      </Box>
-    </Box>
+      </Note>
+    </SidebarRoot>
   );
 };
 

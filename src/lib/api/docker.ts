@@ -1,64 +1,19 @@
 import axios from "axios";
-
-export interface DockerContainer {
-  id: string;
-  name: string;
-  image: string;
-  state: "running" | "exited" | "paused" | "created";
-  status: string;
-  ports: string[];
-  createdAt: string;
-  cpuUsage: number;
-  memoryUsage: number;
-}
-
-export interface DockerImage {
-  id: string;
-  repoTags: string[];
-  size: number;
-  createdAt: string;
-  containers: number;
-}
-
-export interface DockerVolume {
-  name: string;
-  driver: string;
-  mountpoint: string;
-  createdAt: string;
-  size: string;
-}
-
-export interface DockerNetwork {
-  id: string;
-  name: string;
-  driver: string;
-  scope: string;
-  createdAt: string;
-  containers: number;
-}
-
-export interface DockerLogEntry {
-  id: string;
-  containerId: string;
-  timestamp: string;
-  message: string;
-  level: "info" | "warn" | "error";
-}
-
-export interface ContainerFileNode {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  size: number;
-  modifiedAt: string;
-}
+import type {
+  ContainerFileNode,
+  DockerContainer,
+  DockerImage,
+  DockerLogEntry,
+  DockerNetwork,
+  DockerVolume
+} from "@/types/docker";
 
 const dockerApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_DOCKER_API_URL ?? "http://localhost:2375",
-  timeout: 15000
+  baseURL: "/api",
+  timeout: 20000
 });
 
-const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS !== "false";
+const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 
 const mockContainers: DockerContainer[] = [
   {
@@ -100,14 +55,14 @@ const mockImages: DockerImage[] = [
   {
     id: "sha256:123",
     repoTags: ["nginx:1.27"],
-    size: 134217728,
+    size: 134_217_728,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     containers: 2
   },
   {
     id: "sha256:456",
     repoTags: ["node:20-alpine"],
-    size: 256000000,
+    size: 256_000_000,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
     containers: 1
   }
@@ -186,112 +141,214 @@ const mockFiles: ContainerFileNode[] = [
   }
 ];
 
-const withMockFallback = async <T,>(request: () => Promise<T>, mockValue: T): Promise<T> => {
+const withMockFallback = async <T>(request: () => Promise<T>, mockFactory: () => T): Promise<T> => {
   if (useMockData) {
-    return mockValue;
+    return mockFactory();
   }
 
   try {
     return await request();
   } catch (error) {
     console.error("Failed to communicate with Docker API", error);
-    return mockValue;
+    return mockFactory();
   }
 };
 
 export const fetchContainers = async () =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.get<DockerContainer[]>("/containers/json", { params: { all: true } });
-    return data;
-  }, mockContainers);
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.get<DockerContainer[]>("/containers");
+      return data;
+    },
+    () => mockContainers
+  );
 
 export const fetchImages = async () =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.get<DockerImage[]>("/images/json");
-    return data;
-  }, mockImages);
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.get<DockerImage[]>("/images");
+      return data;
+    },
+    () => mockImages
+  );
 
 export const fetchVolumes = async () =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.get<{ Volumes: DockerVolume[] }>("/volumes");
-    return data.Volumes;
-  }, mockVolumes);
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.get<DockerVolume[]>("/volumes");
+      return data;
+    },
+    () => mockVolumes
+  );
 
 export const fetchNetworks = async () =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.get<DockerNetwork[]>("/networks");
-    return data;
-  }, mockNetworks);
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.get<DockerNetwork[]>("/networks");
+      return data;
+    },
+    () => mockNetworks
+  );
 
-export const fetchContainerLogs = async (containerId: string) =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.get<string>(`/containers/${containerId}/logs`, {
-      params: { stdout: true, stderr: true, timestamps: true, tail: 500 }
-    });
+export const fetchContainerLogs = async (
+  containerId: string,
+  options: { tail?: number; since?: string } = {}
+) =>
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
+        params: options
+      });
 
-    return data
-      .split("\n")
-      .filter(Boolean)
-      .map((line, index) => ({
-        id: `${containerId}-log-${index}`,
-        containerId,
-        timestamp: line.slice(0, 30),
-        message: line.slice(31),
-        level: "info" as const
-      }));
-  }, mockLogs.filter((log) => log.containerId === containerId));
+      return data.sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+    },
+    () =>
+      mockLogs
+        .filter((log) => log.containerId === containerId)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  );
 
 export const fetchContainerFiles = async (containerId: string, path = "/") =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.get<ContainerFileNode[]>(`/containers/${containerId}/archive`, {
-      params: { path }
-    });
-    return data;
-  }, mockFiles.map((file) => ({ ...file, path: `${path}${file.name}` })));
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.get<ContainerFileNode[]>(`/containers/${containerId}/files`, {
+        params: { path }
+      });
+      return data;
+    },
+    () =>
+      mockFiles.map((file) => ({
+        ...file,
+        path: `${path === "/" ? "" : path}/${file.name}`.replace(/\/\//g, "/")
+      }))
+  );
 
 export const executeContainerCommand = async (containerId: string, command: string[]) =>
-  withMockFallback(async () => {
-    const { data } = await dockerApi.post<{ Output: string }>(`/containers/${containerId}/exec`, { Cmd: command });
-    return data.Output;
-  }, `Executed ${command.join(" ")} inside ${containerId}`);
+  withMockFallback(
+    async () => {
+      const { data } = await dockerApi.post<{ output: string }>(`/containers/${containerId}/exec`, {
+        command
+      });
 
-export const removeImage = async (imageId: string) =>
-  withMockFallback(async () => {
-    await dockerApi.delete(`/images/${imageId}`);
-    return true;
-  }, true);
+      return data.output;
+    },
+    () => `Executed ${command.join(" ")} inside ${containerId}`
+  );
 
-export const removeContainer = async (containerId: string) =>
-  withMockFallback(async () => {
-    await dockerApi.delete(`/containers/${containerId}`, { params: { force: true } });
-    return true;
-  }, true);
-
-export const pruneVolumes = async () =>
-  withMockFallback(async () => {
-    await dockerApi.post("/volumes/prune");
-    return true;
-  }, true);
-
-export const attachToContainerLogs = (containerId: string, onLog: (log: DockerLogEntry) => void) => {
-  let interval: NodeJS.Timeout | undefined;
-
+export const removeImage = async (imageId: string) => {
   if (useMockData) {
-    interval = setInterval(() => {
-      const nextLog: DockerLogEntry = {
-        id: `live-${Date.now()}`,
+    return true;
+  }
+
+  await dockerApi.delete(`/images/${imageId}`);
+  return true;
+};
+
+export const removeContainer = async (containerId: string) => {
+  if (useMockData) {
+    return true;
+  }
+
+  await dockerApi.delete(`/containers/${containerId}`);
+  return true;
+};
+
+export const pruneVolumes = async () => {
+  if (useMockData) {
+    return true;
+  }
+
+  await dockerApi.post("/volumes/prune");
+  return true;
+};
+
+interface AttachLogOptions {
+  since?: string;
+  intervalMs?: number;
+}
+
+export const attachToContainerLogs = (
+  containerId: string,
+  onLog: (log: DockerLogEntry) => void,
+  options: AttachLogOptions = {}
+) => {
+  if (useMockData) {
+    const interval = setInterval(() => {
+      const log: DockerLogEntry = {
+        id: `mock-${Date.now()}`,
         containerId,
         timestamp: new Date().toISOString(),
         level: "info",
         message: "Heartbeat: container is running"
       };
-      onLog(nextLog);
-    }, 5000);
+      onLog(log);
+    }, options.intervalMs ?? 5000);
+
+    return () => clearInterval(interval);
   }
 
+  let disposed = false;
+  let timer: NodeJS.Timeout | null = null;
+  let lastSeen = options.since ? Date.parse(options.since) : undefined;
+
+  const poll = async () => {
+    if (disposed) {
+      return;
+    }
+
+    try {
+      const params: Record<string, string | number> = {};
+      if (lastSeen) {
+        params.since = new Date(lastSeen).toISOString();
+      }
+
+      const { data } = await dockerApi.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
+        params
+      });
+
+      if (data.length) {
+        const ordered = data.sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+
+        ordered.forEach((log) => {
+          const timestamp = Date.parse(log.timestamp);
+          if (!Number.isFinite(timestamp)) {
+            return;
+          }
+
+          if (!lastSeen || timestamp > lastSeen) {
+            lastSeen = timestamp;
+            onLog(log);
+          }
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to stream logs for ${containerId}`, error);
+    } finally {
+      if (!disposed) {
+        timer = setTimeout(poll, options.intervalMs ?? 4000);
+      }
+    }
+  };
+
+  poll();
+
   return () => {
-    if (interval) {
-      clearInterval(interval);
+    disposed = true;
+    if (timer) {
+      clearTimeout(timer);
     }
   };
 };
+
+export type {
+  DockerContainer,
+  DockerImage,
+  DockerVolume,
+  DockerNetwork,
+  DockerLogEntry,
+  ContainerFileNode
+} from "@/types/docker";

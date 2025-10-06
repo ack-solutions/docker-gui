@@ -1,15 +1,57 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import { Box, Button, Chip, Divider, InputAdornment, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
+import { styled } from "@mui/material/styles";
+import moment from "moment";
+import { Controller, useForm } from "react-hook-form";
 import { useLogs } from "@/features/logs/hooks/useLogs";
 
-dayjs.extend(relativeTime);
+const LogPanel = styled(Paper)(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(2),
+  height: "100%"
+}));
+
+const SearchField = styled(TextField)(({ theme }) => ({
+  minWidth: 220,
+  [theme.breakpoints.down("md")]: {
+    width: "100%"
+  }
+}));
+
+const LevelField = styled(TextField)(({ theme }) => ({
+  minWidth: 180
+}));
+
+const LogViewport = styled(Box)(({ theme }) => ({
+  flex: 1,
+  overflow: "auto",
+  backgroundColor: theme.palette.mode === "dark" ? "rgba(15, 23, 42, 0.6)" : theme.palette.grey[50],
+  borderRadius: theme.shape.borderRadius,
+  padding: theme.spacing(2),
+  maxHeight: 480,
+  border: `1px solid ${theme.palette.divider}`
+}));
+
+const LogLine = styled(Box, {
+  shouldForwardProp: (prop) => prop !== "$level"
+})<{ $level: "info" | "warn" | "error" }>(({ theme, $level }) => {
+  const palette = {
+    error: theme.palette.error.main,
+    warn: theme.palette.warning.main,
+    info: theme.palette.primary.main
+  } as const;
+
+  return {
+    borderLeft: `3px solid ${palette[$level]}`,
+    paddingLeft: theme.spacing(2)
+  };
+});
 
 const logLevels = [
   { label: "All levels", value: "all" },
@@ -24,10 +66,22 @@ interface LogViewerProps {
   containerId: string;
 }
 
+interface LogFilterForm {
+  query: string;
+  level: LogLevel;
+}
+
 const LogViewer = ({ containerId }: LogViewerProps) => {
   const { logs, isStreaming, toggleStreaming, severityCounters } = useLogs({ containerId });
-  const [level, setLevel] = useState<LogLevel>("all");
-  const [query, setQuery] = useState("");
+  const { control, register, watch } = useForm<LogFilterForm>({
+    defaultValues: {
+      query: "",
+      level: "all"
+    }
+  });
+
+  const level = watch("level");
+  const query = watch("query");
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -38,39 +92,41 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
   }, [logs, level, query]);
 
   return (
-    <Paper sx={{ p: 3, borderRadius: 3, display: "flex", flexDirection: "column", gap: 2, height: "100%" }}>
+    <LogPanel>
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="center">
-        <Typography variant="h6" sx={{ flex: 1 }}>
+        <Typography variant="h6" flex={1}>
           Live Logs
         </Typography>
-        <TextField
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+        <SearchField
+          {...register("query")}
           placeholder="Search log output"
           size="small"
-          sx={{ minWidth: 220 }}
         />
-        <TextField
-          select
-          size="small"
-          label="Level"
-          value={level}
-          onChange={(event) => setLevel(event.target.value as LogLevel)}
-          sx={{ minWidth: 180 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <FilterAltIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        >
-          {logLevels.map((option) => (
-            <MenuItem key={option.value} value={option.value}>
-              {option.label}
-            </MenuItem>
-          ))}
-        </TextField>
+        <Controller
+          control={control}
+          name="level"
+          render={({ field }) => (
+            <LevelField
+              select
+              size="small"
+              label="Level"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <FilterAltIcon fontSize="small" />
+                  </InputAdornment>
+                )
+              }}
+              {...field}
+            >
+              {logLevels.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </LevelField>
+          )}
+        />
         <Button
           variant={isStreaming ? "outlined" : "contained"}
           color={isStreaming ? "warning" : "primary"}
@@ -86,37 +142,15 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
         <Chip label={`Errors ${severityCounters.error}`} size="small" color="error" variant="outlined" />
       </Stack>
       <Divider />
-      <Box
-        sx={{
-          flex: 1,
-          overflow: "auto",
-          backgroundColor: "rgba(15, 23, 42, 0.6)",
-          borderRadius: 2,
-          p: 2,
-          maxHeight: 480,
-          border: "1px solid rgba(148, 163, 184, 0.2)"
-        }}
-      >
+      <LogViewport>
         <Stack spacing={1.5}>
           {filteredLogs.map((log) => (
-            <Box
-              key={log.id}
-              sx={{
-                borderLeft: `3px solid ${
-                  log.level === "error"
-                    ? "#f87171"
-                    : log.level === "warn"
-                      ? "#fbbf24"
-                      : "#38bdf8"
-                }`,
-                pl: 2
-              }}
-            >
+            <LogLine key={log.id} $level={log.level}>
               <Typography variant="caption" color="text.secondary">
-                {dayjs(log.timestamp).format("HH:mm:ss")} · {log.level.toUpperCase()}
+                {moment(log.timestamp).format("HH:mm:ss")} · {log.level.toUpperCase()}
               </Typography>
               <Typography variant="body2">{log.message}</Typography>
-            </Box>
+            </LogLine>
           ))}
           {filteredLogs.length === 0 && (
             <Typography variant="body2" color="text.secondary">
@@ -124,8 +158,8 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
             </Typography>
           )}
         </Stack>
-      </Box>
-    </Paper>
+      </LogViewport>
+    </LogPanel>
   );
 };
 

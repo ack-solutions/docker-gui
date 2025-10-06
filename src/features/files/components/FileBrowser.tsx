@@ -3,10 +3,44 @@
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SubdirectoryArrowRightIcon from "@mui/icons-material/SubdirectoryArrowRight";
-import { Breadcrumbs, Button, CircularProgress, Link, List, ListItem, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
+import {
+  Breadcrumbs,
+  Button,
+  CircularProgress,
+  Link,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Paper,
+  Stack,
+  Typography
+} from "@mui/material";
+import { styled } from "@mui/material/styles";
 import { useMemo, useState } from "react";
 import { useFiles } from "@/features/files/hooks/useFiles";
 import { ContainerFileNode } from "@/lib/api/docker";
+
+const BrowserContainer = styled(Paper)(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(2)
+}));
+
+const BreadcrumbLink = styled(Link)({
+  cursor: "pointer"
+});
+
+const FileRow = styled(ListItemButton, {
+  shouldForwardProp: (prop) => prop !== "$isDirectory"
+})<{ $isDirectory: boolean }>(({ theme, $isDirectory }) => ({
+  borderRadius: theme.shape.borderRadius,
+  marginBottom: theme.spacing(1),
+  backgroundColor: $isDirectory ? theme.palette.action.hover : "transparent",
+  "&:hover": {
+    backgroundColor: $isDirectory ? theme.palette.action.selected : theme.palette.action.hover
+  }
+}));
 
 interface FileBrowserProps {
   containerId: string;
@@ -34,25 +68,24 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
   };
 
   return (
-    <Paper sx={{ p: 3, borderRadius: 3, display: "flex", flexDirection: "column", gap: 2 }}>
+    <BrowserContainer>
       <Stack direction={{ xs: "column", md: "row" }} alignItems="center" spacing={2}>
-        <Typography variant="h6" sx={{ flex: 1 }}>
+        <Typography variant="h6" flex={1}>
           File Browser
         </Typography>
         <Breadcrumbs maxItems={4} itemsAfterCollapse={2} separator={<SubdirectoryArrowRightIcon fontSize="small" />}>
-          <Link color="inherit" underline="hover" onClick={() => setPath("/")} sx={{ cursor: "pointer" }}>
+          <BreadcrumbLink color="inherit" underline="hover" onClick={() => setPath("/")}>
             root
-          </Link>
+          </BreadcrumbLink>
           {breadcrumbs.map((crumb) => (
-            <Link
+            <BreadcrumbLink
               key={crumb.path}
               color="inherit"
               underline="hover"
               onClick={() => setPath(crumb.path)}
-              sx={{ cursor: "pointer" }}
             >
               {crumb.label}
-            </Link>
+            </BreadcrumbLink>
           ))}
         </Breadcrumbs>
         <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => setRefreshToken((value) => value + 1)}>
@@ -69,15 +102,11 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
       ) : (
         <List>
           {nodes.map((node) => (
-            <ListItem
+            <FileRow
               key={node.path}
               onClick={() => handleNavigate(node)}
-              sx={{
-                borderRadius: 2,
-                mb: 1,
-                backgroundColor: node.type === "directory" ? "rgba(56, 189, 248, 0.08)" : "transparent",
-                cursor: node.type === "directory" ? "pointer" : "default"
-              }}
+              $isDirectory={node.type === "directory"}
+              disabled={node.type !== "directory"}
             >
               <ListItemIcon>
                 <InsertDriveFileIcon color={node.type === "directory" ? "primary" : "inherit"} />
@@ -86,7 +115,7 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
                 primary={node.name}
                 secondary={`${node.type === "directory" ? "Directory" : "File"} • ${node.size} bytes`}
               />
-            </ListItem>
+            </FileRow>
           ))}
           {nodes.length === 0 && (
             <Typography variant="body2" color="text.secondary">
@@ -95,7 +124,7 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
           )}
         </List>
       )}
-    </Paper>
+    </BrowserContainer>
   );
 };
 

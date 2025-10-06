@@ -3,11 +3,24 @@
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadIcon from "@mui/icons-material/Download";
 import { Button, Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
+import { styled } from "@mui/material/styles";
+import moment from "moment";
 import { useImages } from "@/features/images/hooks/useImages";
 
-dayjs.extend(relativeTime);
+const ImageCard = styled(Paper)(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(3)
+}));
+
+const EmptyState = styled(Paper)(({ theme }) => ({
+  textAlign: "center",
+  padding: theme.spacing(6)
+}));
+
+const ActionButton = styled(Button)({
+  whiteSpace: "nowrap"
+});
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return "0 B";
@@ -33,22 +46,22 @@ const ImageList = () => {
 
   if (!data || data.length === 0) {
     return (
-      <Paper sx={{ p: 6, textAlign: "center" }}>
+      <EmptyState>
         <Typography variant="h6" gutterBottom>
           No images available
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Pull images from registries or build a new image to get started.
         </Typography>
-      </Paper>
+      </EmptyState>
     );
   }
 
   return (
     <Stack spacing={2}>
       {data.map((image) => (
-        <Paper key={image.id} sx={{ p: 3, borderRadius: 3, display: "flex", alignItems: "center", gap: 3 }}>
-          <Stack sx={{ flex: 1 }}>
+        <ImageCard key={image.id}>
+          <Stack flex={1}>
             <Typography variant="subtitle1" fontWeight={600}>
               {image.repoTags.join(", ")}
             </Typography>
@@ -58,22 +71,18 @@ const ImageList = () => {
             <Stack direction="row" spacing={2} mt={1}>
               <Chip label={formatBytes(image.size)} variant="outlined" color="primary" size="small" />
               <Chip label={`Containers: ${image.containers}`} variant="outlined" size="small" />
-              <Chip label={`Created ${dayjs(image.createdAt).fromNow()}`} variant="outlined" size="small" />
+              <Chip label={`Created ${moment(image.createdAt).fromNow()}`} variant="outlined" size="small" />
             </Stack>
           </Stack>
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<DownloadIcon />}
-              sx={{ whiteSpace: "nowrap" }}
-            >
+            <ActionButton variant="outlined" startIcon={<DownloadIcon />}>
               Export
-            </Button>
-            <Button color="error" startIcon={<DeleteOutlineIcon />}
-              sx={{ whiteSpace: "nowrap" }}
-            >
+            </ActionButton>
+            <ActionButton color="error" startIcon={<DeleteOutlineIcon />}>
               Remove
-            </Button>
+            </ActionButton>
           </Stack>
-        </Paper>
+        </ImageCard>
       ))}
     </Stack>
   );

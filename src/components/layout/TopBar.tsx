@@ -4,7 +4,8 @@ import { useState } from "react";
 import SearchIcon from "@mui/icons-material/Search";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
-import { AppBar, Box, IconButton, InputAdornment, TextField, Toolbar, Typography } from "@mui/material";
+import { AppBar, IconButton, InputAdornment, Stack, TextField, Toolbar, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
 
 interface TopBarProps {
   title?: string;
@@ -12,27 +13,33 @@ interface TopBarProps {
   onRefresh?: () => void;
 }
 
+const SearchField = styled(TextField)(({ theme }) => ({
+  minWidth: 280,
+  [theme.breakpoints.down("md")]: {
+    width: "100%"
+  }
+}));
+
 const TopBar = ({ title = "Dashboard", subtitle = "Manage Docker containers, images, networks, and volumes from a unified control plane.", onRefresh }: TopBarProps) => {
   const [query, setQuery] = useState("");
 
   return (
-    <AppBar position="sticky" elevation={0} color="transparent" sx={{ borderBottom: "1px solid", borderColor: "divider" }}>
-      <Toolbar sx={{ gap: 2, minHeight: 80 }}>
-        <Box sx={{ flex: 1 }}>
+    <AppBar position="sticky">
+      <Toolbar>
+        <Stack spacing={0.5} flex={1}>
           <Typography variant="h5" fontWeight={600} gutterBottom>
             {title}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {subtitle}
           </Typography>
-        </Box>
-        <TextField
+        </Stack>
+        <SearchField
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search containers, images, volumes..."
           variant="outlined"
           size="small"
-          sx={{ minWidth: 320 }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">

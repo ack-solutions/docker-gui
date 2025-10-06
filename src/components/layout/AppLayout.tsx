@@ -2,13 +2,33 @@
 
 import { ReactNode, useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { Box, Container } from "@mui/material";
+import { Container } from "@mui/material";
+import { styled } from "@mui/material/styles";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
+
+const Shell = styled("div")(({ theme }) => ({
+  display: "flex",
+  minHeight: "100vh",
+  backgroundColor: theme.palette.background.default
+}));
+
+const MainSection = styled("section")(({ theme }) => ({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  minHeight: "100vh"
+}));
+
+const Content = styled(Container)(({ theme }) => ({
+  flex: 1,
+  display: "flex",
+  flexDirection: "column"
+}));
 
 const AppLayout = ({ children }: AppLayoutProps) => {
   const pathname = usePathname();
@@ -56,21 +76,15 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   }, [pathname]);
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "radial-gradient(circle at top, rgba(56, 189, 248, 0.2), transparent 45%), #0f172a"
-      }}
-    >
+    <Shell>
       <Sidebar />
-      <Box component="section" sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <MainSection>
         <TopBar title={title} subtitle={subtitle} />
-        <Container maxWidth="xl" sx={{ py: 4, flex: 1, display: "flex", flexDirection: "column" }}>
+        <Content component="main">
           {children}
-        </Container>
-      </Box>
-    </Box>
+        </Content>
+      </MainSection>
+    </Shell>
   );
 };
 

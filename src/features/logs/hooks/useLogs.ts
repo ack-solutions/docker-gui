@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DockerLogEntry, attachToContainerLogs, fetchContainerLogs } from "@/lib/api/docker";
 
 export interface UseLogsOptions {
@@ -10,6 +10,7 @@ export interface UseLogsOptions {
 export const useLogs = ({ containerId }: UseLogsOptions) => {
   const [logs, setLogs] = useState<DockerLogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const lastTimestampRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let disposed = false;
@@ -17,6 +18,7 @@ export const useLogs = ({ containerId }: UseLogsOptions) => {
     fetchContainerLogs(containerId).then((data) => {
       if (!disposed) {
         setLogs(data);
+        lastTimestampRef.current = data[0]?.timestamp;
       }
     });
 
@@ -34,9 +36,14 @@ export const useLogs = ({ containerId }: UseLogsOptions) => {
       return;
     }
 
-    const detach = attachToContainerLogs(containerId, (log) => {
-      setLogs((current) => [log, ...current].slice(0, 500));
-    });
+    const detach = attachToContainerLogs(
+      containerId,
+      (log) => {
+        lastTimestampRef.current = log.timestamp;
+        setLogs((current) => [log, ...current].slice(0, 500));
+      },
+      { since: lastTimestampRef.current }
+    );
 
     return detach;
   }, [containerId, isStreaming]);

@@ -3,11 +3,20 @@
 import LanIcon from "@mui/icons-material/Lan";
 import ShieldIcon from "@mui/icons-material/Shield";
 import { Chip, CircularProgress, Grid, Paper, Stack, Typography } from "@mui/material";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
+import { styled } from "@mui/material/styles";
+import moment from "moment";
 import { useNetworks } from "@/features/networks/hooks/useNetworks";
 
-dayjs.extend(relativeTime);
+const NetworkCard = styled(Paper)(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(1.5)
+}));
+
+const EmptyState = styled(Paper)(({ theme }) => ({
+  textAlign: "center",
+  padding: theme.spacing(6)
+}));
 
 const NetworkList = () => {
   const { data, isLoading } = useNetworks();
@@ -25,14 +34,14 @@ const NetworkList = () => {
 
   if (!data || data.length === 0) {
     return (
-      <Paper sx={{ p: 6, textAlign: "center" }}>
+      <EmptyState>
         <Typography variant="h6" gutterBottom>
           No networks discovered
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Create an overlay or bridge network to connect containers securely.
         </Typography>
-      </Paper>
+      </EmptyState>
     );
   }
 
@@ -40,7 +49,7 @@ const NetworkList = () => {
     <Grid container spacing={3}>
       {data.map((network) => (
         <Grid key={network.id} item xs={12} md={6}>
-          <Paper sx={{ p: 3, borderRadius: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <NetworkCard>
             <Stack direction="row" alignItems="center" spacing={1.5}>
               <LanIcon color="primary" />
               <Typography variant="subtitle1" fontWeight={600}>
@@ -58,10 +67,10 @@ const NetworkList = () => {
             <Stack direction="row" alignItems="center" spacing={1}>
               <ShieldIcon fontSize="small" color="secondary" />
               <Typography variant="body2" color="text.secondary">
-                Provisioned {dayjs(network.createdAt).fromNow()}
+                Provisioned {moment(network.createdAt).fromNow()}
               </Typography>
             </Stack>
-          </Paper>
+          </NetworkCard>
         </Grid>
       ))}
     </Grid>
