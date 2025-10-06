@@ -1,0 +1,20 @@
+"use client";
+
+import { Stack, Typography } from "@mui/material";
+import NetworkList from "@/features/networks/components/NetworkList";
+
+const NetworksPage = () => {
+  return (
+    <Stack spacing={3}>
+      <Typography variant="h5" fontWeight={700}>
+        Network Management
+      </Typography>
+      <Typography variant="body1" color="text.secondary">
+        Visualize Docker networks, understand connectivity, and ensure containers communicate securely.
+      </Typography>
+      <NetworkList />
+    </Stack>
+  );
+};
+
+export default NetworksPage;
