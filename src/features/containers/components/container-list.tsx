@@ -5,10 +5,14 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import StopIcon from "@mui/icons-material/Stop";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import TimelineIcon from "@mui/icons-material/Timeline";
-import { Box, Button, Card, CardContent, Chip, CircularProgress, Divider, Grid, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Card, CardContent, Chip, CircularProgress, Divider, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
+import ArticleIcon from "@mui/icons-material/Article";
 import { useContainers } from "@/features/containers/hooks/use-containers";
+import ActionIconButton from "@/components/common/action-icon-button";
+import { useBottomPanel } from "@/components/common/bottom-panel-context";
 
 const UsageBar = styled(LinearProgress)(({ theme }) => ({
   height: 8,
@@ -25,6 +29,7 @@ const EmptyState = styled(Paper)(({ theme }) => ({
 
 const ContainerList = () => {
   const { data, isLoading, isError, error } = useContainers();
+  const { openLogs } = useBottomPanel();
 
   if (isLoading) {
     return (
@@ -64,9 +69,9 @@ const ContainerList = () => {
   }
 
   return (
-    <Grid container spacing={2.5}>
-      {data.map((container) => (
-        <Grid key={container.id} size={{ xs: 12, md: 6, lg: 4 }}>
+      <Grid container spacing={2.5}>
+        {data.map((container) => (
+          <Grid key={container.id} item xs={12} md={6} lg={4}>
           <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
               <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
@@ -114,56 +119,61 @@ const ContainerList = () => {
               <Box 
                 sx={{ 
                   display: "flex", 
-                  flexWrap: "wrap", 
                   gap: 1, 
                   mt: "auto" 
                 }}
               >
-                <Tooltip title="Start">
-                  <span>
-                    <Button
-                      startIcon={<PlayArrowIcon fontSize="small" />}
-                      disabled={container.state === "running"}
+                {container.state !== "running" && (
+                  <Tooltip title="Start container">
+                    <ActionIconButton
+                      color="primary"
                       size="small"
-                      sx={{ minWidth: "auto", flex: "1 1 auto" }}
                     >
-                      Start
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Tooltip title="Stop">
-                  <span>
-                    <Button
-                      startIcon={<StopIcon fontSize="small" />}
-                      color="warning"
-                      disabled={container.state !== "running"}
-                      size="small"
-                      sx={{ minWidth: "auto", flex: "1 1 auto" }}
-                    >
-                      Stop
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Tooltip title="Restart">
-                  <Button 
-                    startIcon={<RestartAltIcon fontSize="small" />} 
-                    color="secondary" 
-                    size="small"
-                    sx={{ minWidth: "auto", flex: "1 1 auto" }}
-                  >
-                    Restart
-                  </Button>
-                </Tooltip>
-                <Tooltip title="Open shell">
-                  <Button 
-                    startIcon={<TerminalIcon fontSize="small" />} 
-                    variant="outlined" 
-                    size="small"
-                    sx={{ minWidth: "auto", flex: "1 1 auto" }}
-                  >
-                    Shell
-                  </Button>
-                </Tooltip>
+                      <PlayArrowIcon fontSize="small" />
+                    </ActionIconButton>
+                  </Tooltip>
+                )}
+                {container.state === "running" && (
+                  <>
+                    <Tooltip title="Stop container">
+                      <ActionIconButton
+                        color="warning"
+                        size="small"
+                      >
+                        <StopIcon fontSize="small" />
+                      </ActionIconButton>
+                    </Tooltip>
+                    <Tooltip title="Restart container">
+                      <ActionIconButton
+                        color="secondary"
+                        size="small"
+                      >
+                        <RestartAltIcon fontSize="small" />
+                      </ActionIconButton>
+                    </Tooltip>
+                    <Tooltip title="Open terminal">
+                      <ActionIconButton
+                        component="a"
+                        href={`/containers/${container.id}/shell`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        color="default"
+                        size="small"
+                      >
+                        <TerminalIcon fontSize="small" />
+                      </ActionIconButton>
+                    </Tooltip>
+                    <Tooltip title="View logs">
+                      <ActionIconButton
+                        color="default"
+                        size="small"
+                        onClick={() => openLogs(container.id, container.name)}
+                      >
+                        <ArticleIcon fontSize="small" />
+                      </ActionIconButton>
+                    </Tooltip>
+                  </>
+                )}
               </Box>
             </CardContent>
           </Card>

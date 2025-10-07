@@ -6,6 +6,8 @@ import { Container } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
+import { BottomPanelProvider } from "@/components/common/bottom-panel-context";
+import BottomPanelWrapper from "@/components/common/bottom-panel-wrapper";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -78,15 +80,18 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   }, [pathname]);
 
   return (
-    <Shell>
-      <Sidebar />
-      <MainSection>
-        <TopBar title={title} subtitle={subtitle} />
-        <Content maxWidth="xl">
-          {children}
-        </Content>
-      </MainSection>
-    </Shell>
+    <BottomPanelProvider>
+      <Shell>
+        <Sidebar />
+        <MainSection>
+          <TopBar title={title} subtitle={subtitle} />
+          <Content maxWidth="xl">
+            {children}
+          </Content>
+        </MainSection>
+        <BottomPanelWrapper />
+      </Shell>
+    </BottomPanelProvider>
   );
 };
 

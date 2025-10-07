@@ -23,17 +23,27 @@ interface ThemeContextProviderProps {
 }
 
 export const ThemeContextProvider = ({ children }: ThemeContextProviderProps) => {
-  const [mode, setMode] = useState<PaletteMode>(() => {
-    if (typeof window !== "undefined") {
-      const savedMode = localStorage.getItem("theme-mode");
-      return (savedMode as PaletteMode) || "dark";
+  const [mode, setMode] = useState<PaletteMode>("dark");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
     }
-    return "dark";
-  });
+
+    const savedMode = localStorage.getItem("theme-mode");
+    if (savedMode === "light" || savedMode === "dark") {
+      setMode(savedMode);
+      return;
+    }
+
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setMode(prefersDark ? "dark" : "light");
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem("theme-mode", mode);
+      document.documentElement.dataset.themeMode = mode;
     }
   }, [mode]);
 
@@ -45,4 +55,3 @@ export const ThemeContextProvider = ({ children }: ThemeContextProviderProps) =>
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };
-

@@ -2,7 +2,7 @@
 
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import { Stack, Typography } from "@mui/material";
-import FileBrowser from "@/features/files/components/file-browser";
+import ContainerFileBrowser from "@/features/files/components/container-file-browser";
 
 const FilesPage = () => {
   return (
@@ -16,7 +16,7 @@ const FilesPage = () => {
       <Typography variant="body1" color="text.secondary">
         Explore files inside your containers, inspect configuration, and download artifacts without leaving the dashboard.
       </Typography>
-      <FileBrowser containerId="1a2b3c" />
+      <ContainerFileBrowser />
     </Stack>
   );
 };
