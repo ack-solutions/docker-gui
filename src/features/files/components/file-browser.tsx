@@ -57,7 +57,7 @@ const splitPath = (path: string) => {
 const FileBrowser = ({ containerId }: FileBrowserProps) => {
   const [path, setPath] = useState("/");
   const [refreshToken, setRefreshToken] = useState(0);
-  const { nodes, isLoading } = useFiles({ containerId, path, refreshToken });
+  const { nodes, isLoading, error } = useFiles({ containerId, path, refreshToken });
 
   const breadcrumbs = useMemo(() => splitPath(path), [path]);
 
@@ -99,6 +99,10 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
             Retrieving directory listing...
           </Typography>
         </Stack>
+      ) : error ? (
+        <Typography variant="body2" color="error">
+          {error.message}
+        </Typography>
       ) : (
         <List>
           {nodes.map((node) => (

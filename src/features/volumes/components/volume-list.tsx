@@ -16,7 +16,7 @@ const EmptyState = styled(Paper)(({ theme }) => ({
 }));
 
 const VolumeList = () => {
-  const { data, isLoading } = useVolumes();
+  const { data, isLoading, isError, error } = useVolumes();
 
   if (isLoading) {
     return (
@@ -26,6 +26,19 @@ const VolumeList = () => {
           Loading volumes from Docker daemon...
         </Typography>
       </Stack>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Unable to load volumes
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {error instanceof Error ? error.message : "Check your Docker connection and try again."}
+        </Typography>
+      </Paper>
     );
   }
 

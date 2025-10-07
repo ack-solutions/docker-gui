@@ -9,7 +9,6 @@ import type {
 } from "@/types/docker";
 
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
-
 const mockContainers: DockerContainer[] = [
   {
     id: "1a2b3c",
@@ -141,12 +140,7 @@ const withMockFallback = async <T>(request: () => Promise<T>, mockFactory: () =>
     return mockFactory();
   }
 
-  try {
-    return await request();
-  } catch (error) {
-    console.error("Failed to communicate with Docker API", error);
-    return mockFactory();
-  }
+  return await request();
 };
 
 export const fetchContainers = async () =>

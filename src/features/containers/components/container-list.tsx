@@ -25,7 +25,7 @@ const EmptyState = styled(Paper)(({ theme }) => ({
 }));
 
 const ContainerList = () => {
-  const { data, isLoading } = useContainers();
+  const { data, isLoading, isError, error } = useContainers();
 
   if (isLoading) {
     return (
@@ -35,6 +35,19 @@ const ContainerList = () => {
           Loading container metadata...
         </Typography>
       </Stack>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Unable to load containers
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {error instanceof Error ? error.message : "Check your Docker connection and try again."}
+        </Typography>
+      </Paper>
     );
   }
 

@@ -20,7 +20,7 @@ const EmptyState = styled(Paper)(({ theme }) => ({
 }));
 
 const NetworkList = () => {
-  const { data, isLoading } = useNetworks();
+  const { data, isLoading, isError, error } = useNetworks();
 
   if (isLoading) {
     return (
@@ -30,6 +30,19 @@ const NetworkList = () => {
           Inspecting Docker networks...
         </Typography>
       </Stack>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Unable to load networks
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {error instanceof Error ? error.message : "Check your Docker connection and try again."}
+        </Typography>
+      </Paper>
     );
   }
 

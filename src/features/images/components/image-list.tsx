@@ -31,7 +31,7 @@ const formatBytes = (bytes: number) => {
 };
 
 const ImageList = () => {
-  const { data, isLoading } = useImages();
+  const { data, isLoading, isError, error } = useImages();
 
   if (isLoading) {
     return (
@@ -41,6 +41,19 @@ const ImageList = () => {
           Fetching image catalog...
         </Typography>
       </Stack>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="subtitle1" gutterBottom>
+          Unable to load images
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {error instanceof Error ? error.message : "Check your Docker connection and try again."}
+        </Typography>
+      </Paper>
     );
   }
 

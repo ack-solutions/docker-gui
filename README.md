@@ -27,14 +27,37 @@ A Next.js + Material UI dashboard for managing Docker resources such as containe
 
    The application will be available at [http://localhost:3000](http://localhost:3000).
 
-3. **Configure Docker Engine API (optional)**
+3. **Configure Docker Engine access (optional)**
 
-   Update the `NEXT_PUBLIC_DOCKER_API_URL` environment variable to point to your Docker daemon. By default, the app uses mocked data so it works out of the box.
+   Duplicate `.env.example` to `.env.local` and tune the flags for your workflow:
 
    ```bash
    cp .env.example .env.local
-   # Edit NEXT_PUBLIC_DOCKER_API_URL and NEXT_PUBLIC_USE_MOCKS as needed
    ```
+
+   - `NEXT_PUBLIC_USE_MOCKS=true` (default) keeps the demo data.
+   - Set `NEXT_PUBLIC_USE_MOCKS=false` to require live Docker responses.
+   - Provide standard Docker variables (`DOCKER_HOST`, `DOCKER_TLS_VERIFY`, `DOCKER_CERT_PATH`, `DOCKER_SOCKET_PATH`) if you connect to a remote daemon or use a non-default socket location.
+
+### Using live Docker data
+
+1. **Start Docker Engine** – ensure Docker Desktop or your daemon is running.
+2. **Expose the socket or TCP endpoint**
+   - Local socket (default): verify `/var/run/docker.sock` exists and is readable.
+     ```bash
+     ls -l /var/run/docker.sock
+     ```
+     On Linux you may need `sudo usermod -aG docker "$USER"` and re-login.
+   - Remote/TCP: set `DOCKER_HOST=tcp://host:2375` and, if TLS is required, `DOCKER_TLS_VERIFY=1` and `DOCKER_CERT_PATH=/path/to/certs`.
+3. **Update `.env.local`** with `NEXT_PUBLIC_USE_MOCKS=false` and any Docker variables described above, then restart `npm run dev`.
+4. **Test connectivity** directly to confirm Docker is reachable:
+   ```bash
+   curl --unix-socket /var/run/docker.sock http://localhost/containers/json
+   # or for TCP endpoints
+   curl http://localhost:2375/containers/json
+   ```
+
+If the dashboard shows a `502 Bad Gateway` message, the server could not reach Docker. Re-check the environment variables, socket permissions, and that the daemon is running.
 
 ## Project Structure
 
