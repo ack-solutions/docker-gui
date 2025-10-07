@@ -5,6 +5,7 @@ import type {
   DockerImage,
   DockerLogEntry,
   DockerNetwork,
+  DockerPruneSummary,
   DockerVolume
 } from "@/types/docker";
 
@@ -97,6 +98,11 @@ const mockNetworks: DockerNetwork[] = [
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString()
   }
 ];
+
+const mockPruneSummary: DockerPruneSummary = {
+  removedCount: 2,
+  reclaimedSpace: 1024 * 1024 * 640
+};
 
 const mockLogs: DockerLogEntry[] = Array.from({ length: 25 }).map((_, index) => ({
   id: `log-${index}`,
@@ -244,14 +250,32 @@ export const removeContainer = async (containerId: string) => {
   return true;
 };
 
-export const pruneVolumes = async () => {
-  if (useMockData) {
-    return true;
-  }
+export const pruneStoppedContainers = async () =>
+  withMockFallback<DockerPruneSummary>(
+    async () => {
+      const { data } = await apiClient.post<DockerPruneSummary>("/containers/prune");
+      return data;
+    },
+    () => mockPruneSummary
+  );
 
-  await apiClient.post("/volumes/prune");
-  return true;
-};
+export const pruneUnusedImages = async () =>
+  withMockFallback<DockerPruneSummary>(
+    async () => {
+      const { data } = await apiClient.post<DockerPruneSummary>("/images/prune");
+      return data;
+    },
+    () => ({ ...mockPruneSummary, removedCount: 3 })
+  );
+
+export const pruneVolumes = async () =>
+  withMockFallback<DockerPruneSummary>(
+    async () => {
+      const { data } = await apiClient.post<DockerPruneSummary>("/volumes/prune");
+      return data;
+    },
+    () => ({ ...mockPruneSummary, removedCount: 1 })
+  );
 
 interface AttachLogOptions {
   since?: string;

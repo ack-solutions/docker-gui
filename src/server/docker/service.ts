@@ -7,6 +7,7 @@ import type {
   DockerImage,
   DockerLogEntry,
   DockerNetwork,
+  DockerPruneSummary,
   DockerVolume
 } from "@/types/docker";
 
@@ -34,6 +35,16 @@ class DockerService {
     const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
     const value = bytes / 1024 ** exponent;
     return `${value.toFixed(value < 10 ? 1 : 0)} ${units[exponent]}`;
+  }
+
+  private static summarizePrune(result: any, key: "ContainersDeleted" | "ImagesDeleted" | "VolumesDeleted") {
+    const removed = Array.isArray(result?.[key]) ? result[key].filter(Boolean).length : 0;
+    const reclaimed = Number.isFinite(result?.SpaceReclaimed) ? Number(result.SpaceReclaimed) : 0;
+
+    return {
+      removedCount: removed,
+      reclaimedSpace: reclaimed
+    } satisfies DockerPruneSummary;
   }
 
   private static calculateCpu(stats: any) {
@@ -306,8 +317,27 @@ class DockerService {
     await this.client.getContainer(containerId).remove({ force: true });
   }
 
-  async pruneDanglingVolumes() {
-    await this.client.pruneVolumes();
+  async pruneStoppedContainers(): Promise<DockerPruneSummary> {
+    const result = await this.client.pruneContainers({ filters: { status: { exited: true } } });
+    return DockerService.summarizePrune(result, "ContainersDeleted");
+  }
+
+  async pruneUnusedImages(): Promise<DockerPruneSummary> {
+    const result = await this.client.pruneImages({ filters: { dangling: { "true": true } } });
+    const removed = Array.isArray(result?.ImagesDeleted)
+      ? result.ImagesDeleted.filter(Boolean).length
+      : 0;
+    const reclaimed = Number.isFinite(result?.SpaceReclaimed) ? Number(result.SpaceReclaimed) : 0;
+
+    return {
+      removedCount: removed,
+      reclaimedSpace: reclaimed
+    } satisfies DockerPruneSummary;
+  }
+
+  async pruneDanglingVolumes(): Promise<DockerPruneSummary> {
+    const result = await this.client.pruneVolumes();
+    return DockerService.summarizePrune(result, "VolumesDeleted");
   }
 }
 

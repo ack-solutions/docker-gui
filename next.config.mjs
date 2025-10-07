@@ -3,6 +3,7 @@ const externalModules = ["better-sqlite3", "dockerode", "ssh2"];
 
 const nextConfig = {
   reactStrictMode: true,
+  output: "standalone",
   webpack: (config, { isServer }) => {
     if (isServer) {
       if (typeof config.externals === "function") {

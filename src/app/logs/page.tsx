@@ -5,10 +5,18 @@ import TerminalIcon from "@mui/icons-material/Terminal";
 import { MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import LogViewer from "@/features/logs/components/log-viewer";
 import { useContainers } from "@/features/containers/hooks/use-containers";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const LogsPage = () => {
   const { data: containers } = useContainers();
-  const defaultContainerId = useMemo(() => containers?.[0]?.id ?? "1a2b3c", [containers]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const containerFromQuery = searchParams.get("containerId");
+  const defaultContainerId = useMemo(
+    () => containerFromQuery ?? containers?.[0]?.id ?? "1a2b3c",
+    [containerFromQuery, containers]
+  );
   const [selectedContainer, setSelectedContainer] = useState(defaultContainerId);
 
   useEffect(() => {
@@ -17,6 +25,10 @@ const LogsPage = () => {
 
   const handleChange = (value: string) => {
     setSelectedContainer(value);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("containerId", value);
+    const query = nextParams.toString();
+    router.replace(query ? `/logs?${query}` : "/logs", { scroll: false });
   };
 
   return (

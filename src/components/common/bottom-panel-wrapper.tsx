@@ -6,7 +6,7 @@ import TerminalPanel from "./terminal-panel";
 import LogsPanel from "./logs-panel";
 
 export const BottomPanelWrapper = () => {
-  const { tabs, activeTabId, isOpen, closePanel, setActiveTab } = useBottomPanel();
+  const { tabs, activeTabId, isOpen, closePanel, setActiveTab, closeTab } = useBottomPanel();
 
   if (!isOpen) return null;
 
@@ -17,7 +17,8 @@ export const BottomPanelWrapper = () => {
       <TerminalPanel containerId={tab.containerId} containerName={tab.containerName} />
     ) : (
       <LogsPanel containerId={tab.containerId} containerName={tab.containerName} />
-    )
+    ),
+    onClose: () => closeTab(tab.id)
   }));
 
   return (

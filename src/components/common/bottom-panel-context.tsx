@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useState } from "react";
 
 interface PanelTab {
   id: string;
@@ -39,13 +39,13 @@ export const BottomPanelProvider = ({ children }: BottomPanelProviderProps) => {
   const [tabs, setTabs] = useState<PanelTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
-  const openTerminal = (containerId: string, containerName: string) => {
+  const openTerminal = useCallback((containerId: string, containerName: string) => {
     const tabId = `terminal-${containerId}`;
-    const existingTab = tabs.find((tab) => tab.id === tabId);
+    setTabs((current) => {
+      if (current.some((tab) => tab.id === tabId)) {
+        return current;
+      }
 
-    if (existingTab) {
-      setActiveTabId(tabId);
-    } else {
       const newTab: PanelTab = {
         id: tabId,
         label: `${containerName} - Terminal`,
@@ -53,18 +53,19 @@ export const BottomPanelProvider = ({ children }: BottomPanelProviderProps) => {
         containerId,
         containerName
       };
-      setTabs([...tabs, newTab]);
-      setActiveTabId(tabId);
-    }
-  };
 
-  const openLogs = (containerId: string, containerName: string) => {
+      return [...current, newTab];
+    });
+    setActiveTabId(tabId);
+  }, []);
+
+  const openLogs = useCallback((containerId: string, containerName: string) => {
     const tabId = `logs-${containerId}`;
-    const existingTab = tabs.find((tab) => tab.id === tabId);
+    setTabs((current) => {
+      if (current.some((tab) => tab.id === tabId)) {
+        return current;
+      }
 
-    if (existingTab) {
-      setActiveTabId(tabId);
-    } else {
       const newTab: PanelTab = {
         id: tabId,
         label: `${containerName} - Logs`,
@@ -72,28 +73,34 @@ export const BottomPanelProvider = ({ children }: BottomPanelProviderProps) => {
         containerId,
         containerName
       };
-      setTabs([...tabs, newTab]);
-      setActiveTabId(tabId);
-    }
-  };
 
-  const closeTab = (tabId: string) => {
-    const newTabs = tabs.filter((tab) => tab.id !== tabId);
-    setTabs(newTabs);
-    
-    if (activeTabId === tabId) {
-      setActiveTabId(newTabs.length > 0 ? newTabs[0].id : null);
-    }
-  };
+      return [...current, newTab];
+    });
+    setActiveTabId(tabId);
+  }, []);
 
-  const closePanel = () => {
+  const closeTab = useCallback((tabId: string) => {
+    let nextTabs: PanelTab[] = [];
+    setTabs((current) => {
+      nextTabs = current.filter((tab) => tab.id !== tabId);
+      return nextTabs;
+    });
+    setActiveTabId((current) => {
+      if (current === tabId) {
+        return nextTabs[0]?.id ?? null;
+      }
+      return current;
+    });
+  }, []);
+
+  const closePanel = useCallback(() => {
     setTabs([]);
     setActiveTabId(null);
-  };
+  }, []);
 
-  const setActiveTab = (tabId: string) => {
+  const setActiveTab = useCallback((tabId: string) => {
     setActiveTabId(tabId);
-  };
+  }, []);
 
   const value = {
     tabs,

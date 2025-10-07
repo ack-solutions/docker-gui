@@ -5,10 +5,10 @@ export const runtime = "nodejs";
 
 export async function POST() {
   try {
-    const summary = await dockerService.pruneDanglingVolumes();
+    const summary = await dockerService.pruneUnusedImages();
     return NextResponse.json(summary);
   } catch (error) {
-    console.error("Failed to prune volumes", error);
-    return NextResponse.json({ message: "Unable to prune volumes." }, { status: 500 });
+    console.error("Failed to prune images", error);
+    return NextResponse.json({ message: "Unable to prune images." }, { status: 500 });
   }
 }

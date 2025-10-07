@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import CloseIcon from "@mui/icons-material/Close";
 import MinimizeIcon from "@mui/icons-material/Minimize";
 import MaximizeIcon from "@mui/icons-material/Maximize";
@@ -64,6 +64,17 @@ export const BottomPanel = ({ tabs, activeTabId, onTabChange, onClose }: BottomP
   const [isMinimized, setIsMinimized] = useState(false);
   const [currentTabId, setCurrentTabId] = useState(activeTabId || tabs[0]?.id);
 
+  useEffect(() => {
+    if (activeTabId && activeTabId !== currentTabId) {
+      setCurrentTabId(activeTabId);
+      return;
+    }
+
+    if (!activeTabId && tabs.length > 0 && !tabs.find((tab) => tab.id === currentTabId)) {
+      setCurrentTabId(tabs[0].id);
+    }
+  }, [activeTabId, currentTabId, tabs]);
+
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
     setCurrentTabId(newValue);
     onTabChange?.(newValue);
@@ -92,7 +103,25 @@ export const BottomPanel = ({ tabs, activeTabId, onTabChange, onClose }: BottomP
           {tabs.map((tab) => (
             <Tab
               key={tab.id}
-              label={tab.label}
+              label={
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ textTransform: "none" }}>
+                  <Typography variant="body2" sx={{ textTransform: "none" }}>
+                    {tab.label}
+                  </Typography>
+                  {tab.onClose && (
+                    <IconButton
+                      size="small"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        tab.onClose?.();
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  )}
+                </Stack>
+              }
               value={tab.id}
               sx={{ minHeight: 48 }}
             />

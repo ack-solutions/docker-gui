@@ -4,7 +4,7 @@ import { ReactNode, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { Container } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import Sidebar from "@/components/layout/sidebar";
+import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/top-bar";
 import { BottomPanelProvider } from "@/components/common/bottom-panel-context";
 import BottomPanelWrapper from "@/components/common/bottom-panel-wrapper";

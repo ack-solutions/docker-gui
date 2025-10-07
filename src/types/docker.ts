@@ -50,3 +50,8 @@ export interface ContainerFileNode {
   size: number;
   modifiedAt: string;
 }
+
+export interface DockerPruneSummary {
+  removedCount: number;
+  reclaimedSpace: number;
+}
