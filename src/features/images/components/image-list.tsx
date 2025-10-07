@@ -62,7 +62,7 @@ const ImageList = () => {
       {data.map((image) => (
         <ImageCard key={image.id}>
           <Stack flex={1}>
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="subtitle1">
               {image.repoTags.join(", ")}
             </Typography>
             <Typography variant="caption" color="text.secondary">

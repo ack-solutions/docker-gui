@@ -6,7 +6,7 @@ import ImageList from "@/features/images/components/image-list";
 const ImagesPage = () => {
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" fontWeight={700}>
+      <Typography variant="h5">
         Image Management
       </Typography>
       <Typography variant="body1" color="text.secondary">

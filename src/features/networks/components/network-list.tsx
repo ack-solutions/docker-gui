@@ -53,7 +53,7 @@ const NetworkList = () => {
           <NetworkCard>
             <Stack direction="row" alignItems="center" spacing={1.5}>
               <LanIcon color="primary" />
-              <Typography variant="subtitle1" fontWeight={600}>
+              <Typography variant="subtitle1">
                 {network.name}
               </Typography>
             </Stack>

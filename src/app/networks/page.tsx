@@ -6,7 +6,7 @@ import NetworkList from "@/features/networks/components/network-list";
 const NetworksPage = () => {
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" fontWeight={700}>
+      <Typography variant="h5">
         Network Management
       </Typography>
       <Typography variant="body1" color="text.secondary">

@@ -21,9 +21,9 @@ const LogsPage = () => {
 
   return (
     <Stack spacing={3}>
-      <Stack direction="row" spacing={2} alignItems="center">
+      <Stack direction="row" spacing={1.5} alignItems="center">
         <TerminalIcon color="primary" />
-        <Typography variant="h5" fontWeight={700}>
+        <Typography variant="h5">
           Container Logs & Debugging
         </Typography>
       </Stack>

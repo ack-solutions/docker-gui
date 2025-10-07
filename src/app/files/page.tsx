@@ -7,9 +7,9 @@ import FileBrowser from "@/features/files/components/file-browser";
 const FilesPage = () => {
   return (
     <Stack spacing={3}>
-      <Stack direction="row" spacing={2} alignItems="center">
+      <Stack direction="row" spacing={1.5} alignItems="center">
         <FolderOpenIcon color="primary" />
-        <Typography variant="h5" fontWeight={700}>
+        <Typography variant="h5">
           Container File Browser
         </Typography>
       </Stack>

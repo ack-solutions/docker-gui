@@ -5,18 +5,11 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import StopIcon from "@mui/icons-material/Stop";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import TimelineIcon from "@mui/icons-material/Timeline";
-import { Box, Button, Chip, CircularProgress, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, Divider, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import Grid from "@mui/material/GridLegacy";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
 import { useContainers } from "@/features/containers/hooks/use-containers";
-
-const ContainerCard = styled(Paper)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  gap: theme.spacing(2),
-  height: "100%"
-}));
 
 const UsageBar = styled(LinearProgress)(({ theme }) => ({
   height: 8,
@@ -59,13 +52,13 @@ const ContainerList = () => {
   }
 
   return (
-    <Grid container spacing={3}>
+    <Grid container spacing={2.5}>
       {data.map((container) => (
         <Grid key={container.id} item xs={12} md={6} lg={4}>
-          <ContainerCard>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Paper sx={{ display: "flex", flexDirection: "column", gap: 2, height: "100%" }}>
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
               <Box>
-                <Typography variant="subtitle1" fontWeight={600}>
+                <Typography variant="subtitle1">
                   {container.name}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -73,27 +66,28 @@ const ContainerList = () => {
                 </Typography>
               </Box>
               <Chip
+                size="small"
                 label={container.state === "running" ? "Running" : "Stopped"}
                 color={container.state === "running" ? "success" : "default"}
-                variant={container.state === "running" ? "filled" : "outlined"}
               />
             </Stack>
-            <Stack spacing={1}>
+            <Stack spacing={0.75}>
               <Typography variant="body2" color="text.secondary">
-                Image: {container.image}
+                Image · {container.image}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Ports: {container.ports.length > 0 ? container.ports.join(", ") : "None"}
+                Ports · {container.ports.length > 0 ? container.ports.join(", ") : "None"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Status: {container.status} · created {moment(container.createdAt).fromNow()}
+                {container.status} · created {moment(container.createdAt).fromNow()}
               </Typography>
             </Stack>
-            <Stack spacing={1.5}>
+            <Divider flexItem light />
+            <Stack spacing={1.25}>
               <Stack direction="row" alignItems="center" spacing={1}>
                 <TimelineIcon fontSize="small" color="primary" />
                 <Typography variant="caption" color="text.secondary">
-                  CPU Usage
+                  CPU usage
                 </Typography>
               </Stack>
               <UsageBar variant="determinate" value={Math.min(container.cpuUsage, 100)} />
@@ -107,30 +101,39 @@ const ContainerList = () => {
             <Stack direction="row" spacing={1} mt="auto">
               <Tooltip title="Start">
                 <span>
-                  <Button startIcon={<PlayArrowIcon />} disabled={container.state === "running"}>
+                  <Button
+                    startIcon={<PlayArrowIcon fontSize="small" />}
+                    disabled={container.state === "running"}
+                    size="small"
+                  >
                     Start
                   </Button>
                 </span>
               </Tooltip>
               <Tooltip title="Stop">
                 <span>
-                  <Button startIcon={<StopIcon />} color="warning" disabled={container.state !== "running"}>
+                  <Button
+                    startIcon={<StopIcon fontSize="small" />}
+                    color="warning"
+                    disabled={container.state !== "running"}
+                    size="small"
+                  >
                     Stop
                   </Button>
                 </span>
               </Tooltip>
               <Tooltip title="Restart">
-                <Button startIcon={<RestartAltIcon />} color="secondary">
+                <Button startIcon={<RestartAltIcon fontSize="small" />} color="secondary" size="small">
                   Restart
                 </Button>
               </Tooltip>
               <Tooltip title="Open shell">
-                <Button startIcon={<TerminalIcon />} variant="outlined">
+                <Button startIcon={<TerminalIcon fontSize="small" />} variant="outlined" size="small">
                   Shell
                 </Button>
               </Tooltip>
             </Stack>
-          </ContainerCard>
+          </Paper>
         </Grid>
       ))}
     </Grid>

@@ -23,13 +23,13 @@ const navigationItems = [
 ];
 
 const SidebarRoot = styled("nav")(({ theme }) => ({
-  width: 280,
+  width: 240,
   flexShrink: 0,
   position: "sticky",
   top: 0,
   alignSelf: "flex-start",
   height: "100vh",
-  padding: theme.spacing(3),
+  padding: theme.spacing(2.5),
   display: "flex",
   flexDirection: "column",
   gap: theme.spacing(2),
@@ -70,7 +70,10 @@ const NavItem = styled(ListItemButton)<ListItemButtonProps>(({ theme }) => ({
 }));
 
 const BrandAvatar = styled(Avatar)(({ theme }) => ({
-  backgroundColor: theme.palette.primary.main
+  backgroundColor: theme.palette.primary.main,
+  width: 40,
+  height: 40,
+  fontSize: theme.typography.pxToRem(16)
 }));
 
 const Note = styled(Paper)(({ theme }) => ({
@@ -91,7 +94,7 @@ const Sidebar = () => {
       <Stack direction="row" alignItems="center" spacing={1.5}>
         <BrandAvatar>DG</BrandAvatar>
         <Stack spacing={0.5}>
-          <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+          <Typography variant="subtitle1">
             Docker GUI
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -119,7 +122,7 @@ const Sidebar = () => {
         })}
       </NavList>
       <Note variant="outlined">
-        <Typography variant="subtitle2" gutterBottom fontWeight={600}>
+        <Typography variant="subtitle2" gutterBottom>
           Docker Engine
         </Typography>
         <Typography variant="caption" color="text.secondary" display="block">

@@ -14,7 +14,7 @@ interface TopBarProps {
 }
 
 const SearchField = styled(TextField)(({ theme }) => ({
-  minWidth: 280,
+  minWidth: 220,
   [theme.breakpoints.down("md")]: {
     width: "100%"
   }
@@ -26,34 +26,36 @@ const TopBar = ({ title = "Dashboard", subtitle = "Manage Docker containers, ima
   return (
     <AppBar position="sticky">
       <Toolbar>
-        <Stack spacing={0.5} flex={1}>
-          <Typography variant="h5" fontWeight={600} gutterBottom>
+        <Stack spacing={0.25} flex={1}>
+          <Typography variant="h6">
             {title}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" noWrap>
             {subtitle}
           </Typography>
         </Stack>
-        <SearchField
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search containers, images, volumes..."
-          variant="outlined"
-          size="small"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-        />
-        <IconButton color="inherit" onClick={onRefresh} aria-label="Refresh data">
-          <RefreshIcon />
-        </IconButton>
-        <IconButton color="inherit" aria-label="Notifications">
-          <NotificationsNoneIcon />
-        </IconButton>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <SearchField
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search containers, images, volumes..."
+            variant="outlined"
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              )
+            }}
+          />
+          <IconButton color="inherit" onClick={onRefresh} aria-label="Refresh data" size="small">
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+          <IconButton color="inherit" aria-label="Notifications" size="small">
+            <NotificationsNoneIcon fontSize="small" />
+          </IconButton>
+        </Stack>
       </Toolbar>
     </AppBar>
   );

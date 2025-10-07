@@ -6,7 +6,7 @@ import ContainerList from "@/features/containers/components/container-list";
 const ContainersPage = () => {
   return (
     <Stack spacing={3}>
-      <Typography variant="h5" fontWeight={700}>
+      <Typography variant="h5">
         Container Management
       </Typography>
       <Typography variant="body1" color="text.secondary">
