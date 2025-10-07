@@ -13,7 +13,9 @@ const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 const mockContainers: DockerContainer[] = [
   {
     id: "1a2b3c",
-    name: "web-frontend",
+    name: "demo-web-1",
+    project: "demo",
+    service: "web",
     image: "nginx:1.27",
     state: "running",
     status: "Up 3 hours",
@@ -24,7 +26,9 @@ const mockContainers: DockerContainer[] = [
   },
   {
     id: "4d5e6f",
-    name: "api-gateway",
+    name: "demo-api-1",
+    project: "demo",
+    service: "api",
     image: "node:20-alpine",
     state: "running",
     status: "Up 47 minutes",
@@ -36,6 +40,8 @@ const mockContainers: DockerContainer[] = [
   {
     id: "7g8h9i",
     name: "postgresql",
+    project: null,
+    service: null,
     image: "postgres:16",
     state: "exited",
     status: "Exited (0) 2 hours ago",
@@ -247,6 +253,33 @@ export const removeContainer = async (containerId: string) => {
   }
 
   await apiClient.delete(`/containers/${containerId}`);
+  return true;
+};
+
+export const startContainer = async (containerId: string) => {
+  if (useMockData) {
+    return true;
+  }
+
+  await apiClient.post(`/containers/${containerId}/start`);
+  return true;
+};
+
+export const stopContainer = async (containerId: string) => {
+  if (useMockData) {
+    return true;
+  }
+
+  await apiClient.post(`/containers/${containerId}/stop`);
+  return true;
+};
+
+export const restartContainer = async (containerId: string) => {
+  if (useMockData) {
+    return true;
+  }
+
+  await apiClient.post(`/containers/${containerId}/restart`);
   return true;
 };
 

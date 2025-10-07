@@ -147,9 +147,18 @@ class DockerService {
             : `${port.PrivatePort}/${port.Type}`
         );
 
+        const labels = container.Labels ?? {};
+        const composeProject = labels["com.docker.compose.project"];
+        const stackNamespace = labels["com.docker.stack.namespace"];
+        const project = composeProject || stackNamespace || null;
+        const service =
+          labels["com.docker.compose.service"] || labels["com.docker.swarm.service.name"] || null;
+
         return {
           id: container.Id,
           name: container.Names?.[0]?.replace(/^\//, "") ?? container.Id,
+          project,
+          service,
           image: container.Image,
           state: (container.State ?? "running") as DockerContainer["state"],
           status: container.Status ?? container.State ?? "Unknown",
@@ -315,6 +324,18 @@ class DockerService {
 
   async removeContainer(containerId: string) {
     await this.client.getContainer(containerId).remove({ force: true });
+  }
+
+  async startContainer(containerId: string) {
+    await this.client.getContainer(containerId).start();
+  }
+
+  async stopContainer(containerId: string) {
+    await this.client.getContainer(containerId).stop();
+  }
+
+  async restartContainer(containerId: string) {
+    await this.client.getContainer(containerId).restart();
   }
 
   async pruneStoppedContainers(): Promise<DockerPruneSummary> {

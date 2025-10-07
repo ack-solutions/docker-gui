@@ -1,6 +1,8 @@
 export interface DockerContainer {
   id: string;
   name: string;
+  project?: string | null;
+  service?: string | null;
   image: string;
   state: "running" | "exited" | "paused" | "created" | "restarting" | "removing" | "dead";
   status: string;

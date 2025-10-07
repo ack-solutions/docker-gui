@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ArticleIcon from "@mui/icons-material/Article";
 import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -12,8 +13,9 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import StopIcon from "@mui/icons-material/Stop";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import ViewListIcon from "@mui/icons-material/ViewList";
+import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -27,12 +29,18 @@ import {
   Menu,
   MenuItem,
   Paper,
-  Snackbar,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography
 } from "@mui/material";
-import type { AlertColor } from "@mui/material/Alert";
+import { toast } from "sonner";
 import Grid from "@mui/material/Grid";
 import { styled } from "@mui/material/styles";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,7 +49,14 @@ import { containerQueryKeys, useContainers } from "@/features/containers/hooks/u
 import { imageQueryKeys } from "@/features/images/hooks/use-images";
 import ActionIconButton from "@/components/common/action-icon-button";
 import { useBottomPanel } from "@/components/common/bottom-panel-context";
-import { pruneStoppedContainers, pruneUnusedImages, removeContainer } from "@/lib/api/docker";
+import { pruneStoppedContainers, pruneUnusedImages, removeContainer, startContainer, stopContainer, restartContainer } from "@/lib/api/docker";
+import type { DockerContainer } from "@/types/docker";
+import ContainerCard from "./container-card";
+import ContainerGroupActions from "./container-group-actions";
+import ContainerTableRow from "./container-table-row";
+import ContainerContextMenu from "./container-context-menu";
+import ContainerMaintenancePanel from "./container-maintenance-panel";
+import { useGroupedContainers } from "../hooks/use-grouped-containers";
 
 const UsageBar = styled(LinearProgress)(({ theme }) => ({
   height: 8,
@@ -72,7 +87,7 @@ const ContainerList = () => {
   const { openLogs, openTerminal } = useBottomPanel();
   const queryClient = useQueryClient();
   const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
-  const [feedback, setFeedback] = useState<{ message: string; severity: AlertColor } | null>(null);
+  const [loadingContainerId, setLoadingContainerId] = useState<string | null>(null);
 
   const handleMenuOpen = (containerId: string, anchor: HTMLElement) => {
     setMenuAnchor({ id: containerId, anchor });
@@ -82,22 +97,18 @@ const ContainerList = () => {
     setMenuAnchor(null);
   }, []);
 
-  const handleFeedbackClose = () => {
-    setFeedback(null);
-  };
-
   const removeContainerMutation = useMutation({
     mutationFn: async ({ id }: { id: string; name: string }) => removeContainer(id),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
-      setFeedback({ message: `Removed container ${variables.name}`, severity: "success" });
+      toast.success(`Removed container ${variables.name}`);
     },
     onError: (mutationError, variables) => {
       const message =
         mutationError instanceof Error
           ? mutationError.message
           : `Unable to remove container ${variables.name}`;
-      setFeedback({ message, severity: "error" });
+      toast.error(message);
     }
   });
 
@@ -105,19 +116,17 @@ const ContainerList = () => {
     mutationFn: pruneStoppedContainers,
     onSuccess: (summary) => {
       queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
-      setFeedback({
-        message: summary.removedCount
-          ? `Removed ${summary.removedCount} stopped container${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
-          : "No stopped containers to remove.",
-        severity: "success"
-      });
+      const message = summary.removedCount
+        ? `Removed ${summary.removedCount} stopped container${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
+        : "No stopped containers to remove.";
+      toast.success(message);
     },
     onError: (mutationError) => {
       const message =
         mutationError instanceof Error
           ? mutationError.message
           : "Unable to remove stopped containers.";
-      setFeedback({ message, severity: "error" });
+      toast.error(message);
     }
   });
 
@@ -125,19 +134,38 @@ const ContainerList = () => {
     mutationFn: pruneUnusedImages,
     onSuccess: (summary) => {
       queryClient.invalidateQueries({ queryKey: imageQueryKeys.all });
-      setFeedback({
-        message: summary.removedCount
-          ? `Removed ${summary.removedCount} unused image${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
-          : "No unused images to clean up.",
-        severity: "success"
-      });
+      const message = summary.removedCount
+        ? `Removed ${summary.removedCount} unused image${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
+        : "No unused images to clean up.";
+      toast.success(message);
     },
     onError: (mutationError) => {
       const message =
         mutationError instanceof Error
           ? mutationError.message
           : "Unable to remove unused images.";
-      setFeedback({ message, severity: "error" });
+      toast.error(message);
+    }
+  });
+
+  const startContainerMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; name: string }) => startContainer(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
+    }
+  });
+
+  const stopContainerMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; name: string }) => stopContainer(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
+    }
+  });
+
+  const restartContainerMutation = useMutation({
+    mutationFn: async ({ id }: { id: string; name: string }) => restartContainer(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
     }
   });
 
@@ -152,6 +180,152 @@ const ContainerList = () => {
 
     handleMenuClose();
     removeContainerMutation.mutate({ id: containerId, name: containerName });
+  };
+
+  const handleStartContainer = async (containerId: string, containerName: string) => {
+    setLoadingContainerId(containerId);
+    try {
+      await toast.promise(
+        startContainerMutation.mutateAsync({ id: containerId, name: containerName }),
+        {
+          loading: `Starting ${containerName}...`,
+          success: `Started ${containerName}`,
+          error: (error) => error instanceof Error ? error.message : `Unable to start ${containerName}`
+        }
+      );
+    } finally {
+      setLoadingContainerId(null);
+    }
+  };
+
+  const handleStopContainer = async (containerId: string, containerName: string) => {
+    setLoadingContainerId(containerId);
+    try {
+      await toast.promise(
+        stopContainerMutation.mutateAsync({ id: containerId, name: containerName }),
+        {
+          loading: `Stopping ${containerName}...`,
+          success: `Stopped ${containerName}`,
+          error: (error) => error instanceof Error ? error.message : `Unable to stop ${containerName}`
+        }
+      );
+    } finally {
+      setLoadingContainerId(null);
+    }
+  };
+
+  const handleRestartContainer = async (containerId: string, containerName: string) => {
+    setLoadingContainerId(containerId);
+    try {
+      await toast.promise(
+        restartContainerMutation.mutateAsync({ id: containerId, name: containerName }),
+        {
+          loading: `Restarting ${containerName}...`,
+          success: `Restarted ${containerName}`,
+          error: (error) => error instanceof Error ? error.message : `Unable to restart ${containerName}`
+        }
+      );
+    } finally {
+      setLoadingContainerId(null);
+    }
+  };
+
+  // Group-level actions
+  const handleGroupStart = async (containers: DockerContainer[]) => {
+    const stoppedContainers = containers.filter(c => c.state !== "running");
+    if (stoppedContainers.length === 0) {
+      toast.info("All containers are already running");
+      return;
+    }
+
+    const toastId = toast.loading(`Starting ${stoppedContainers.length} container${stoppedContainers.length > 1 ? "s" : ""}...`);
+    
+    try {
+      await Promise.all(
+        stoppedContainers.map(container => 
+          startContainer(container.id)
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
+      toast.success(`Started ${stoppedContainers.length} container${stoppedContainers.length > 1 ? "s" : ""}`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to start containers", { id: toastId });
+    }
+  };
+
+  const handleGroupStop = async (containers: DockerContainer[]) => {
+    const runningContainers = containers.filter(c => c.state === "running");
+    if (runningContainers.length === 0) {
+      toast.info("All containers are already stopped");
+      return;
+    }
+
+    const toastId = toast.loading(`Stopping ${runningContainers.length} container${runningContainers.length > 1 ? "s" : ""}...`);
+    
+    try {
+      await Promise.all(
+        runningContainers.map(container => 
+          stopContainer(container.id)
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
+      toast.success(`Stopped ${runningContainers.length} container${runningContainers.length > 1 ? "s" : ""}`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to stop containers", { id: toastId });
+    }
+  };
+
+  const handleGroupRestart = async (containers: DockerContainer[]) => {
+    const runningContainers = containers.filter(c => c.state === "running");
+    if (runningContainers.length === 0) {
+      toast.info("No running containers to restart");
+      return;
+    }
+
+    const toastId = toast.loading(`Restarting ${runningContainers.length} container${runningContainers.length > 1 ? "s" : ""}...`);
+    
+    try {
+      await Promise.all(
+        runningContainers.map(container => 
+          restartContainer(container.id)
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
+      toast.success(`Restarted ${runningContainers.length} container${runningContainers.length > 1 ? "s" : ""}`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to restart containers", { id: toastId });
+    }
+  };
+
+  const handleGroupDelete = async (containers: DockerContainer[], groupName: string) => {
+    const confirmed = window.confirm(
+      `Delete all ${containers.length} container${containers.length > 1 ? "s" : ""} in "${groupName}"? This will force delete all containers and any ephemeral data.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const toastId = toast.loading(`Removing ${containers.length} container${containers.length > 1 ? "s" : ""}...`);
+    
+    try {
+      await Promise.all(
+        containers.map(container => 
+          removeContainer(container.id)
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
+      toast.success(`Removed ${containers.length} container${containers.length > 1 ? "s" : ""}`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to remove containers", { id: toastId });
+    }
+  };
+
+  const handleGroupLogs = (containers: DockerContainer[]) => {
+    containers.forEach(container => {
+      openLogs(container.id, container.name);
+    });
+    toast.success(`Opened logs for ${containers.length} container${containers.length > 1 ? "s" : ""}`);
   };
 
   const quickActions = useMemo(
@@ -173,6 +347,32 @@ const ContainerList = () => {
         handleMenuClose();
       }
     }), [handleMenuClose, openLogs, openTerminal]);
+
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+
+  const handleViewModeChange = (_event: unknown, value: "list" | "grid" | null) => {
+    if (value) {
+      setViewMode(value);
+    }
+  };
+
+  const groupedContainers = useGroupedContainers(data);
+
+  const renderContainerCard = (container: DockerContainer) => {
+    return (
+      <ContainerCard
+        key={container.id}
+        container={container}
+        isLoading={loadingContainerId === container.id}
+        onStart={handleStartContainer}
+        onStop={handleStopContainer}
+        onRestart={handleRestartContainer}
+        onOpenTerminal={openTerminal}
+        onOpenLogs={openLogs}
+        onMenuOpen={handleMenuOpen}
+      />
+    );
+  };
 
   if (isLoading) {
     return (
@@ -214,199 +414,109 @@ const ContainerList = () => {
   return (
     <>
       <Stack spacing={3}>
-        <Grid container spacing={2.5}>
-          {data.map((container) => (
-            <Grid key={container.id} size={{ xs: 12, md: 6, lg: 4 }}>
-              <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-                  <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
-                    <Box>
-                      <Typography variant="subtitle1">{container.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {container.id}
-                      </Typography>
-                    </Box>
-                    <Chip
-                      size="small"
-                      label={container.state === "running" ? "Running" : "Stopped"}
-                      color={container.state === "running" ? "success" : "default"}
-                    />
-                  </Stack>
-                  <Stack spacing={0.75}>
-                    <Typography variant="body2" color="text.secondary">
-                      Image · {container.image}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Ports · {container.ports.length > 0 ? container.ports.join(", ") : "None"}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {container.status} · created {moment(container.createdAt).fromNow()}
-                    </Typography>
-                  </Stack>
-                  <Divider flexItem light />
-                  <Stack spacing={1.25}>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TimelineIcon fontSize="small" color="primary" />
-                      <Typography variant="caption" color="text.secondary">
-                        CPU usage
-                      </Typography>
-                    </Stack>
-                    <UsageBar variant="determinate" value={Math.min(container.cpuUsage, 100)} />
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography variant="caption" color="text.secondary">
-                        Memory
-                      </Typography>
-                      <Chip size="small" label={`${container.memoryUsage.toFixed(0)} MiB`} color="primary" variant="outlined" />
-                    </Stack>
-                  </Stack>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 1,
-                      mt: "auto"
-                    }}
-                  >
-                    {container.state !== "running" && (
-                      <Tooltip title="Start container">
-                        <ActionIconButton color="primary" size="small">
-                          <PlayArrowIcon fontSize="small" />
-                        </ActionIconButton>
-                      </Tooltip>
-                    )}
-                    {container.state === "running" && (
-                      <>
-                        <Tooltip title="Stop container">
-                          <ActionIconButton color="warning" size="small">
-                            <StopIcon fontSize="small" />
-                          </ActionIconButton>
-                        </Tooltip>
-                        <Tooltip title="Restart container">
-                          <ActionIconButton color="secondary" size="small">
-                            <RestartAltIcon fontSize="small" />
-                          </ActionIconButton>
-                        </Tooltip>
-                        <Tooltip title="Open terminal in drawer">
-                          <ActionIconButton
-                            color="default"
-                            size="small"
-                            onClick={() => openTerminal(container.id, container.name)}
-                          >
-                            <TerminalIcon fontSize="small" />
-                          </ActionIconButton>
-                        </Tooltip>
-                        <Tooltip title="View logs in drawer">
-                          <ActionIconButton
-                            color="default"
-                            size="small"
-                            onClick={() => openLogs(container.id, container.name)}
-                          >
-                            <ArticleIcon fontSize="small" />
-                          </ActionIconButton>
-                        </Tooltip>
-                      </>
-                    )}
-                    <Tooltip title="More actions">
-                      <ActionIconButton
-                        color="default"
-                        size="small"
-                        onClick={(event) => handleMenuOpen(container.id, event.currentTarget)}
-                      >
-                        <MoreHorizIcon fontSize="small" />
-                      </ActionIconButton>
-                    </Tooltip>
-                    <Menu
-                      anchorEl={menuAnchor?.anchor ?? null}
-                      open={menuAnchor?.id === container.id}
-                      onClose={handleMenuClose}
-                      anchorOrigin={{ vertical: "top", horizontal: "right" }}
-                      transformOrigin={{ vertical: "top", horizontal: "right" }}
-                      keepMounted
-                    >
-                      <MenuItem
-                        onClick={() => quickActions.openTerminalDrawer(container.id, container.name)}
-                        disabled={container.state !== "running"}
-                      >
-                        <ListItemIcon>
-                          <TerminalIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText primary="Open terminal in drawer" />
-                      </MenuItem>
-                      <MenuItem
-                        onClick={() => quickActions.openTerminalNewTab(container.id)}
-                        disabled={container.state !== "running"}
-                      >
-                        <ListItemIcon>
-                          <OpenInNewIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText primary="Open terminal in new tab" />
-                      </MenuItem>
-                      <MenuItem onClick={() => quickActions.openLogsDrawer(container.id, container.name)}>
-                        <ListItemIcon>
-                          <ArticleIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText primary="View logs in drawer" />
-                      </MenuItem>
-                      <MenuItem onClick={() => quickActions.openLogsNewTab(container.id)}>
-                        <ListItemIcon>
-                          <OpenInNewIcon fontSize="small" />
-                        </ListItemIcon>
-                        <ListItemText primary="View logs in new tab" />
-                      </MenuItem>
-                      <Divider sx={{ my: 0.5 }} />
-                      <MenuItem onClick={() => handleRemoveContainer(container.id, container.name)}>
-                        <ListItemIcon>
-                          <DeleteOutlineIcon fontSize="small" color="error" />
-                        </ListItemIcon>
-                        <ListItemText primary="Remove container" />
-                      </MenuItem>
-                    </Menu>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-        <Paper sx={{ p: 3, borderRadius: 3 }}>
-          <Stack spacing={1.5}>
-            <Typography variant="subtitle1">Container & image maintenance</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Clean up stopped workloads and dangling artifacts to keep your Docker host healthy.
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteSweepIcon />}
-                onClick={() => pruneContainersMutation.mutate()}
-                disabled={pruneContainersMutation.isPending}
-              >
-                Remove stopped containers
-              </Button>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<CleaningServicesIcon />}
-                onClick={() => pruneImagesMutation.mutate()}
-                disabled={pruneImagesMutation.isPending}
-              >
-                Remove unused images
-              </Button>
-            </Stack>
+        <Stack direction="row" justifyContent="flex-end">
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={viewMode}
+            onChange={handleViewModeChange}
+            aria-label="container view switcher"
+          >
+            <ToggleButton value="grid" aria-label="grid view">
+              <ViewModuleIcon fontSize="small" sx={{ mr: 1 }} />
+              Grid
+            </ToggleButton>
+            <ToggleButton value="list" aria-label="list view">
+              <ViewListIcon fontSize="small" sx={{ mr: 1 }} />
+              List
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+        {viewMode === "grid" ? (
+          <Stack spacing={3}>
+            {groupedContainers.map((group) => (
+              <Box key={group.key}>
+                <ContainerGroupActions
+                  groupLabel={group.label}
+                  containerCount={group.containers.length}
+                  containers={group.containers}
+                  onGroupStart={handleGroupStart}
+                  onGroupStop={handleGroupStop}
+                  onGroupRestart={handleGroupRestart}
+                  onGroupLogs={handleGroupLogs}
+                  onGroupDelete={handleGroupDelete}
+                />
+                <Grid container spacing={2.5}>
+                  {group.containers.map(renderContainerCard)}
+                </Grid>
+              </Box>
+            ))}
           </Stack>
-        </Paper>
+        ) : (
+          <Stack spacing={3}>
+            {groupedContainers.map((group) => (
+              <Box key={group.key}>
+                <ContainerGroupActions
+                  groupLabel={group.label}
+                  containerCount={group.containers.length}
+                  containers={group.containers}
+                  onGroupStart={handleGroupStart}
+                  onGroupStop={handleGroupStop}
+                  onGroupRestart={handleGroupRestart}
+                  onGroupLogs={handleGroupLogs}
+                  onGroupDelete={handleGroupDelete}
+                />
+                <Paper>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Image</TableCell>
+                        <TableCell>Ports</TableCell>
+                        <TableCell>CPU</TableCell>
+                        <TableCell>Memory</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {group.containers.map((container) => (
+                        <ContainerTableRow
+                          key={container.id}
+                          container={container}
+                          isLoading={loadingContainerId === container.id}
+                          onStart={handleStartContainer}
+                          onStop={handleStopContainer}
+                          onRestart={handleRestartContainer}
+                          onOpenTerminal={openTerminal}
+                          onOpenLogs={openLogs}
+                          onMenuOpen={handleMenuOpen}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Paper>
+              </Box>
+            ))}
+          </Stack>
+        )}
+        <ContainerMaintenancePanel
+          onPruneContainers={() => pruneContainersMutation.mutate()}
+          onPruneImages={() => pruneImagesMutation.mutate()}
+          isPruningContainers={pruneContainersMutation.isPending}
+          isPruningImages={pruneImagesMutation.isPending}
+        />
       </Stack>
-      {feedback && (
-        <Snackbar
-          open={true}
-          autoHideDuration={6000}
-          onClose={handleFeedbackClose}
-          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        >
-          <Alert onClose={handleFeedbackClose} severity={feedback.severity} sx={{ width: "100%" }}>
-            {feedback.message}
-          </Alert>
-        </Snackbar>
-      )}
+      <ContainerContextMenu
+        anchorEl={menuAnchor?.anchor ?? null}
+        container={menuAnchor ? data?.find(c => c.id === menuAnchor.id) : undefined}
+        onClose={handleMenuClose}
+        onOpenTerminalDrawer={quickActions.openTerminalDrawer}
+        onOpenTerminalTab={quickActions.openTerminalNewTab}
+        onOpenLogsDrawer={quickActions.openLogsDrawer}
+        onOpenLogsTab={quickActions.openLogsNewTab}
+        onRemove={handleRemoveContainer}
+      />
     </>
   );
 };

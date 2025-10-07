@@ -4,10 +4,12 @@ import { ReactNode, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { Container } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
 import { BottomPanelProvider } from "@/components/common/bottom-panel-context";
 import BottomPanelWrapper from "@/components/common/bottom-panel-wrapper";
+import { useThemeMode } from "@/components/theme/theme-context";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -36,6 +38,7 @@ const Content = styled(Container)(({ theme }) => ({
 
 const AppLayout = ({ children }: AppLayoutProps) => {
   const pathname = usePathname();
+  const { mode } = useThemeMode();
 
   const { title, subtitle } = useMemo(() => {
     const defaults = {
@@ -81,6 +84,13 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
   return (
     <BottomPanelProvider>
+      <Toaster 
+        theme={mode}
+        position="top-right"
+        expand={false}
+        richColors
+        closeButton
+      />
       <Shell>
         <Sidebar />
         <MainSection>
