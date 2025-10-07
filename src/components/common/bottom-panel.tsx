@@ -17,7 +17,10 @@ interface BottomPanelTab {
 interface BottomPanelProps {
   tabs: BottomPanelTab[];
   activeTabId?: string;
+  isMinimized?: boolean;
   onTabChange?: (tabId: string) => void;
+  onTabClose?: (tabId: string) => void;
+  onToggleMinimize?: () => void;
   onClose?: () => void;
 }
 

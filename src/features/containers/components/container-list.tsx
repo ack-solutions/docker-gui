@@ -89,7 +89,7 @@ const ContainerList = () => {
   const removeContainerMutation = useMutation({
     mutationFn: async ({ id }: { id: string; name: string }) => removeContainer(id),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries(containerQueryKeys.all);
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
       setFeedback({ message: `Removed container ${variables.name}`, severity: "success" });
     },
     onError: (mutationError, variables) => {
@@ -104,7 +104,7 @@ const ContainerList = () => {
   const pruneContainersMutation = useMutation({
     mutationFn: pruneStoppedContainers,
     onSuccess: (summary) => {
-      queryClient.invalidateQueries(containerQueryKeys.all);
+      queryClient.invalidateQueries({ queryKey: containerQueryKeys.all });
       setFeedback({
         message: summary.removedCount
           ? `Removed ${summary.removedCount} stopped container${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
@@ -124,7 +124,7 @@ const ContainerList = () => {
   const pruneImagesMutation = useMutation({
     mutationFn: pruneUnusedImages,
     onSuccess: (summary) => {
-      queryClient.invalidateQueries(imageQueryKeys.all);
+      queryClient.invalidateQueries({ queryKey: imageQueryKeys.all });
       setFeedback({
         message: summary.removedCount
           ? `Removed ${summary.removedCount} unused image${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
@@ -216,7 +216,7 @@ const ContainerList = () => {
       <Stack spacing={3}>
         <Grid container spacing={2.5}>
           {data.map((container) => (
-            <Grid key={container.id} item xs={12} md={6} lg={4}>
+            <Grid key={container.id} size={{ xs: 12, md: 6, lg: 4 }}>
               <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
                 <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
                   <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
@@ -395,18 +395,18 @@ const ContainerList = () => {
           </Stack>
         </Paper>
       </Stack>
-      <Snackbar
-        open={Boolean(feedback)}
-        autoHideDuration={6000}
-        onClose={handleFeedbackClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        {feedback && (
+      {feedback && (
+        <Snackbar
+          open={true}
+          autoHideDuration={6000}
+          onClose={handleFeedbackClose}
+          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        >
           <Alert onClose={handleFeedbackClose} severity={feedback.severity} sx={{ width: "100%" }}>
             {feedback.message}
           </Alert>
-        )}
-      </Snackbar>
+        </Snackbar>
+      )}
     </>
   );
 };
