@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import TerminalIcon from "@mui/icons-material/Terminal";
-import { MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { CircularProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import LogViewer from "@/features/logs/components/log-viewer";
 import { useContainers } from "@/features/containers/hooks/use-containers";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const LogsPage = () => {
+const LogsPageContent = () => {
   const { data: containers } = useContainers();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,6 +65,21 @@ const LogsPage = () => {
       </Paper>
       <LogViewer containerId={selectedContainer} />
     </Stack>
+  );
+};
+
+const LogsPage = () => {
+  return (
+    <Suspense fallback={
+      <Stack alignItems="center" justifyContent="center" py={6}>
+        <CircularProgress />
+        <Typography variant="body2" color="text.secondary" mt={2}>
+          Loading logs...
+        </Typography>
+      </Stack>
+    }>
+      <LogsPageContent />
+    </Suspense>
   );
 };
 
