@@ -1,7 +1,7 @@
 "use client";
 
 import { Stack, Typography } from "@mui/material";
-import ImageList from "@/features/images/components/ImageList";
+import ImageList from "@/features/images/components/image-list";
 
 const ImagesPage = () => {
   return (

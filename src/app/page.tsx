@@ -5,12 +5,13 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import LanIcon from "@mui/icons-material/Lan";
 import LayersIcon from "@mui/icons-material/Layers";
 import TerminalIcon from "@mui/icons-material/Terminal";
-import { Box, Grid, Paper, Stack, Typography } from "@mui/material";
-import ContainerList from "@/features/containers/components/ContainerList";
-import { useContainerMetrics } from "@/features/containers/hooks/useContainers";
-import { useImageStorage } from "@/features/images/hooks/useImages";
-import { useNetworks } from "@/features/networks/hooks/useNetworks";
-import { useVolumes } from "@/features/volumes/hooks/useVolumes";
+import { Box, Paper, Stack, Typography } from "@mui/material";
+import Grid from "@mui/material/GridLegacy";
+import ContainerList from "@/features/containers/components/container-list";
+import { useContainerMetrics } from "@/features/containers/hooks/use-containers";
+import { useImageStorage } from "@/features/images/hooks/use-images";
+import { useNetworks } from "@/features/networks/hooks/use-networks";
+import { useVolumes } from "@/features/volumes/hooks/use-volumes";
 
 const OverviewMetric = ({ label, value, icon }: { label: string; value: string; icon: ReactNode }) => (
   <Paper sx={{ p: 3, borderRadius: 3, height: "100%" }}>

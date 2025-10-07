@@ -1,7 +1,7 @@
 "use client";
 
 import { Stack, Typography } from "@mui/material";
-import ContainerList from "@/features/containers/components/ContainerList";
+import ContainerList from "@/features/containers/components/container-list";
 
 const ContainersPage = () => {
   return (

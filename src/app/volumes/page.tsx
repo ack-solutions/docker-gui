@@ -1,7 +1,7 @@
 "use client";
 
 import { Stack, Typography } from "@mui/material";
-import VolumeList from "@/features/volumes/components/VolumeList";
+import VolumeList from "@/features/volumes/components/volume-list";
 
 const VolumesPage = () => {
   return (

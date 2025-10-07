@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { listImages } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const images = await listImages();
+    const images = await dockerService.listImages();
     return NextResponse.json(images);
   } catch (error) {
     console.error("Failed to fetch images", error);

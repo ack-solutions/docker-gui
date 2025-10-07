@@ -4,8 +4,8 @@ import { ReactNode, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { Container } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import Sidebar from "@/components/layout/Sidebar";
-import TopBar from "@/components/layout/TopBar";
+import Sidebar from "@/components/layout/sidebar";
+import TopBar from "@/components/layout/top-bar";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -80,7 +80,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       <Sidebar />
       <MainSection>
         <TopBar title={title} subtitle={subtitle} />
-        <Content component="main">
+        <Content>
           {children}
         </Content>
       </MainSection>

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DnsIcon from "@mui/icons-material/Dns";
 import LayersIcon from "@mui/icons-material/Layers";
@@ -10,6 +9,7 @@ import LanIcon from "@mui/icons-material/Lan";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import FolderIcon from "@mui/icons-material/Folder";
 import { Avatar, Divider, List, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
+import type { ListItemButtonProps } from "@mui/material/ListItemButton";
 import { styled } from "@mui/material/styles";
 
 const navigationItems = [
@@ -47,7 +47,7 @@ const NavList = styled(List)(({ theme }) => ({
   padding: 0
 }));
 
-const NavItem = styled(ListItemButton)(({ theme }) => ({
+const NavItem = styled(ListItemButton)<ListItemButtonProps>(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
   color: theme.palette.text.secondary,
   transition: theme.transitions.create(["background-color", "color"], {
@@ -75,12 +75,16 @@ const BrandAvatar = styled(Avatar)(({ theme }) => ({
 
 const Note = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(2),
-  borderRadius: theme.shape.borderRadius * 1.5,
+  borderRadius:
+    typeof theme.shape.borderRadius === "number"
+      ? theme.shape.borderRadius * 1.5
+      : theme.shape.borderRadius,
   backgroundColor: theme.palette.mode === "dark" ? "rgba(148, 163, 184, 0.08)" : theme.palette.background.default
 }));
 
 const Sidebar = () => {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <SidebarRoot>
@@ -103,9 +107,8 @@ const Sidebar = () => {
           return (
             <NavItem
               key={item.href}
-              component={Link}
-              href={item.href}
               selected={Boolean(isActive)}
+              onClick={() => router.push(item.href)}
             >
               <ListItemIcon>
                 {item.icon}

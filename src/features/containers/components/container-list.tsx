@@ -5,10 +5,11 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import StopIcon from "@mui/icons-material/Stop";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import TimelineIcon from "@mui/icons-material/Timeline";
-import { Box, Button, Chip, CircularProgress, Grid, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import Grid from "@mui/material/GridLegacy";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
-import { useContainers } from "@/features/containers/hooks/useContainers";
+import { useContainers } from "@/features/containers/hooks/use-containers";
 
 const ContainerCard = styled(Paper)(({ theme }) => ({
   display: "flex",
@@ -19,7 +20,10 @@ const ContainerCard = styled(Paper)(({ theme }) => ({
 
 const UsageBar = styled(LinearProgress)(({ theme }) => ({
   height: 8,
-  borderRadius: theme.shape.borderRadius * 3
+  borderRadius:
+    typeof theme.shape.borderRadius === "number"
+      ? theme.shape.borderRadius * 3
+      : theme.shape.borderRadius
 }));
 
 const EmptyState = styled(Paper)(({ theme }) => ({

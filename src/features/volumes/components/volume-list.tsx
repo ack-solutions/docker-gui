@@ -4,7 +4,7 @@ import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import StorageIcon from "@mui/icons-material/Storage";
 import { Button, CircularProgress, List, ListItem, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useVolumes } from "@/features/volumes/hooks/useVolumes";
+import { useVolumes } from "@/features/volumes/hooks/use-volumes";
 
 const VolumePanel = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3)

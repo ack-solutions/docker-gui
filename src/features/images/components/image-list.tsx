@@ -5,7 +5,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import { Button, Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
-import { useImages } from "@/features/images/hooks/useImages";
+import { useImages } from "@/features/images/hooks/use-images";
 
 const ImageCard = styled(Paper)(({ theme }) => ({
   display: "flex",

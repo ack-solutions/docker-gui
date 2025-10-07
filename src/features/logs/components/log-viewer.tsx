@@ -8,7 +8,7 @@ import { Box, Button, Chip, Divider, InputAdornment, MenuItem, Paper, Stack, Tex
 import { styled } from "@mui/material/styles";
 import moment from "moment";
 import { Controller, useForm } from "react-hook-form";
-import { useLogs } from "@/features/logs/hooks/useLogs";
+import { useLogs } from "@/features/logs/hooks/use-logs";
 
 const LogPanel = styled(Paper)(({ theme }) => ({
   display: "flex",

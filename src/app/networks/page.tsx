@@ -1,7 +1,7 @@
 "use client";
 
 import { Stack, Typography } from "@mui/material";
-import NetworkList from "@/features/networks/components/NetworkList";
+import NetworkList from "@/features/networks/components/network-list";
 
 const NetworksPage = () => {
   return (

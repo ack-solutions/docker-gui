@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import { MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
-import LogViewer from "@/features/logs/components/LogViewer";
-import { useContainers } from "@/features/containers/hooks/useContainers";
+import LogViewer from "@/features/logs/components/log-viewer";
+import { useContainers } from "@/features/containers/hooks/use-containers";
 
 const LogsPage = () => {
   const { data: containers } = useContainers();

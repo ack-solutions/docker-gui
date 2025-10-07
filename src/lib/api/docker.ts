@@ -1,4 +1,4 @@
-import axios from "axios";
+import apiClient from "@/lib/api/client";
 import type {
   ContainerFileNode,
   DockerContainer,
@@ -7,11 +7,6 @@ import type {
   DockerNetwork,
   DockerVolume
 } from "@/types/docker";
-
-const dockerApi = axios.create({
-  baseURL: "/api",
-  timeout: 20000
-});
 
 const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 
@@ -157,7 +152,7 @@ const withMockFallback = async <T>(request: () => Promise<T>, mockFactory: () =>
 export const fetchContainers = async () =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.get<DockerContainer[]>("/containers");
+      const { data } = await apiClient.get<DockerContainer[]>("/containers");
       return data;
     },
     () => mockContainers
@@ -166,7 +161,7 @@ export const fetchContainers = async () =>
 export const fetchImages = async () =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.get<DockerImage[]>("/images");
+      const { data } = await apiClient.get<DockerImage[]>("/images");
       return data;
     },
     () => mockImages
@@ -175,7 +170,7 @@ export const fetchImages = async () =>
 export const fetchVolumes = async () =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.get<DockerVolume[]>("/volumes");
+      const { data } = await apiClient.get<DockerVolume[]>("/volumes");
       return data;
     },
     () => mockVolumes
@@ -184,7 +179,7 @@ export const fetchVolumes = async () =>
 export const fetchNetworks = async () =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.get<DockerNetwork[]>("/networks");
+      const { data } = await apiClient.get<DockerNetwork[]>("/networks");
       return data;
     },
     () => mockNetworks
@@ -196,7 +191,7 @@ export const fetchContainerLogs = async (
 ) =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
+      const { data } = await apiClient.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
         params: options
       });
 
@@ -213,7 +208,7 @@ export const fetchContainerLogs = async (
 export const fetchContainerFiles = async (containerId: string, path = "/") =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.get<ContainerFileNode[]>(`/containers/${containerId}/files`, {
+      const { data } = await apiClient.get<ContainerFileNode[]>(`/containers/${containerId}/files`, {
         params: { path }
       });
       return data;
@@ -228,7 +223,7 @@ export const fetchContainerFiles = async (containerId: string, path = "/") =>
 export const executeContainerCommand = async (containerId: string, command: string[]) =>
   withMockFallback(
     async () => {
-      const { data } = await dockerApi.post<{ output: string }>(`/containers/${containerId}/exec`, {
+      const { data } = await apiClient.post<{ output: string }>(`/containers/${containerId}/exec`, {
         command
       });
 
@@ -242,7 +237,7 @@ export const removeImage = async (imageId: string) => {
     return true;
   }
 
-  await dockerApi.delete(`/images/${imageId}`);
+  await apiClient.delete(`/images/${imageId}`);
   return true;
 };
 
@@ -251,7 +246,7 @@ export const removeContainer = async (containerId: string) => {
     return true;
   }
 
-  await dockerApi.delete(`/containers/${containerId}`);
+  await apiClient.delete(`/containers/${containerId}`);
   return true;
 };
 
@@ -260,7 +255,7 @@ export const pruneVolumes = async () => {
     return true;
   }
 
-  await dockerApi.post("/volumes/prune");
+  await apiClient.post("/volumes/prune");
   return true;
 };
 
@@ -304,7 +299,7 @@ export const attachToContainerLogs = (
         params.since = new Date(lastSeen).toISOString();
       }
 
-      const { data } = await dockerApi.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
+      const { data } = await apiClient.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
         params
       });
 

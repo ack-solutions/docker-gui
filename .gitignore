@@ -4,6 +4,7 @@
 # Build outputs
 /.next
 /out
+/.data
 
 # Production
 npm-debug.log*

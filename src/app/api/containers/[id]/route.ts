@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { removeContainer } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   }
 
   try {
-    await removeContainer(containerId);
+    await dockerService.removeContainer(containerId);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`Failed to remove container ${containerId}`, error);

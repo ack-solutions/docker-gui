@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { removeImage } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
@@ -9,7 +9,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   }
 
   try {
-    await removeImage(params.id);
+    await dockerService.removeImage(params.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`Failed to remove image ${params.id}`, error);

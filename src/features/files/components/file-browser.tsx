@@ -18,7 +18,7 @@ import {
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useMemo, useState } from "react";
-import { useFiles } from "@/features/files/hooks/useFiles";
+import { useFiles } from "@/features/files/hooks/use-files";
 import { ContainerFileNode } from "@/lib/api/docker";
 
 const BrowserContainer = styled(Paper)(({ theme }) => ({

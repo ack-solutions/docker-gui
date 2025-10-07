@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listContainerFiles } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const url = new URL(request.url);
     const pathParam = url.searchParams.get("path") ?? "/";
-    const files = await listContainerFiles(containerId, pathParam || "/");
+    const files = await dockerService.listContainerFiles(containerId, pathParam || "/");
     return NextResponse.json(files);
   } catch (error) {
     console.error(`Failed to fetch files for container ${containerId}`, error);

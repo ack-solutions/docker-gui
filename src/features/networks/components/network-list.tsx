@@ -2,10 +2,11 @@
 
 import LanIcon from "@mui/icons-material/Lan";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { Chip, CircularProgress, Grid, Paper, Stack, Typography } from "@mui/material";
+import { Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
+import Grid from "@mui/material/GridLegacy";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
-import { useNetworks } from "@/features/networks/hooks/useNetworks";
+import { useNetworks } from "@/features/networks/hooks/use-networks";
 
 const NetworkCard = styled(Paper)(({ theme }) => ({
   display: "flex",

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { pruneDanglingVolumes } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
 export async function POST() {
   try {
-    await pruneDanglingVolumes();
+    await dockerService.pruneDanglingVolumes();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to prune volumes", error);

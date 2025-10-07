@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getContainerLogs } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ message: "Invalid since parameter." }, { status: 400 });
     }
 
-    const logs = await getContainerLogs(containerId, { tail, since });
+    const logs = await dockerService.getContainerLogs(containerId, { tail, since });
     return NextResponse.json(logs);
   } catch (error) {
     console.error(`Failed to fetch logs for container ${containerId}`, error);

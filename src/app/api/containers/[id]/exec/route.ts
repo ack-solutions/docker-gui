@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { execInContainer } from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 
 export const runtime = "nodejs";
 
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   try {
-    const output = await execInContainer(containerId, command);
+    const output = await dockerService.execInContainer(containerId, command);
     return NextResponse.json({ output });
   } catch (error) {
     console.error(`Failed to execute command in container ${containerId}`, error);
