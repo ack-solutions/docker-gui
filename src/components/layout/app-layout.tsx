@@ -27,7 +27,9 @@ const MainSection = styled("section")(({ theme }) => ({
 const Content = styled(Container)(({ theme }) => ({
   flex: 1,
   display: "flex",
-  flexDirection: "column"
+  flexDirection: "column",
+  paddingTop: theme.spacing(3),
+  paddingBottom: theme.spacing(3)
 }));
 
 const AppLayout = ({ children }: AppLayoutProps) => {
@@ -80,7 +82,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       <Sidebar />
       <MainSection>
         <TopBar title={title} subtitle={subtitle} />
-        <Content>
+        <Content maxWidth="xl">
           {children}
         </Content>
       </MainSection>

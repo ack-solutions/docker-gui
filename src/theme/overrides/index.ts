@@ -1,6 +1,8 @@
 import type { Theme } from "@mui/material/styles";
 import appBarOverrides from "@/theme/overrides/app-bar";
 import buttonOverrides from "@/theme/overrides/button";
+import cardOverrides from "@/theme/overrides/card";
+import cardContentOverrides from "@/theme/overrides/card-content";
 import chipOverrides from "@/theme/overrides/chip";
 import containerOverrides from "@/theme/overrides/container";
 import cssBaselineOverrides from "@/theme/overrides/css-baseline";
@@ -46,6 +48,16 @@ const buildComponentOverrides = (theme: Theme) => ({
   },
   MuiChip: {
     styleOverrides: chipOverrides(theme)
+  },
+  MuiCard: {
+    defaultProps: {
+      elevation: 0,
+      variant: "outlined" as const
+    },
+    styleOverrides: cardOverrides(theme)
+  },
+  MuiCardContent: {
+    styleOverrides: cardContentOverrides(theme)
   }
 });
 

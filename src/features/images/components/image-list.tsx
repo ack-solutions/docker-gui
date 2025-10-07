@@ -2,25 +2,15 @@
 
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadIcon from "@mui/icons-material/Download";
-import { Button, Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
 import { useImages } from "@/features/images/hooks/use-images";
-
-const ImageCard = styled(Paper)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: theme.spacing(3)
-}));
 
 const EmptyState = styled(Paper)(({ theme }) => ({
   textAlign: "center",
   padding: theme.spacing(6)
 }));
-
-const ActionButton = styled(Button)({
-  whiteSpace: "nowrap"
-});
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return "0 B";
@@ -71,31 +61,37 @@ const ImageList = () => {
   }
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2.5}>
       {data.map((image) => (
-        <ImageCard key={image.id}>
-          <Stack flex={1}>
-            <Typography variant="subtitle1">
-              {image.repoTags.join(", ")}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {image.id}
-            </Typography>
-            <Stack direction="row" spacing={2} mt={1}>
-              <Chip label={formatBytes(image.size)} variant="outlined" color="primary" size="small" />
-              <Chip label={`Containers: ${image.containers}`} variant="outlined" size="small" />
-              <Chip label={`Created ${moment(image.createdAt).fromNow()}`} variant="outlined" size="small" />
+        <Card key={image.id}>
+          <CardContent>
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+              <Stack flex={1} spacing={1.5}>
+                <Box>
+                  <Typography variant="subtitle1">
+                    {image.repoTags.join(", ")}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {image.id}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  <Chip label={formatBytes(image.size)} variant="outlined" color="primary" size="small" />
+                  <Chip label={`Containers: ${image.containers}`} variant="outlined" size="small" />
+                  <Chip label={`Created ${moment(image.createdAt).fromNow()}`} variant="outlined" size="small" />
+                </Box>
+              </Stack>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                <Button variant="outlined" startIcon={<DownloadIcon />} size="small" sx={{ minWidth: "auto" }}>
+                  Export
+                </Button>
+                <Button color="error" startIcon={<DeleteOutlineIcon />} size="small" sx={{ minWidth: "auto" }}>
+                  Remove
+                </Button>
+              </Box>
             </Stack>
-          </Stack>
-          <Stack direction="row" spacing={1}>
-            <ActionButton variant="outlined" startIcon={<DownloadIcon />}>
-              Export
-            </ActionButton>
-            <ActionButton color="error" startIcon={<DeleteOutlineIcon />}>
-              Remove
-            </ActionButton>
-          </Stack>
-        </ImageCard>
+          </CardContent>
+        </Card>
       ))}
     </Stack>
   );

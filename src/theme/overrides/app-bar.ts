@@ -8,7 +8,8 @@ const appBarOverrides = (theme: Theme) => ({
         ? "rgba(11, 17, 32, 0.85)"
         : theme.palette.background.paper,
     backdropFilter: "blur(10px)",
-    minHeight: 56
+    minHeight: 56,
+    borderRadius: 0
   }
 });
 

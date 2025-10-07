@@ -1,6 +1,6 @@
 import type { Theme } from "@mui/material/styles";
 
-const paperOverrides = (theme: Theme) => ({
+const cardOverrides = (theme: Theme) => ({
   root: {
     backgroundImage: "none",
     borderRadius:
@@ -11,4 +11,5 @@ const paperOverrides = (theme: Theme) => ({
   }
 });
 
-export default paperOverrides;
+export default cardOverrides;
+

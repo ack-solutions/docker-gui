@@ -4,8 +4,11 @@ import { useState } from "react";
 import SearchIcon from "@mui/icons-material/Search";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
 import { AppBar, IconButton, InputAdornment, Stack, TextField, Toolbar, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import { useThemeMode } from "@/components/theme/theme-context";
 
 interface TopBarProps {
   title?: string;
@@ -20,17 +23,22 @@ const SearchField = styled(TextField)(({ theme }) => ({
   }
 }));
 
-const TopBar = ({ title = "Dashboard", subtitle = "Manage Docker containers, images, networks, and volumes from a unified control plane.", onRefresh }: TopBarProps) => {
+const TopBar = ({
+  title = "Dashboard",
+  subtitle = "Manage Docker containers, images, networks, and volumes from a unified control plane.",
+  onRefresh
+}: TopBarProps) => {
   const [query, setQuery] = useState("");
+  const { mode, toggleTheme } = useThemeMode();
 
   return (
-    <AppBar position="sticky">
-      <Toolbar>
+    <AppBar position="sticky" elevation={0} sx={{ borderRadius: 0 }}>
+      <Toolbar sx={{ px: 3, py: 2 }}>
         <Stack spacing={0.25} flex={1}>
           <Typography variant="h6">
             {title}
           </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: "600px" }}>
             {subtitle}
           </Typography>
         </Stack>
@@ -51,6 +59,9 @@ const TopBar = ({ title = "Dashboard", subtitle = "Manage Docker containers, ima
           />
           <IconButton color="inherit" onClick={onRefresh} aria-label="Refresh data" size="small">
             <RefreshIcon fontSize="small" />
+          </IconButton>
+          <IconButton color="inherit" onClick={toggleTheme} aria-label="Toggle theme" size="small">
+            {mode === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
           </IconButton>
           <IconButton color="inherit" aria-label="Notifications" size="small">
             <NotificationsNoneIcon fontSize="small" />

@@ -2,13 +2,9 @@
 
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import StorageIcon from "@mui/icons-material/Storage";
-import { Button, CircularProgress, List, ListItem, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
+import { Button, Card, CardContent, CircularProgress, Divider, List, ListItem, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useVolumes } from "@/features/volumes/hooks/use-volumes";
-
-const VolumePanel = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3)
-}));
 
 const EmptyState = styled(Paper)(({ theme }) => ({
   textAlign: "center",
@@ -56,16 +52,20 @@ const VolumeList = () => {
   }
 
   return (
-    <VolumePanel>
-      <Stack spacing={2}>
-        <Stack direction="row" justifyContent="flex-end">
-          <Button startIcon={<DeleteSweepIcon />} color="warning">
-            Prune unused volumes
-          </Button>
-        </Stack>
-        <List>
-          {data.map((volume) => (
-            <ListItem key={volume.name} divider>
+    <Stack spacing={2.5}>
+      <Stack direction="row" justifyContent="flex-end">
+        <Button startIcon={<DeleteSweepIcon />} color="warning" variant="outlined">
+          Prune unused volumes
+        </Button>
+      </Stack>
+      <Card>
+        <List disablePadding>
+          {data.map((volume, index) => (
+            <ListItem 
+              key={volume.name}
+              divider={index !== data.length - 1}
+              sx={{ py: 2 }}
+            >
               <ListItemIcon>
                 <StorageIcon color="primary" />
               </ListItemIcon>
@@ -76,8 +76,8 @@ const VolumeList = () => {
             </ListItem>
           ))}
         </List>
-      </Stack>
-    </VolumePanel>
+      </Card>
+    </Stack>
   );
 };
 

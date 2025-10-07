@@ -2,17 +2,10 @@
 
 import LanIcon from "@mui/icons-material/Lan";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { Chip, CircularProgress, Paper, Stack, Typography } from "@mui/material";
-import Grid from "@mui/material/GridLegacy";
+import { Box, Card, CardContent, Chip, CircularProgress, Grid, Paper, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import moment from "moment";
 import { useNetworks } from "@/features/networks/hooks/use-networks";
-
-const NetworkCard = styled(Paper)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  gap: theme.spacing(1.5)
-}));
 
 const EmptyState = styled(Paper)(({ theme }) => ({
   textAlign: "center",
@@ -60,31 +53,33 @@ const NetworkList = () => {
   }
 
   return (
-    <Grid container spacing={3}>
+    <Grid container spacing={2.5}>
       {data.map((network) => (
-        <Grid key={network.id} item xs={12} md={6}>
-          <NetworkCard>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
-              <LanIcon color="primary" />
-              <Typography variant="subtitle1">
-                {network.name}
+        <Grid key={network.id} size={{ xs: 12, md: 6, lg: 4 }}>
+          <Card sx={{ height: "100%" }}>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <LanIcon color="primary" />
+                <Typography variant="subtitle1">
+                  {network.name}
+                </Typography>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                {network.id}
               </Typography>
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              {network.id}
-            </Typography>
-            <Stack direction="row" spacing={1}>
-              <Chip label={network.driver} size="small" variant="outlined" />
-              <Chip label={`${network.scope} scope`} size="small" variant="outlined" />
-              <Chip label={`${network.containers} containers`} size="small" variant="outlined" />
-            </Stack>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <ShieldIcon fontSize="small" color="secondary" />
-              <Typography variant="body2" color="text.secondary">
-                Provisioned {moment(network.createdAt).fromNow()}
-              </Typography>
-            </Stack>
-          </NetworkCard>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                <Chip label={network.driver} size="small" variant="outlined" />
+                <Chip label={`${network.scope} scope`} size="small" variant="outlined" />
+                <Chip label={`${network.containers} containers`} size="small" variant="outlined" color="primary" />
+              </Box>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <ShieldIcon fontSize="small" color="secondary" />
+                <Typography variant="body2" color="text.secondary">
+                  Provisioned {moment(network.createdAt).fromNow()}
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
         </Grid>
       ))}
     </Grid>

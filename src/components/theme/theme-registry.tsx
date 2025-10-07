@@ -1,16 +1,17 @@
 "use client";
 
 import { ReactNode, useMemo } from "react";
-import { CssBaseline, PaletteMode } from "@mui/material";
+import { CssBaseline } from "@mui/material";
 import { ThemeProvider } from "@mui/material/styles";
 import createAppTheme from "@/theme";
+import { ThemeContextProvider, useThemeMode } from "./theme-context";
 
 interface ThemeRegistryProps {
   children: ReactNode;
-  mode?: PaletteMode;
 }
 
-const ThemeRegistry = ({ children, mode = "dark" }: ThemeRegistryProps) => {
+const ThemeRegistryInner = ({ children }: ThemeRegistryProps) => {
+  const { mode } = useThemeMode();
   const theme = useMemo(() => createAppTheme(mode), [mode]);
 
   return (
@@ -18,6 +19,14 @@ const ThemeRegistry = ({ children, mode = "dark" }: ThemeRegistryProps) => {
       <CssBaseline />
       {children}
     </ThemeProvider>
+  );
+};
+
+const ThemeRegistry = ({ children }: ThemeRegistryProps) => {
+  return (
+    <ThemeContextProvider>
+      <ThemeRegistryInner>{children}</ThemeRegistryInner>
+    </ThemeContextProvider>
   );
 };
 
