@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import UserRepository from "@/server/user/user-repository";
-import type { User, UserRecord } from "@/types/user";
+import { rolePermissions } from "@/types/user";
+import type { User, UserPermission, UserRecord, UserRole } from "@/types/user";
 
 interface AuthCredentials {
   email: string;
@@ -46,16 +47,24 @@ class AuthService {
       throw new AuthError("Email and password are required.");
     }
 
+    if (this.repository.count() > 0) {
+      throw new AuthError("Registration is disabled. Ask an administrator to provision your account.", 403);
+    }
+
     const existing = this.repository.findByEmail(email);
     if (existing) {
       throw new AuthError("Email is already registered.", 409);
     }
 
     const passwordHash = bcrypt.hashSync(credentials.password, this.saltRounds);
+    const role: UserRole = "admin";
+    const permissions: UserPermission[] = rolePermissions[role] ?? [];
     const record = this.repository.create({
       email,
       passwordHash,
-      name: credentials.name ?? null
+      name: credentials.name ?? null,
+      role,
+      permissions
     });
 
     return {
@@ -101,7 +110,8 @@ class AuthService {
     return jwt.sign(
       {
         sub: record.id,
-        email: record.email
+        email: record.email,
+        role: record.role
       },
       this.jwtSecret,
       { expiresIn: this.tokenExpiresIn }
@@ -113,6 +123,8 @@ class AuthService {
       id: record.id,
       email: record.email,
       name: record.name,
+      role: record.role,
+      permissions: record.permissions,
       createdAt: record.createdAt
     } satisfies User;
   }

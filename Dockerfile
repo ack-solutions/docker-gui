@@ -1,14 +1,18 @@
-FROM node:22-alpine AS base
+FROM node:22-bookworm-slim AS base
 
-# Install dependencies for native modules
-RUN apk add --no-cache \
+# Install build dependencies for native modules
+RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev
+    pkg-config \
+    libcairo2-dev \
+    libjpeg62-turbo-dev \
+    libpango1.0-dev \
+    libgif-dev \
+    libsqlite3-dev \
+    git \
+  && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -29,16 +33,18 @@ COPY . .
 RUN yarn build
 
 # Production stage
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
-# Install runtime dependencies for native modules and healthcheck
-RUN apk add --no-cache \
+# Install runtime dependencies and init process
+RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    dumb-init \
     wget \
-    dumb-init
+    libsqlite3-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 
@@ -50,6 +56,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
 
 # Switch to non-root user
 USER node
@@ -62,4 +69,3 @@ ENV HOSTNAME="0.0.0.0"
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "server.js"]
-

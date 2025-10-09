@@ -1,8 +1,8 @@
 "use client";
 
-import { ReactNode, useMemo } from "react";
-import { usePathname } from "next/navigation";
-import { Container } from "@mui/material";
+import { ReactNode, useEffect, useMemo } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Box, CircularProgress, Container, Stack } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/sidebar";
@@ -10,15 +10,20 @@ import TopBar from "@/components/layout/top-bar";
 import { BottomPanelProvider } from "@/components/common/bottom-panel-context";
 import BottomPanelWrapper from "@/components/common/bottom-panel-wrapper";
 import { useThemeMode } from "@/components/theme/theme-context";
+import { ConfirmationDialogProvider } from "@/components/common/confirmation-dialog-provider";
+import {
+  HeaderActionsProvider,
+  useHeaderActionsConfig
+} from "@/components/layout/header-actions-context";
+import { useAuth } from "@/components/providers/auth-provider";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
-const Shell = styled("div")(({ theme }) => ({
+const Shell = styled("div")(() => ({
   display: "flex",
-  minHeight: "100vh",
-  backgroundColor: theme.palette.background.default
+  minHeight: "100vh"
 }));
 
 const MainSection = styled("section")(({ theme }) => ({
@@ -37,13 +42,122 @@ const Content = styled(Container)(({ theme }) => ({
 }));
 
 const AppLayout = ({ children }: AppLayoutProps) => {
-  const pathname = usePathname();
   const { mode } = useThemeMode();
+  const pathname = usePathname();
+  const router = useRouter();
+  const { isAuthenticated, loading } = useAuth();
+
+  const isAuthRoute = pathname === "/login";
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (!isAuthenticated && !isAuthRoute) {
+      const redirect =
+        pathname && pathname !== "/"
+          ? `?redirect=${encodeURIComponent(pathname)}`
+          : "";
+      router.replace(`/login${redirect}`);
+    } else if (isAuthenticated && isAuthRoute) {
+      router.replace("/");
+    }
+  }, [isAuthenticated, isAuthRoute, loading, pathname, router]);
+
+  const toaster = (
+    <Toaster
+      theme={mode}
+      position="top-right"
+      expand={false}
+      richColors
+      closeButton
+    />
+  );
+
+  if (isAuthRoute) {
+    if (isAuthenticated && !loading) {
+      return (
+        <>
+          {toaster}
+          <Box
+            sx={{
+              minHeight: "100vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Stack spacing={2} alignItems="center">
+              <CircularProgress size={32} />
+            </Stack>
+          </Box>
+        </>
+      );
+    }
+    return (
+      <>
+        {toaster}
+        <Box
+          component="main"
+          sx={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            p: 3
+          }}
+        >
+          {children}
+        </Box>
+      </>
+    );
+  }
+
+  if (loading || !isAuthenticated) {
+    return (
+      <>
+        {toaster}
+        <Box
+          sx={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <Stack spacing={2} alignItems="center">
+            <CircularProgress size={32} />
+          </Stack>
+        </Box>
+      </>
+    );
+  }
+
+  return (
+    <BottomPanelProvider>
+      <ConfirmationDialogProvider>
+        <HeaderActionsProvider>
+          {toaster}
+          <Shell>
+            <Sidebar />
+            <AppLayoutMain>{children}</AppLayoutMain>
+            <BottomPanelWrapper />
+          </Shell>
+        </HeaderActionsProvider>
+      </ConfirmationDialogProvider>
+    </BottomPanelProvider>
+  );
+};
+
+const AppLayoutMain = ({ children }: AppLayoutProps) => {
+  const pathname = usePathname();
+  const headerActions = useHeaderActionsConfig();
 
   const { title, subtitle } = useMemo(() => {
     const defaults = {
       title: "Dashboard",
-      subtitle: "Manage Docker containers, images, networks, and volumes from a unified control plane."
+      subtitle: "Monitor and operate your infrastructure from a unified control plane."
     };
 
     if (!pathname) {
@@ -52,56 +166,105 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
     const lookup: Record<string, { title: string; subtitle: string }> = {
       "/": defaults,
+      "/server/docker/containers": {
+        title: "Container Management",
+        subtitle: "Start, stop, and inspect workload containers while tracking resource utilization."
+      },
       "/containers": {
         title: "Container Management",
         subtitle: "Start, stop, and inspect workload containers while tracking resource utilization."
+      },
+      "/server/docker/images": {
+        title: "Image Catalog",
+        subtitle: "Review image versions, audit storage consumption, and prepare artifacts for deployment."
       },
       "/images": {
         title: "Image Catalog",
         subtitle: "Review image versions, audit storage consumption, and prepare artifacts for deployment."
       },
+      "/server/docker/volumes": {
+        title: "Volume Management",
+        subtitle: "Manage persistent storage, monitor usage, and safely prune unused data."
+      },
       "/volumes": {
         title: "Volume Management",
         subtitle: "Manage persistent storage, monitor usage, and safely prune unused data."
+      },
+      "/server/docker/networks": {
+        title: "Network Management",
+        subtitle: "Visualize Docker networks and confirm containers communicate across the right overlays."
       },
       "/networks": {
         title: "Network Management",
         subtitle: "Visualize Docker networks and confirm containers communicate across the right overlays."
       },
+      "/server/docker/logs": {
+        title: "Logs & Debugging",
+        subtitle: "Follow live logs, filter output, and troubleshoot services in real-time."
+      },
       "/logs": {
         title: "Logs & Debugging",
         subtitle: "Follow live logs, filter output, and troubleshoot services in real-time."
       },
+      "/server/docker/files": {
+        title: "File Browser",
+        subtitle: "Navigate container file systems to inspect configuration and generated assets."
+      },
       "/files": {
         title: "File Browser",
         subtitle: "Navigate container file systems to inspect configuration and generated assets."
+      },
+      "/server/docker/images/": {
+        title: "Image Detail",
+        subtitle: "Inspect image metadata, layers, and history before deployment."
+      },
+      "/server/domains": {
+        title: "Domain Management",
+        subtitle: "Organize DNS records, hostnames, and domain-level routing policies."
+      },
+      "/server/ssl": {
+        title: "SSL Certificates",
+        subtitle: "Issue, renew, and deploy TLS certificates with confidence."
+      },
+      "/server/nginx": {
+        title: "Nginx Configuration",
+        subtitle: "Manage reverse proxy directives and site templates for your edge."
+      },
+      "/server/proxies": {
+        title: "Proxy Manager",
+        subtitle: "Configure load-balancing rules and traffic routing across services."
+      },
+      "/server/email": {
+        title: "Email Management",
+        subtitle: "Centralize SMTP relays, mailboxes, and deliverability monitoring."
+      },
+      "/server/users": {
+        title: "User Management",
+        subtitle: "Invite teammates and tailor module-level permissions for each role."
+      },
+      "/images/": {
+        title: "Image Detail",
+        subtitle: "Inspect image metadata, layers, and history before deployment."
+      },
+      "/containers/": {
+        title: "Container Detail",
+        subtitle: "Review container health, logs, and configuration."
       }
     };
 
-    const key = Object.keys(lookup).find((route) => route !== "/" && pathname.startsWith(route));
-    return key ? lookup[key] : lookup[pathname] ?? defaults;
+    const match = Object.keys(lookup)
+      .filter((route) => route !== "/")
+      .sort((a, b) => b.length - a.length)
+      .find((route) => pathname.startsWith(route));
+
+    return match ? lookup[match] : lookup[pathname] ?? defaults;
   }, [pathname]);
 
   return (
-    <BottomPanelProvider>
-      <Toaster 
-        theme={mode}
-        position="top-right"
-        expand={false}
-        richColors
-        closeButton
-      />
-      <Shell>
-        <Sidebar />
-        <MainSection>
-          <TopBar title={title} subtitle={subtitle} />
-          <Content maxWidth="xl">
-            {children}
-          </Content>
-        </MainSection>
-        <BottomPanelWrapper />
-      </Shell>
-    </BottomPanelProvider>
+    <MainSection>
+      <TopBar title={title} subtitle={subtitle} onRefresh={headerActions.onRefresh} />
+      <Content maxWidth="xl">{children}</Content>
+    </MainSection>
   );
 };
 

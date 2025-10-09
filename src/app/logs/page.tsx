@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import { CircularProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
-import LogViewer from "@/features/logs/components/log-viewer";
-import { useContainers } from "@/features/containers/hooks/use-containers";
+import LogViewer from "@/features/docker/logs/components/log-viewer";
+import { useContainers } from "@/features/docker/containers/hooks/use-containers";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const LogsPageContent = () => {

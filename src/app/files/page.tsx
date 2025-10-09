@@ -2,7 +2,7 @@
 
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import { Stack, Typography } from "@mui/material";
-import ContainerFileBrowser from "@/features/files/components/container-file-browser";
+import ContainerFileBrowser from "@/features/docker/files/components/container-file-browser";
 
 const FilesPage = () => {
   return (

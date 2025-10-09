@@ -7,11 +7,12 @@ import LayersIcon from "@mui/icons-material/Layers";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import { Avatar, Box, Card, CardContent, Chip, Grid, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import ContainerList from "@/features/containers/components/container-list";
-import { useContainerMetrics } from "@/features/containers/hooks/use-containers";
-import { useImageStorage } from "@/features/images/hooks/use-images";
-import { useNetworks } from "@/features/networks/hooks/use-networks";
-import { useVolumes } from "@/features/volumes/hooks/use-volumes";
+import ContainerList from "@/features/docker/containers/components/container-list";
+import { ContainerProvider } from "@/features/docker/containers/context/container-provider";
+import { useContainerMetrics } from "@/features/docker/containers/hooks/use-containers";
+import { useImageStorage } from "@/features/docker/images/hooks/use-images";
+import { useNetworks } from "@/features/docker/networks/hooks/use-networks";
+import { useVolumes } from "@/features/docker/volumes/hooks/use-volumes";
 
 const MetricCard = styled(Card)(({ theme }) => ({
   display: "flex",
@@ -51,7 +52,7 @@ const upcomingJobs = [
   { id: "job-2", label: "image-cleanup", schedule: "Tomorrow · 03:00", status: "queued" }
 ];
 
-const DashboardPage = () => {
+const DashboardPageContent = () => {
   const { metrics } = useContainerMetrics();
   const { storage } = useImageStorage();
   const { data: networks } = useNetworks();
@@ -168,6 +169,14 @@ const DashboardPage = () => {
         </Grid>
       </Grid>
     </Stack>
+  );
+};
+
+const DashboardPage = () => {
+  return (
+    <ContainerProvider>
+      <DashboardPageContent />
+    </ContainerProvider>
   );
 };
 

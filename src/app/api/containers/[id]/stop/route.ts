@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { dockerService } from "@/server/docker/service";
+import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export async function POST(_request: Request, { params }: { params: { id: string } }) {
+export const POST = withAuth(async (_request, { params }, _user) => {
   const containerId = params?.id;
 
   if (!containerId) {
@@ -17,5 +18,4 @@ export async function POST(_request: Request, { params }: { params: { id: string
     console.error(`Failed to stop container ${containerId}`, error);
     return NextResponse.json({ message: "Unable to stop container." }, { status: 500 });
   }
-}
-
+}, { permission: "containers:manage" });

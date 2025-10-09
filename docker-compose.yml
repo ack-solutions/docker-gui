@@ -1,36 +1,36 @@
-version: '3.8'
+version: "3.9"
 
 services:
   docker-gui:
+    container_name: docker-gui-dev
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: docker-gui
+      target: base
+    command: sh -c "yarn install && yarn dev"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+      DATABASE_URL: file:/app/data/docker-gui.db
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-development}
+      NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
+      SQLITE_PATH: ${SQLITE_PATH:-/app/data/auth.db}
     ports:
       - "3000:3000"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
+      - docker-gui-node-modules:/app/node_modules
       - docker-gui-data:/app/data
-    environment:
-      - NODE_ENV=production
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - DATABASE_URL=file:/app/data/docker-gui.db
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
-    restart: unless-stopped
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - docker-gui-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
 volumes:
+  docker-gui-node-modules:
   docker-gui-data:
-    driver: local
 
 networks:
   docker-gui-network:
     driver: bridge
-

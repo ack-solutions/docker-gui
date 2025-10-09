@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { dockerService } from "@/server/docker/service";
+import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export const GET = withAuth(async (_request, _context, _user) => {
   try {
     const networks = await dockerService.listNetworks();
     return NextResponse.json(networks);
@@ -11,4 +12,4 @@ export async function GET() {
     console.error("Failed to fetch networks", error);
     return NextResponse.json({ message: "Unable to retrieve networks." }, { status: 502 });
   }
-}
+}, { permission: "networks:view" });

@@ -2,7 +2,7 @@ import axios from "axios";
 
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api",
-  timeout: 20000,
+  timeout: 300000, // 5 minutes for long-running operations like pulling images
   headers: {
     "Content-Type": "application/json"
   }

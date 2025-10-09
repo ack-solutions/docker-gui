@@ -1,19 +1,33 @@
 "use client";
 
-import { Stack, Typography } from "@mui/material";
-import ContainerList from "@/features/containers/components/container-list";
+import { useCallback, useEffect } from "react";
+import ContainerList from "@/features/docker/containers/components/container-list";
+import { ContainerProvider, useContainerStore } from "@/features/docker/containers/context/container-provider";
+import { useHeaderActions } from "@/components/layout/header-actions-context";
+
+const ContainersPageContent = () => {
+  const { refresh } = useContainerStore();
+  const { setActions, clearActions } = useHeaderActions();
+
+  const handleRefresh = useCallback(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    setActions({ onRefresh: handleRefresh });
+    return () => {
+      clearActions();
+    };
+  }, [clearActions, handleRefresh, setActions]);
+
+  return <ContainerList />;
+};
 
 const ContainersPage = () => {
   return (
-    <Stack spacing={3}>
-      <Typography variant="h5">
-        Container Management
-      </Typography>
-      <Typography variant="body1" color="text.secondary">
-        Start, stop, and inspect your Docker containers. Interact with logs, resource usage, and shell access to keep services healthy.
-      </Typography>
-      <ContainerList />
-    </Stack>
+    <ContainerProvider>
+      <ContainersPageContent />
+    </ContainerProvider>
   );
 };
 

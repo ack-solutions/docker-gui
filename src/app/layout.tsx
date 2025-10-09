@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
 import QueryProvider from "@/components/providers/query-provider";
+import { AuthProvider } from "@/components/providers/auth-provider";
 import AppLayout from "@/components/layout/app-layout";
 import ThemeRegistry from "@/components/theme/theme-registry";
 import "./globals.css";
@@ -17,7 +18,9 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
         <AppRouterCacheProvider options={{ key: "mui" }}>
           <ThemeRegistry>
             <QueryProvider>
-              <AppLayout>{children}</AppLayout>
+              <AuthProvider>
+                <AppLayout>{children}</AppLayout>
+              </AuthProvider>
             </QueryProvider>
           </ThemeRegistry>
         </AppRouterCacheProvider>

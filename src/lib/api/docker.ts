@@ -1,8 +1,11 @@
 import apiClient from "@/lib/api/client";
 import type {
   ContainerFileNode,
+  CreateContainerRequest,
   DockerContainer,
+  DockerContainerInspect,
   DockerImage,
+  DockerImageInspect,
   DockerLogEntry,
   DockerNetwork,
   DockerPruneSummary,
@@ -108,6 +111,143 @@ const mockNetworks: DockerNetwork[] = [
 const mockPruneSummary: DockerPruneSummary = {
   removedCount: 2,
   reclaimedSpace: 1024 * 1024 * 640
+};
+
+const mockContainerInspect: DockerContainerInspect = {
+  id: mockContainers[0].id,
+  name: mockContainers[0].name,
+  createdAt: mockContainers[0].createdAt,
+  path: "/docker-entrypoint.sh",
+  args: [],
+  image: mockContainers[0].image,
+  imageId: `sha256:${mockContainers[0].id}`,
+  platform: "linux/amd64",
+  driver: "overlay2",
+  config: {
+    hostname: "demo-web-1",
+    domainname: "",
+    user: "",
+    env: ["NODE_ENV=production", "PORT=3000"],
+    cmd: ["npm", "start"],
+    entrypoint: ["docker-entrypoint.sh"],
+    workingDir: "/app",
+    labels: {
+      "com.docker.compose.project": "demo",
+      "com.docker.compose.service": "web"
+    }
+  },
+  state: {
+    status: "running",
+    running: true,
+    paused: false,
+    restarting: false,
+    oomKilled: false,
+    dead: false,
+    pid: 1234,
+    exitCode: 0,
+    startedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    finishedAt: undefined,
+    health: undefined
+  },
+  networkSettings: {
+    ipAddress: "172.18.0.5",
+    macAddress: "02:42:ac:12:00:05",
+    networks: {
+      demo_default: {
+        ipAddress: "172.18.0.5",
+        macAddress: "02:42:ac:12:00:05",
+        gateway: "172.18.0.1",
+        globalIPv6Address: undefined,
+        ipv6Gateway: undefined
+      }
+    },
+    ports: {
+      "80/tcp": [{ hostIp: "0.0.0.0", hostPort: "8080" }]
+    }
+  },
+  mounts: [
+    {
+      type: "bind",
+      source: "/var/www/demo",
+      destination: "/app",
+      mode: "rw",
+      rw: true,
+      propagation: "rprivate",
+      name: null,
+      driver: undefined
+    }
+  ],
+  hostConfig: {
+    networkMode: "bridge",
+    restartPolicy: {
+      name: "unless-stopped",
+      maximumRetryCount: 0
+    },
+    binds: ["/var/www/demo:/app"],
+    extraHosts: undefined,
+    logConfig: {
+      type: "json-file",
+      config: {
+        "max-size": "10m"
+      }
+    },
+    portBindings: {
+      "80/tcp": [{ hostIp: "0.0.0.0", hostPort: "8080" }]
+    }
+  }
+};
+
+const mockImageInspect: DockerImageInspect = {
+  id: mockImages[0].id,
+  repoTags: mockImages[0].repoTags,
+  repoDigests: ["sha256:123456"],
+  size: mockImages[0].size,
+  virtualSize: mockImages[0].size,
+  createdAt: mockImages[0].createdAt,
+  author: "Mock Author",
+  architecture: "amd64",
+  os: "linux",
+  osVersion: undefined,
+  dockerVersion: "24.0.0",
+  variant: undefined,
+  config: {
+    env: ["NODE_ENV=production"],
+    cmd: ["npm", "start"],
+    entrypoint: ["docker-entrypoint.sh"],
+    workingDir: "/app",
+    user: "node",
+    labels: {
+      maintainer: "Example"
+    },
+    exposedPorts: ["3000/tcp"]
+  },
+  rootFS: {
+    type: "layers",
+    layers: ["sha256:layer1", "sha256:layer2"],
+    diffIds: ["sha256:diff1", "sha256:diff2"]
+  },
+  history: [
+    {
+      id: "sha256:layer1",
+      created: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+      createdBy: "RUN npm install",
+      comment: "Install dependencies",
+      tags: [],
+      size: 52_428_800
+    },
+    {
+      id: "sha256:layer2",
+      created: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+      createdBy: "CMD [\"npm\", \"start\"]",
+      comment: "",
+      tags: mockImages[0].repoTags,
+      size: 10_485_760
+    }
+  ],
+  layers: [
+    { digest: "sha256:layer1", size: 52_428_800, createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() },
+    { digest: "sha256:layer2", size: 10_485_760, createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString() }
+  ]
 };
 
 const mockLogs: DockerLogEntry[] = Array.from({ length: 25 }).map((_, index) => ({
@@ -283,6 +423,11 @@ export const restartContainer = async (containerId: string) => {
   return true;
 };
 
+export const createContainer = async (payload: CreateContainerRequest) => {
+  const { data } = await apiClient.post<DockerContainer>("/containers", payload);
+  return data;
+};
+
 export const pruneStoppedContainers = async () =>
   withMockFallback<DockerPruneSummary>(
     async () => {
@@ -309,6 +454,17 @@ export const pruneVolumes = async () =>
     },
     () => ({ ...mockPruneSummary, removedCount: 1 })
   );
+
+export const pullImage = async (image: string) => {
+  if (useMockData) {
+    return { success: true, image };
+  }
+
+  const { data } = await apiClient.post<{ success: boolean; image: string }>("/images/pull", {
+    image
+  });
+  return data;
+};
 
 interface AttachLogOptions {
   since?: string;
@@ -396,5 +552,25 @@ export type {
   DockerVolume,
   DockerNetwork,
   DockerLogEntry,
-  ContainerFileNode
+  ContainerFileNode,
+  DockerContainerInspect,
+  DockerImageInspect
 } from "@/types/docker";
+
+export const fetchContainerInspect = async (containerId: string) =>
+  withMockFallback(
+    async () => {
+      const { data } = await apiClient.get<DockerContainerInspect>(`/containers/${containerId}/inspect`);
+      return data;
+    },
+    () => ({ ...mockContainerInspect, id: containerId, name: `container-${containerId}` })
+  );
+
+export const fetchImageInspect = async (imageId: string) =>
+  withMockFallback(
+    async () => {
+      const { data } = await apiClient.get<DockerImageInspect>(`/images/${imageId}/inspect`);
+      return data;
+    },
+    () => ({ ...mockImageInspect, id: imageId })
+  );

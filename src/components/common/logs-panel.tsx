@@ -10,7 +10,7 @@ import { Box, Chip, Divider, IconButton, InputAdornment, MenuItem, Stack, TextFi
 import { styled } from "@mui/material/styles";
 import moment from "moment";
 import { Controller, useForm } from "react-hook-form";
-import { useLogs } from "@/features/logs/hooks/use-logs";
+import { useLogs } from "@/features/docker/logs/hooks/use-logs";
 
 const SearchField = styled(TextField)({
   minWidth: 200
@@ -174,4 +174,3 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
 };
 
 export default LogsPanel;
-

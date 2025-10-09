@@ -59,6 +59,51 @@ A Next.js + Material UI dashboard for managing Docker resources such as containe
 
 If the dashboard shows a `502 Bad Gateway` message, the server could not reach Docker. Re-check the environment variables, socket permissions, and that the daemon is running.
 
+## Authentication & Users
+
+- The dashboard now requires authentication. Without a valid session token no API or page is accessible.
+- On first run, create an administrator account with a single POST request (subsequent registrations are disabled so the portal stays locked down):
+
+  ```bash
+  curl -X POST http://localhost:3000/api/auth/register \
+    -H "Content-Type: application/json" \
+    -d '{"email":"admin@example.com","password":"ChangeMe123!","name":"Platform Admin"}'
+  ```
+
+  Replace the credentials and update them immediately after signing in.
+
+- Sign in at [http://localhost:3000/login](http://localhost:3000/login). Sessions are JWT-based and stored in `localStorage`.
+- Manage additional users and their module-level permissions under **Server → User Management**. Roles (admin, operator, viewer) provide sensible defaults, and you can override access per module.
+- User and session data are stored in SQLite (`SQLITE_PATH`, default `/app/data/auth.db`). Make sure this path lives on persistent storage in production.
+
+## Running with Docker Compose
+
+### Local development (hot reload)
+
+1. Ensure Docker Desktop / Docker Engine is running and the Unix socket (or TCP endpoint) is reachable.
+2. Optionally duplicate `.env.example` to `.env.development` and adjust values.
+3. Start the dev stack with file watching and hot reload:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   The container mounts your workspace, runs `yarn install`, and executes `yarn dev`, so code edits on macOS, Linux, or Windows (via WSL2) trigger instant reloads. Generated SQLite data lives in `docker-gui-data` and the authentication database defaults to `/app/data/auth.db`; inspect them via `docker volume ls`.
+
+4. Stop the stack with `Ctrl+C` (foreground) or `docker compose down`.
+
+> **Windows note:** Bind-mounting `/var/run/docker.sock` is not supported on native Windows. Run the stack inside WSL2 or expose the Docker daemon at `tcp://host.docker.internal:2375` and set `DOCKER_HOST` accordingly before starting the compose service.
+
+### Production image
+
+Build and run the optimized Next.js output using the dedicated compose file:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+This uses the `runner` stage from the `Dockerfile`, copies the standalone Next.js bundle, and keeps data in the `docker-gui-data` volume. Set `JWT_SECRET`, `SQLITE_PATH`, and any additional environment variables prior to deployment.
+
 ## Project Structure
 
 ```

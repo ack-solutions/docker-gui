@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dockerService } from "@/server/docker/service";
+import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export const GET = withAuth(async (request: NextRequest, { params }, _user) => {
   const containerId = params?.id;
 
   if (!containerId) {
@@ -28,4 +29,4 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     console.error(`Failed to fetch logs for container ${containerId}`, error);
     return NextResponse.json({ message: "Unable to retrieve logs." }, { status: 500 });
   }
-}
+}, { permission: "logs:view" });

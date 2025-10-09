@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { dockerService } from "@/server/docker/service";
+import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export const POST = withAuth(async (request: Request, { params }, _user) => {
   const containerId = params?.id;
 
   if (!containerId) {
@@ -24,4 +25,4 @@ export async function POST(request: Request, { params }: { params: { id: string 
     console.error(`Failed to execute command in container ${containerId}`, error);
     return NextResponse.json({ message: "Unable to execute command." }, { status: 500 });
   }
-}
+}, { permission: "containers:manage" });
