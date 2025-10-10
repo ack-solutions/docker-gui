@@ -18,3 +18,4 @@ npm-debug.log*
 .vscode
 .idea
 *.swp
+db/docker-gui.db

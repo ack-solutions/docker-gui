@@ -21,7 +21,8 @@ export const AppDataSource = new DataSource({
   type: "sqlite",
   database: resolveDatabasePath(),
   entities: [UserEntity],
-  migrations: [InitUsers1708064400000],
+  // migrations: [InitUsers1708064400000],
+  synchronize: true,
   migrationsTableName: "migrations",
   logging: process.env.TYPEORM_LOGGING === "true"
 });

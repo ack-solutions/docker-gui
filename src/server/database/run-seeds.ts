@@ -118,7 +118,7 @@ const run = async () => {
     const runUp = async () => {
       for (const seed of applicableSeeds) {
         if (options.skipIfSeeded && seed.isSeeded) {
-          const seeded = await seed.isSeeded(dataSource);
+          const seeded = await seed.isSeeded();
           if (seeded) {
             console.info(`[seed:${seed.name}] Skipped (already seeded).`);
             continue;
@@ -132,7 +132,7 @@ const run = async () => {
     const runDown = async () => {
       for (const seed of [...applicableSeeds].reverse()) {
         console.info(`[seed:${seed.name}] Running down()`);
-        await seed.down(dataSource);
+        await seed.down();
       }
     };
 

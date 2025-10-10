@@ -55,6 +55,12 @@ export class InitUsers1708064400000 implements MigrationInterface {
             type: "datetime",
             isNullable: false,
             default: "CURRENT_TIMESTAMP"
+          },
+          {
+            name: "updatedAt",
+            type: "datetime",
+            isNullable: false,
+            default: "CURRENT_TIMESTAMP"
           }
         ]
       }),

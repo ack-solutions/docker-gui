@@ -7,28 +7,30 @@ export interface SeedOptions {
   targetSeedName: string | null;
 }
 
-export abstract class BaseSeed {
+export type SeedConstructor = new (dataSource: DataSource, options: SeedOptions) => BaseSeed;
 
+export abstract class BaseSeed {
+  readonly name: string;
+  readonly tags: string[];
   protected dataSource: DataSource;
+  protected options: SeedOptions;
 
   constructor(dataSource: DataSource, options: SeedOptions) {
     this.dataSource = dataSource;
+    this.options = options;
+    this.name = this.constructor.name;
+    this.tags = [];
   }
 
   abstract up(): Promise<void>;
-  
+
   abstract down(): Promise<void>;
-  
+
   async isSeeded?(): Promise<boolean> {
     return false;
   }
 
-  // ============================================================================
-  // Helper Methods
-  // ============================================================================
-
   protected shouldIncludeDummy(): boolean {
-    return process.env.SEED_INCLUDE_DUMMY === "true" || process.env.SEED_INCLUDE_DUMMY === "1";
+    return this.options.includeDummy;
   }
-
 }

@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
-import type { DataSource, Repository } from "typeorm";
+import type { DataSource } from "typeorm";
 import { UserEntity } from "@/server/user/user.entity";
 import { rolePermissions } from "@/types/user";
-import { BaseSeed } from "./base/base-seed";
+import { BaseSeed, type SeedOptions } from "./base/base-seed";
 
 const DUMMY_USERS = [
   {
@@ -26,6 +26,11 @@ const DUMMY_USERS = [
 const DUMMY_PASSWORD = "Password!23";
 
 export class UserSeed extends BaseSeed {
+
+  constructor(dataSource: DataSource, options: SeedOptions) {
+    super(dataSource, options);
+    this.tags.push("core");
+  }
 
   /**
    * Check if the seed has already been applied to the database
@@ -54,9 +59,6 @@ export class UserSeed extends BaseSeed {
    * Apply the seed - create users in the database
    */
   async up(): Promise<void> {
-    const repository = this.dataSource.getRepository(UserEntity);
-
-    // 1. Create super administrator
     await this.createSuperAdmin();
 
     // 2. Optionally create dummy users for development/testing
@@ -71,15 +73,11 @@ export class UserSeed extends BaseSeed {
   async down(): Promise<void> {
     const repository = this.dataSource.getRepository(UserEntity);
 
-    // 1. Remove super administrator
     await repository.delete({ isSuperAdmin: true });
     console.info("[seed:UserSeed] Removed super administrator.");
 
-    // 2. Remove dummy users if they were seeded
-    if (this.shouldIncludeDummy()) {
-      await this.dataSource.getRepository(UserEntity).delete(DUMMY_USERS.map((user) => ({ email: user.email })));
-      console.info("[seed:UserSeed] Removed dummy users.");
-    }
+    await repository.delete(DUMMY_USERS.map((user) => ({ email: user.email })));
+    console.info("[seed:UserSeed] Removed dummy users (if any).");
   }
 
   /**
@@ -94,15 +92,10 @@ export class UserSeed extends BaseSeed {
       return;
     }
 
-    const email = (process.env.DEFAULT_ADMIN_EMAIL ?? "admin@example.com").trim().toLowerCase();
+    const email = (process.env.DEFAULT_ADMIN_EMAIL ?? "admin@gmail.com").trim().toLowerCase();
     const name = process.env.DEFAULT_ADMIN_NAME ?? "Super Administrator";
-    let password = process.env.DEFAULT_ADMIN_PASSWORD?.trim();
+    let password = process.env.DEFAULT_ADMIN_PASSWORD?.trim() ?? "Admin@123";
 
-    if (!password || password.length < 8) {
-      password = this.generatePassword();
-      console.warn("[seed:UserSeed] DEFAULT_ADMIN_PASSWORD missing or too short. Generated temporary password.");
-      console.warn(`[seed:UserSeed] Temporary administrator password: ${password}`);
-    }
 
     const saltRounds = Number.parseInt(process.env.BCRYPT_SALT_ROUNDS ?? "10", 10);
     const passwordHash = bcrypt.hashSync(password, saltRounds);
@@ -136,14 +129,14 @@ export class UserSeed extends BaseSeed {
         continue;
       }
 
-      const entity = repository.create({
-        ...dummy,
-        passwordHash,
-        permissions: rolePermissions[dummy.role] ?? [],
-        isSuperAdmin: false
-      } as UserEntity);
-
-      await repository.save(entity);
+      await repository.save(
+        repository.create({
+          ...dummy,
+          passwordHash,
+          permissions: rolePermissions[dummy.role] ?? [],
+          isSuperAdmin: false
+        } as UserEntity)
+      );
     }
 
 
@@ -163,4 +156,3 @@ export class UserSeed extends BaseSeed {
     return candidate.slice(0, 18);
   }
 }
-
