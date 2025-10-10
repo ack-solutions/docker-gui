@@ -26,10 +26,7 @@ import {
   type ContainerActionState,
   type ContainerBulkActionState
 } from "@/store/docker/slice";
-import type {
-  CreateContainerRequest,
-  DockerContainer,
-} from "@/types/docker";
+import type { CreateContainerRequest, DockerContainer } from "@/types/docker";
 
 interface UseContainersOptions {
   refetchIntervalMs?: number;
@@ -54,12 +51,6 @@ export const useContainers = ({
   const status = useAppSelector(selectContainersStatus);
   const error = useAppSelector(selectContainersError);
   const isFetching = useAppSelector(selectContainersIsFetching);
-
-  useEffect(() => {
-    if (status === "idle") {
-      void dispatch(fetchContainers());
-    }
-  }, [dispatch, status]);
 
   useEffect(() => {
     if (!refetchIntervalMs || refetchIntervalMs <= 0) {

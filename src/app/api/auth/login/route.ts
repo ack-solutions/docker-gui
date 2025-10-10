@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AuthError, authService } from "@/server/auth/auth-service";
+import { AuthError, AUTH_COOKIE_NAME, authService } from "@/server/auth/auth-service";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,18 @@ export async function POST(request: Request) {
       password: password ?? ""
     });
 
-    return NextResponse.json(result);
+    const response = NextResponse.json(result);
+    response.cookies.set({
+      name: AUTH_COOKIE_NAME,
+      value: result.token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 12
+    });
+
+    return response;
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ message: error.message }, { status: error.statusCode });

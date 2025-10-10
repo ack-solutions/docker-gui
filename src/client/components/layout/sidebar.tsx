@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DnsIcon from "@mui/icons-material/Dns";
 import LayersIcon from "@mui/icons-material/Layers";
@@ -141,7 +142,6 @@ const Note = styled(Paper)(({ theme }) => ({
 
 const Sidebar = () => {
   const pathname = usePathname();
-  const router = useRouter();
   const { hasPermission } = useAuth();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
@@ -264,15 +264,21 @@ const Sidebar = () => {
                     <Collapse in={isOpen} timeout="auto" unmountOnExit>
                       <Stack spacing={0.25} sx={{ pl: 2 }}>
                         {item.children.map((child) => (
-                          <NavItem
+                          <Link
                             key={child.href ?? child.label}
-                            selected={Boolean(child.href && isPathActive(child.href))}
-                            onClick={() => child.href && router.push(child.href)}
-                            sx={{ pl: 2 }}
+                            href={child.href ?? "#"}
+                            passHref
+                            legacyBehavior
+                            style={{ textDecoration: "none", color: "inherit" }}
                           >
-                            {child.icon && <ListItemIcon>{child.icon}</ListItemIcon>}
-                            <ListItemText primary={child.label} />
-                          </NavItem>
+                            <NavItem
+                              selected={Boolean(child.href && isPathActive(child.href))}
+                              sx={{ pl: 2 }}
+                            >
+                              {child.icon && <ListItemIcon>{child.icon}</ListItemIcon>}
+                              <ListItemText primary={child.label} />
+                            </NavItem>
+                          </Link>
                         ))}
                       </Stack>
                     </Collapse>
@@ -281,14 +287,20 @@ const Sidebar = () => {
               }
 
               return (
-                <NavItem
+                <Link
                   key={item.href ?? item.label}
-                  selected={Boolean(item.href && isPathActive(item.href))}
-                  onClick={() => item.href && router.push(item.href)}
+                  href={item.href ?? "#"}
+                  passHref
+                  legacyBehavior
+                  style={{ textDecoration: "none", color: "inherit" }}
                 >
-                  {item.icon && <ListItemIcon>{item.icon}</ListItemIcon>}
-                  <ListItemText primary={item.label} />
-                </NavItem>
+                  <NavItem
+                    selected={Boolean(item.href && isPathActive(item.href))}
+                  >
+                    {item.icon && <ListItemIcon>{item.icon}</ListItemIcon>}
+                    <ListItemText primary={item.label} />
+                  </NavItem>
+                </Link>
               );
             })}
           </Stack>

@@ -31,38 +31,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const persistToken = useCallback((token: string | null) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (token) {
-      window.localStorage.setItem("authToken", token);
-    } else {
-      window.localStorage.removeItem("authToken");
-    }
-  }, []);
-
   const fetchCurrentUser = useCallback(async () => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    const token = window.localStorage.getItem("authToken");
-    if (!token) {
-      setUser(null);
-      return null;
-    }
-
     try {
-      const { data } = await apiClient.get<{ user: User }>("/auth/me");
+      const { data } = await apiClient.get<{ user: User }>("/auth/me", {
+        headers: { "x-skip-auth-redirect": "true" }
+      });
       setUser(data.user);
       return data.user;
-    } catch (error) {
-      console.error("Failed to fetch current user", error);
-      persistToken(null);
+    } catch (error: any) {
+      if (error?.response?.status !== 401) {
+        console.error("Failed to fetch current user", error);
+      }
       setUser(null);
       return null;
     }
-  }, [persistToken]);
+  }, []);
 
   const initialize = useCallback(async () => {
     setLoading(true);
@@ -76,7 +59,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const handleUnauthorized = () => {
-      persistToken(null);
+      void apiClient.post("/auth/logout").catch(() => undefined);
       setUser(null);
       setLoading(false);
       toast.error("Your session has expired. Please sign in again.");
@@ -89,28 +72,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     return undefined;
-  }, [persistToken, router]);
+  }, [router]);
 
   const login = useCallback(
     async (credentials: { email: string; password: string }) => {
       setLoading(true);
       try {
         const { data } = await apiClient.post<AuthResponse>("/auth/login", credentials);
-        persistToken(data.token);
         setUser(data.user);
         return data.user;
       } finally {
         setLoading(false);
       }
     },
-    [persistToken]
+    []
   );
 
   const logout = useCallback(() => {
-    persistToken(null);
+    void apiClient.post("/auth/logout").catch((error) => {
+      console.error("Failed to log out", error);
+    });
     setUser(null);
     router.replace("/login");
-  }, [persistToken, router]);
+  }, [router]);
 
   const refresh = useCallback(async () => {
     await fetchCurrentUser();

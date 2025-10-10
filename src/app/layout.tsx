@@ -4,6 +4,7 @@ import QueryProvider from "@/components/providers/query-provider";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import AppLayout from "@/components/layout/app-layout";
 import ThemeRegistry from "@/components/theme/theme-registry";
+import PageLoadingBar from "@/components/common/page-loading-bar";
 import StoreProvider from "@/store/provider";
 import "./globals.css";
 
@@ -18,6 +19,7 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
       <body>
         <AppRouterCacheProvider options={{ key: "mui" }}>
           <ThemeRegistry>
+            <PageLoadingBar />
             <StoreProvider>
               <QueryProvider>
                 <AuthProvider>

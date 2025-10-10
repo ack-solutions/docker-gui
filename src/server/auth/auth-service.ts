@@ -21,6 +21,8 @@ interface AuthResult {
   token: string;
 }
 
+export const AUTH_COOKIE_NAME = "auth_token";
+
 class AuthError extends Error {
   constructor(message: string, readonly statusCode = 400) {
     super(message);

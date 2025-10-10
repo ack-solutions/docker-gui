@@ -11,7 +11,7 @@ export type SeedConstructor = new (dataSource: DataSource, options: SeedOptions)
 
 export abstract class BaseSeed {
   readonly name: string;
-  readonly tags: string[];
+  public tags: string[];
   protected dataSource: DataSource;
   protected options: SeedOptions;
 

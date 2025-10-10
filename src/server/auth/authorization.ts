@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { AuthError, authService } from "@/server/auth/auth-service";
+import { AuthError, AUTH_COOKIE_NAME, authService } from "@/server/auth/auth-service";
 import type { User, UserPermission } from "@/types/user";
 
 export class AuthorizationError extends Error {
@@ -26,25 +26,32 @@ export const userHasPermission = (user: User, permission: UserPermission | UserP
 };
 
 export const getTokenFromRequest = (request: Request): string => {
-  const authorization =
+  const authorizationHeader =
     request.headers.get("authorization") ??
     request.headers.get("Authorization");
 
-  if (!authorization) {
-    throw new AuthorizationError("Authentication token is required.", 401);
+  if (authorizationHeader?.startsWith("Bearer ")) {
+    const token = authorizationHeader.slice(7).trim();
+    if (token) {
+      return token;
+    }
   }
 
-  if (!authorization.startsWith("Bearer ")) {
-    throw new AuthorizationError("Invalid authorization header.", 401);
+  const cookieHeader = request.headers.get("cookie");
+  if (cookieHeader) {
+    const cookies = Object.fromEntries(
+      cookieHeader.split(";").map((part) => {
+        const [key, ...rest] = part.trim().split("=");
+        return [key, rest.join("=")];
+      })
+    );
+    const token = cookies[AUTH_COOKIE_NAME];
+    if (token) {
+      return decodeURIComponent(token);
+    }
   }
 
-  const token = authorization.slice(7).trim();
-
-  if (!token) {
-    throw new AuthorizationError("Authentication token is required.", 401);
-  }
-
-  return token;
+  throw new AuthorizationError("Authentication token is required.", 401);
 };
 
 export const requireUser = async (
