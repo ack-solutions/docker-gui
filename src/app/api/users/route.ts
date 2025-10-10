@@ -29,7 +29,7 @@ const sanitizePermissions = (value: unknown): UserPermission[] | null => {
 export const runtime = "nodejs";
 
 export const GET = withAuth(async () => {
-  const users = userService.list();
+  const users = await userService.list();
   return NextResponse.json(users);
 }, { permission: "users:manage" });
 
@@ -47,16 +47,20 @@ export const POST = withAuth(async (request) => {
   }
 
   try {
-    const user = userService.create({
+    const user = await userService.create({
       email,
       password,
       name,
       role,
-      permissions
+      permissions,
+      isSuperAdmin: false
     });
     return NextResponse.json(user, { status: 201 });
   } catch (error: any) {
-    if (error?.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    if (
+      error?.code === "SQLITE_CONSTRAINT" ||
+      (typeof error?.message === "string" && error.message.includes("UNIQUE constraint failed"))
+    ) {
       return NextResponse.json({ message: "Email is already registered." }, { status: 409 });
     }
     console.error("Failed to create user", error);

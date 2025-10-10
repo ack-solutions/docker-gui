@@ -18,10 +18,33 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@/client/*": [
+        "./src/client/*"
+      ],
+      "@/components/*": [
+        "./src/client/components/*"
+      ],
+      "@/features/*": [
+        "./src/client/features/*"
+      ],
+      "@/lib/*": [
+        "./src/client/lib/*"
+      ],
+      "@/theme/*": [
+        "./src/client/theme/*"
+      ],
+      "@/store/*": [
+        "./src/client/store/*"
+      ],
+      "@/server/*": [
+        "./src/server/*"
       ]
     },
     "plugins": [

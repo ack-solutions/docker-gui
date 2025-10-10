@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import UserRepository from "@/server/user/user-repository";
@@ -31,6 +32,7 @@ class AuthService {
   private readonly jwtSecret: string;
   private readonly tokenExpiresIn: string;
   private readonly saltRounds: number;
+  private readonly bootstrapReady: Promise<void>;
 
   constructor(
     private readonly repository = new UserRepository(),
@@ -39,19 +41,77 @@ class AuthService {
     this.jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? process.env.AUTH_SECRET ?? "development-secret";
     this.tokenExpiresIn = options.tokenExpiresIn ?? process.env.JWT_EXPIRES_IN ?? "12h";
     this.saltRounds = options.saltRounds ?? Number.parseInt(process.env.BCRYPT_SALT_ROUNDS ?? "10", 10);
+    this.bootstrapReady = this.bootstrapDefaultAdmin();
   }
 
-  register(credentials: AuthCredentials): AuthResult {
+  private async bootstrapDefaultAdmin(): Promise<void> {
+    try {
+      const existingUsers = await this.repository.all();
+      const existingSuperAdmin = existingUsers.find((user) => user.isSuperAdmin);
+      if (existingSuperAdmin) {
+        return;
+      }
+
+      if (existingUsers.length > 0) {
+        const promoted = existingUsers.find((user) => user.role === "admin") ?? existingUsers[0];
+        await this.repository.update(promoted.id, {
+          role: "admin",
+          permissions: rolePermissions.admin,
+          isSuperAdmin: true
+        });
+        console.warn(
+          `[auth] Promoted existing account (${promoted.email}) to super administrator because none was configured.`
+        );
+        return;
+      }
+
+      const email = (process.env.DEFAULT_ADMIN_EMAIL ?? "admin@example.com").trim().toLowerCase();
+      const name = process.env.DEFAULT_ADMIN_NAME ?? "Super Administrator";
+      let password = process.env.DEFAULT_ADMIN_PASSWORD?.trim();
+
+      if (!password || password.length < 8) {
+        let candidate = "";
+        while (candidate.length < 12) {
+          candidate += randomBytes(24)
+            .toString("base64")
+            .replace(/[^a-zA-Z0-9]/g, "");
+        }
+        password = candidate.slice(0, 18);
+        console.warn(
+          `[auth] DEFAULT_ADMIN_PASSWORD not provided; generated temporary password for ${email}. Update the environment variables immediately.`
+        );
+        console.warn(`[auth] Temporary administrator password: ${password}`);
+      }
+
+      const passwordHash = bcrypt.hashSync(password, this.saltRounds);
+      await this.repository.create({
+        email,
+        passwordHash,
+        name,
+        role: "admin",
+        permissions: rolePermissions.admin,
+        isSuperAdmin: true
+      });
+
+      console.info(`[auth] Bootstrapped default administrator account (${email}).`);
+    } catch (error) {
+      console.error("Failed to bootstrap default administrator", error);
+    }
+  }
+
+  async register(credentials: AuthCredentials): Promise<AuthResult> {
+    await this.bootstrapReady;
+
     const email = credentials.email.trim().toLowerCase();
     if (!email || !credentials.password) {
       throw new AuthError("Email and password are required.");
     }
 
-    if (this.repository.count() > 0) {
+    if ((await this.repository.count()) > 0) {
       throw new AuthError("Registration is disabled. Ask an administrator to provision your account.", 403);
     }
 
-    const existing = this.repository.findByEmail(email);
+    const existing = await this.repository.findByEmail(email);
     if (existing) {
       throw new AuthError("Email is already registered.", 409);
     }
@@ -59,23 +119,26 @@ class AuthService {
     const passwordHash = bcrypt.hashSync(credentials.password, this.saltRounds);
     const role: UserRole = "admin";
     const permissions: UserPermission[] = rolePermissions[role] ?? [];
-    const record = this.repository.create({
+    const record = await this.repository.create({
       email,
       passwordHash,
       name: credentials.name ?? null,
       role,
-      permissions
+      permissions,
+      isSuperAdmin: true
     });
 
     return {
       user: this.toUser(record),
       token: this.createToken(record)
-    } satisfies AuthResult;
+    };
   }
 
-  login(credentials: AuthCredentials): AuthResult {
+  async login(credentials: AuthCredentials): Promise<AuthResult> {
+    await this.bootstrapReady;
+
     const email = credentials.email.trim().toLowerCase();
-    const record = this.repository.findByEmail(email);
+    const record = await this.repository.findByEmail(email);
 
     if (!record || !bcrypt.compareSync(credentials.password, record.passwordHash)) {
       throw new AuthError("Invalid email or password.", 401);
@@ -84,13 +147,15 @@ class AuthService {
     return {
       user: this.toUser(record),
       token: this.createToken(record)
-    } satisfies AuthResult;
+    };
   }
 
-  verify(token: string): User {
+  async verify(token: string): Promise<User> {
+    await this.bootstrapReady;
+
     try {
       const payload = jwt.verify(token, this.jwtSecret) as AuthTokenPayload;
-      const record = this.repository.findById(payload.sub);
+      const record = await this.repository.findById(payload.sub);
 
       if (!record) {
         throw new AuthError("User not found.", 404);
@@ -125,8 +190,9 @@ class AuthService {
       name: record.name,
       role: record.role,
       permissions: record.permissions,
+      isSuperAdmin: record.isSuperAdmin,
       createdAt: record.createdAt
-    } satisfies User;
+    };
   }
 }
 

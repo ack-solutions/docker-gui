@@ -73,6 +73,7 @@ export interface User {
   name?: string | null;
   role: UserRole;
   permissions: UserPermission[];
+  isSuperAdmin: boolean;
   createdAt: string;
 }
 
@@ -86,6 +87,7 @@ export interface CreateUserInput {
   name?: string | null;
   role: UserRole;
   permissions?: UserPermission[];
+  isSuperAdmin?: boolean;
 }
 
 export interface UpdateUserInput {
@@ -94,4 +96,5 @@ export interface UpdateUserInput {
   name?: string | null;
   role?: UserRole;
   permissions?: UserPermission[];
+  isSuperAdmin?: boolean;
 }

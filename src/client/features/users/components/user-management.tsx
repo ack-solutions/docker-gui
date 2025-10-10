@@ -160,6 +160,7 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
   const [submitting, setSubmitting] = useState(false);
 
   const title = mode === "create" ? "Invite user" : `Edit ${user?.name ?? user?.email ?? "user"}`;
+  const isSuperAdmin = Boolean(user?.isSuperAdmin);
 
   const handleClose = () => {
     if (!submitting) {
@@ -220,6 +221,7 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
               value={values.email}
               onChange={(event) => setValues((prev) => ({ ...prev, email: event.target.value }))}
               required
+              disabled={mode === "edit" && isSuperAdmin}
               autoComplete="email"
             />
             <TextField
@@ -246,6 +248,7 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
                 label="Role"
                 value={values.role}
                 onChange={(event) => handleRoleChange(event.target.value as UserRole)}
+                disabled={mode === "edit" && isSuperAdmin}
               >
                 <MenuItem value="admin">Administrator</MenuItem>
                 <MenuItem value="operator">Operator</MenuItem>
@@ -275,6 +278,7 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
                             size="small"
                             checked={values.permissions.includes(item.value)}
                             onChange={() => togglePermission(item.value)}
+                            disabled={mode === "edit" && isSuperAdmin}
                           />
                         }
                         label={item.label}
@@ -363,6 +367,10 @@ const UserManagement = () => {
   };
 
   const handleDelete = async (user: User) => {
+    if (user.isSuperAdmin) {
+      toast.error("The default super administrator cannot be removed.");
+      return;
+    }
     // eslint-disable-next-line no-alert
     const confirmed = window.confirm(
       `Delete ${user.email}? This action cannot be undone.`
@@ -438,63 +446,75 @@ const UserManagement = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {orderedUsers.map((user) => (
-                <TableRow hover key={user.id}>
-                  <TableCell>
-                    <Typography variant="body2">{user.email}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{user.name ?? "\u2014"}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <RoleChip label={user.role} size="small" color={user.role === "admin" ? "primary" : "default"} />
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                      {user.permissions.map((permission) => (
-                        <Chip
-                          key={permission}
-                          label={permissionLabelMap[permission] ?? permission}
-                          size="small"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title={moment(user.createdAt).format("MMM D, YYYY h:mm A")}>
-                      <Typography variant="body2">
-                        {moment(user.createdAt).fromNow()}
-                      </Typography>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} justifyContent="flex-end">
-                      <Tooltip title="Edit user">
-                        <Button
-                          variant="text"
-                          size="small"
-                          startIcon={<EditIcon fontSize="small" />}
-                          onClick={() => openEditDialog(user)}
-                        >
-                          Edit
-                        </Button>
+              {orderedUsers.map((user) => {
+                const isSuperAdmin = user.isSuperAdmin;
+                return (
+                  <TableRow hover key={user.id}>
+                    <TableCell>
+                      <Typography variant="body2">{user.email}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{user.name ?? "\u2014"}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.75} alignItems="center">
+                        <RoleChip label={user.role} size="small" color={user.role === "admin" ? "primary" : "default"} />
+                        {isSuperAdmin ? <Chip label="Super admin" size="small" color="secondary" /> : null}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                        {user.permissions.map((permission) => (
+                          <Chip
+                            key={permission}
+                            label={permissionLabelMap[permission] ?? permission}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title={moment(user.createdAt).format("MMM D, YYYY h:mm A")}>
+                        <Typography variant="body2">
+                          {moment(user.createdAt).fromNow()}
+                        </Typography>
                       </Tooltip>
-                      <Tooltip title="Remove user">
-                        <Button
-                          variant="text"
-                          size="small"
-                          color="error"
-                          startIcon={<DeleteOutlineIcon fontSize="small" />}
-                          onClick={() => handleDelete(user)}
-                        >
-                          Remove
-                        </Button>
-                      </Tooltip>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Tooltip title={isSuperAdmin ? "Super admin details" : "Edit user"}>
+                          <span>
+                            <Button
+                              variant="text"
+                              size="small"
+                              startIcon={<EditIcon fontSize="small" />}
+                              onClick={() => openEditDialog(user)}
+                              disabled={createUser.isPending || updateUser.isPending}
+                            >
+                              Edit
+                            </Button>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title={isSuperAdmin ? "Super admin cannot be removed" : "Remove user"}>
+                          <span>
+                            <Button
+                              variant="text"
+                              size="small"
+                              color="error"
+                              startIcon={<DeleteOutlineIcon fontSize="small" />}
+                              onClick={() => handleDelete(user)}
+                              disabled={isSuperAdmin || deleteUser.isPending}
+                            >
+                              Remove
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           {orderedUsers.length === 0 ? (

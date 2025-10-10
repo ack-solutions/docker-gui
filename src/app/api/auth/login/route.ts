@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const { email, password } = body as { email?: string; password?: string };
 
-    const result = authService.login({
+    const result = await authService.login({
       email: email ?? "",
       password: password ?? ""
     });

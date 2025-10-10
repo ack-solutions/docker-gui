@@ -1,136 +1,91 @@
-import { randomUUID } from "node:crypto";
-import SqliteClient from "@/server/database/sqlite-client";
+import type { Repository } from "typeorm";
+import { getDataSource } from "@/server/database/data-source";
+import { UserEntity } from "@/server/user/user.entity";
+import { userPermissions } from "@/types/user";
 import type { UserPermission, UserRecord, UserRole } from "@/types/user";
 
+const VALID_PERMISSION_SET = new Set(userPermissions);
+
 class UserRepository {
-  private readonly db = SqliteClient.getInstance();
-
-  constructor() {
-    this.initialize();
+  private normalizePermissions(input: UserPermission[] = []): UserPermission[] {
+    return input.filter((permission) => VALID_PERMISSION_SET.has(permission));
   }
 
-  private initialize() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT,
-        role TEXT NOT NULL DEFAULT 'viewer',
-        permissions TEXT NOT NULL DEFAULT '[]',
-        created_at TEXT NOT NULL
-      );
-    `);
-    this.ensureColumns();
+  private async getRepository(): Promise<Repository<UserEntity>> {
+    const dataSource = await getDataSource();
+    return dataSource.getRepository(UserEntity);
   }
 
-  private ensureColumns() {
-    const columns = this.db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
-    const columnNames = columns.map((column) => column.name);
-
-    if (!columnNames.includes("role")) {
-      this.db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'viewer'");
+  private mapPermissions(raw: unknown): UserPermission[] {
+    if (!Array.isArray(raw)) {
+      return [];
     }
-
-    if (!columnNames.includes("permissions")) {
-      this.db.exec("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'");
-    }
+    return raw
+      .filter((entry): entry is UserPermission => typeof entry === "string" && VALID_PERMISSION_SET.has(entry as UserPermission));
   }
 
-  private mapRow(row: any): UserRecord | null {
-    if (!row) {
-      return null;
-    }
-
+  private mapUser(user: UserEntity): UserRecord {
     return {
-      id: row.id,
-      email: row.email,
-      passwordHash: row.password_hash,
-      name: row.name,
-      role: row.role ?? "viewer",
-      permissions: this.parsePermissions(row.permissions),
-      createdAt: row.created_at
-    } satisfies UserRecord;
+      id: user.id,
+      email: user.email,
+      passwordHash: user.passwordHash,
+      name: user.name ?? null,
+      role: user.role as UserRole,
+      permissions: this.mapPermissions(user.permissions),
+      isSuperAdmin: user.isSuperAdmin,
+      createdAt: user.createdAt.toISOString()
+    };
   }
 
-  private parsePermissions(raw: string | null | undefined): UserPermission[] {
-    if (!raw) {
-      return [];
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed.filter((item) => typeof item === "string") as UserPermission[]) : [];
-    } catch {
-      return [];
-    }
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    const repository = await this.getRepository();
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await repository.findOne({ where: { email: normalizedEmail } });
+    return user ? this.mapUser(user) : null;
   }
 
-  findByEmail(email: string): UserRecord | null {
-    const statement = this.db.prepare(
-      "SELECT id, email, password_hash, name, role, permissions, created_at FROM users WHERE email = ?"
-    );
-    const row = statement.get(email.toLowerCase());
-    return this.mapRow(row);
+  async findById(id: string): Promise<UserRecord | null> {
+    const repository = await this.getRepository();
+    const user = await repository.findOne({ where: { id } });
+    return user ? this.mapUser(user) : null;
   }
 
-  findById(id: string): UserRecord | null {
-    const statement = this.db.prepare(
-      "SELECT id, email, password_hash, name, role, permissions, created_at FROM users WHERE id = ?"
-    );
-    const row = statement.get(id);
-    return this.mapRow(row);
+  async all(): Promise<UserRecord[]> {
+    const repository = await this.getRepository();
+    const users = await repository.find({ order: { email: "ASC" } });
+    return users.map((user) => this.mapUser(user));
   }
 
-  all(): UserRecord[] {
-    const statement = this.db.prepare(
-      "SELECT id, email, password_hash, name, role, permissions, created_at FROM users ORDER BY email ASC"
-    );
-    return statement.all().map((row) => this.mapRow(row)).filter(Boolean) as UserRecord[];
+  async count(): Promise<number> {
+    const repository = await this.getRepository();
+    return repository.count();
   }
 
-  count(): number {
-    const statement = this.db.prepare("SELECT COUNT(*) AS total FROM users");
-    const row = statement.get() as { total: number };
-    return row?.total ?? 0;
-  }
-
-  create(input: {
+  async create(input: {
     email: string;
     passwordHash: string;
     name?: string | null;
     role: UserRole;
     permissions: UserPermission[];
-  }): UserRecord {
-    const id = randomUUID();
-    const createdAt = new Date().toISOString();
-    const normalizedEmail = input.email.toLowerCase();
-
-    const statement = this.db.prepare(
-      "INSERT INTO users (id, email, password_hash, name, role, permissions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    );
-
-    statement.run(
-      id,
-      normalizedEmail,
-      input.passwordHash,
-      input.name ?? null,
-      input.role,
-      JSON.stringify(input.permissions),
-      createdAt
-    );
-
-    return {
-      id,
+    isSuperAdmin?: boolean;
+  }): Promise<UserRecord> {
+    const repository = await this.getRepository();
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const user = repository.create({
       email: normalizedEmail,
       passwordHash: input.passwordHash,
       name: input.name ?? null,
       role: input.role,
-      permissions: input.permissions,
-      createdAt
-    };
+      permissions: this.normalizePermissions(input.permissions),
+      isSuperAdmin: Boolean(input.isSuperAdmin)
+    });
+
+    await repository.save(user);
+
+    return this.mapUser(user);
   }
 
-  update(
+  async update(
     id: string,
     input: {
       email?: string;
@@ -138,42 +93,47 @@ class UserRepository {
       name?: string | null;
       role?: UserRole;
       permissions?: UserPermission[];
+      isSuperAdmin?: boolean;
     }
-  ): UserRecord | null {
-    const existing = this.findById(id);
+  ): Promise<UserRecord | null> {
+    const repository = await this.getRepository();
+    const existing = await repository.findOne({ where: { id } });
     if (!existing) {
       return null;
     }
 
-    const next: UserRecord = {
-      ...existing,
-      email: input.email?.toLowerCase() ?? existing.email,
-      passwordHash: input.passwordHash ?? existing.passwordHash,
-      name: input.name ?? existing.name ?? null,
-      role: input.role ?? existing.role,
-      permissions: input.permissions ?? existing.permissions
-    };
+    if (input.email !== undefined) {
+      existing.email = input.email.trim().toLowerCase();
+    }
+    if (input.passwordHash !== undefined) {
+      existing.passwordHash = input.passwordHash;
+    }
+    if (input.name !== undefined) {
+      existing.name = input.name ?? null;
+    }
+    if (input.role !== undefined) {
+      existing.role = input.role;
+    }
+    if (input.permissions !== undefined) {
+      existing.permissions = this.normalizePermissions(input.permissions);
+    }
+    if (input.isSuperAdmin !== undefined) {
+      existing.isSuperAdmin = input.isSuperAdmin;
+    }
 
-    const statement = this.db.prepare(
-      "UPDATE users SET email = ?, password_hash = ?, name = ?, role = ?, permissions = ? WHERE id = ?"
-    );
-
-    statement.run(
-      next.email,
-      next.passwordHash,
-      next.name ?? null,
-      next.role,
-      JSON.stringify(next.permissions),
-      id
-    );
-
-    return next;
+    await repository.save(existing);
+    return this.mapUser(existing);
   }
 
-  delete(id: string): boolean {
-    const statement = this.db.prepare("DELETE FROM users WHERE id = ?");
-    const result = statement.run(id);
-    return result.changes > 0;
+  async delete(id: string): Promise<boolean> {
+    const repository = await this.getRepository();
+    const existing = await repository.findOne({ where: { id } });
+    if (!existing) {
+      return false;
+    }
+
+    await repository.remove(existing);
+    return true;
   }
 }
 

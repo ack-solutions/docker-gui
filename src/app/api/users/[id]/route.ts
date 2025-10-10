@@ -37,7 +37,7 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
     return NextResponse.json({ message: "User id is required." }, { status: 400 });
   }
 
-  const existing = userService.getById(userId);
+  const existing = await userService.getById(userId);
   if (!existing) {
     return NextResponse.json({ message: "User not found." }, { status: 404 });
   }
@@ -56,11 +56,17 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
     if (typeof payload.email !== "string" || !payload.email.trim()) {
       return NextResponse.json({ message: "Email must be a non-empty string." }, { status: 400 });
     }
-    updates.email = payload.email.trim();
+    const nextEmail = payload.email.trim();
+    if (nextEmail.toLowerCase() !== existing.email.toLowerCase()) {
+      updates.email = nextEmail;
+    }
   }
 
   if (payload.name !== undefined) {
-    updates.name = typeof payload.name === "string" ? payload.name : null;
+    const nextName = typeof payload.name === "string" ? payload.name : null;
+    if (nextName !== existing.name) {
+      updates.name = nextName;
+    }
   }
 
   if (payload.password !== undefined) {
@@ -75,7 +81,9 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
     if (!role) {
       return NextResponse.json({ message: "Invalid role provided." }, { status: 400 });
     }
-    updates.role = role;
+    if (role !== existing.role) {
+      updates.role = role;
+    }
   }
 
   if (payload.permissions !== undefined) {
@@ -83,11 +91,25 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
     if (!permissions) {
       return NextResponse.json({ message: "Invalid permissions payload." }, { status: 400 });
     }
-    updates.permissions = permissions;
+    const samePermissions =
+      permissions.length === existing.permissions.length &&
+      permissions.every((perm) => existing.permissions.includes(perm));
+    if (!samePermissions) {
+      updates.permissions = permissions;
+    }
   }
 
   if (!Object.keys(updates).length) {
     return NextResponse.json({ message: "No updates provided." }, { status: 400 });
+  }
+
+  if (
+    existing.isSuperAdmin &&
+    (Object.prototype.hasOwnProperty.call(updates, "email") ||
+      Object.prototype.hasOwnProperty.call(updates, "role") ||
+      Object.prototype.hasOwnProperty.call(updates, "permissions"))
+  ) {
+    return NextResponse.json({ message: "Default super administrator cannot be reassigned." }, { status: 400 });
   }
 
   if (updates.role && updates.permissions === undefined) {
@@ -98,9 +120,7 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
   const nextPermissions = updates.permissions ?? existing.permissions;
 
   if (existing.role === "admin" && nextRole !== "admin") {
-    const otherAdmins = userService
-      .list()
-      .filter((user) => user.id !== existing.id && user.role === "admin");
+    const otherAdmins = (await userService.list()).filter((user) => user.id !== existing.id && user.role === "admin");
     if (!otherAdmins.length) {
       return NextResponse.json(
         { message: "At least one administrator must remain in the system." },
@@ -113,9 +133,7 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
     hasUserManagementPermission(existing.permissions) &&
     !hasUserManagementPermission(nextPermissions)
   ) {
-    const otherManagers = userService
-      .list()
-      .filter((user) => user.id !== existing.id && hasUserManagementPermission(user.permissions));
+    const otherManagers = (await userService.list()).filter((user) => user.id !== existing.id && hasUserManagementPermission(user.permissions));
     if (!otherManagers.length) {
       return NextResponse.json(
         { message: "At least one user must retain user management permissions." },
@@ -125,7 +143,7 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
   }
 
   try {
-    const updated = userService.update(userId, updates);
+    const updated = await userService.update(userId, updates);
     if (!updated) {
       return NextResponse.json({ message: "User not found." }, { status: 404 });
     }
@@ -137,7 +155,10 @@ export const PATCH = withAuth(async (request, { params }, currentUser) => {
 
     return NextResponse.json(updated);
   } catch (error: any) {
-    if (error?.code === "SQLITE_CONSTRAINT_UNIQUE") {
+    if (
+      error?.code === "SQLITE_CONSTRAINT" ||
+      (typeof error?.message === "string" && error.message.includes("UNIQUE constraint failed"))
+    ) {
       return NextResponse.json({ message: "Email is already registered." }, { status: 409 });
     }
     console.error(`Failed to update user ${userId}`, error);
@@ -151,7 +172,7 @@ export const DELETE = withAuth(async (_request, { params }, currentUser) => {
     return NextResponse.json({ message: "User id is required." }, { status: 400 });
   }
 
-  const existing = userService.getById(userId);
+  const existing = await userService.getById(userId);
   if (!existing) {
     return NextResponse.json({ message: "User not found." }, { status: 404 });
   }
@@ -160,10 +181,12 @@ export const DELETE = withAuth(async (_request, { params }, currentUser) => {
     return NextResponse.json({ message: "You cannot delete your own account." }, { status: 400 });
   }
 
+  if (existing.isSuperAdmin) {
+    return NextResponse.json({ message: "Default super administrator cannot be deleted." }, { status: 400 });
+  }
+
   if (existing.role === "admin") {
-    const otherAdmins = userService
-      .list()
-      .filter((user) => user.id !== existing.id && user.role === "admin");
+    const otherAdmins = (await userService.list()).filter((user) => user.id !== existing.id && user.role === "admin");
     if (!otherAdmins.length) {
       return NextResponse.json(
         { message: "At least one administrator must remain in the system." },
@@ -173,9 +196,7 @@ export const DELETE = withAuth(async (_request, { params }, currentUser) => {
   }
 
   if (hasUserManagementPermission(existing.permissions)) {
-    const otherManagers = userService
-      .list()
-      .filter((user) => user.id !== existing.id && hasUserManagementPermission(user.permissions));
+    const otherManagers = (await userService.list()).filter((user) => user.id !== existing.id && hasUserManagementPermission(user.permissions));
     if (!otherManagers.length) {
       return NextResponse.json(
         { message: "At least one user must retain user management permissions." },
@@ -185,7 +206,7 @@ export const DELETE = withAuth(async (_request, { params }, currentUser) => {
   }
 
   try {
-    const removed = userService.delete(userId);
+    const removed = await userService.delete(userId);
     if (!removed) {
       return NextResponse.json({ message: "User not found." }, { status: 404 });
     }

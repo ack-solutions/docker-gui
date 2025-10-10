@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const { email, password, name } = body as { email?: string; password?: string; name?: string };
 
-    const result = authService.register({
+    const result = await authService.register({
       email: email ?? "",
       password: password ?? "",
       name

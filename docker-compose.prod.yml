@@ -20,7 +20,9 @@ services:
       DATABASE_URL: file:/app/data/docker-gui.db
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
-      SQLITE_PATH: ${SQLITE_PATH:-/app/data/auth.db}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
     restart: unless-stopped
     networks:
       - docker-gui-network

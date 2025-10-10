@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: base
-    command: sh -c "yarn install && yarn dev"
+    command: sh -c "yarn install && yarn db:migrate && yarn db:seed && yarn dev"
     environment:
       NODE_ENV: development
       PORT: 3000
@@ -16,7 +16,9 @@ services:
       DATABASE_URL: file:/app/data/docker-gui.db
       JWT_SECRET: ${JWT_SECRET:-change-me-in-development}
       NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
-      SQLITE_PATH: ${SQLITE_PATH:-/app/data/auth.db}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
     ports:
       - "3000:3000"
     volumes:

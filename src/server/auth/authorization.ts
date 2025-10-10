@@ -49,9 +49,13 @@ export const getTokenFromRequest = (request: Request): string => {
   return token;
 };
 
-export const requireUser = (request: Request, permission?: UserPermission | UserPermission[], requireAll = false): User => {
+export const requireUser = async (
+  request: Request,
+  permission?: UserPermission | UserPermission[],
+  requireAll = false
+): Promise<User> => {
   const token = getTokenFromRequest(request);
-  const user = authService.verify(token);
+  const user = await authService.verify(token);
 
   if (permission && !userHasPermission(user, permission, requireAll)) {
     throw new AuthorizationError("You do not have permission to perform this action.", 403);
@@ -71,7 +75,7 @@ export const withAuth =
   <Context = unknown>(handler: WithAuthHandler<Context>, options: WithAuthOptions = {}) =>
   async (request: Request, context: Context) => {
     try {
-      const user = requireUser(request, options.permission, options.requireAll ?? false);
+      const user = await requireUser(request, options.permission, options.requireAll ?? false);
       return await handler(request, context, user);
     } catch (error) {
       if (error instanceof AuthorizationError || error instanceof AuthError) {

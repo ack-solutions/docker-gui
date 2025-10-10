@@ -68,4 +68,4 @@ ENV HOSTNAME="0.0.0.0"
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "yarn db:migrate && yarn db:seed && node server.js"]

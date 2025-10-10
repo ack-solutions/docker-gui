@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const user = authService.verify(token);
+    const user = await authService.verify(token);
     return NextResponse.json({ user });
   } catch (error) {
     if (error instanceof AuthError) {

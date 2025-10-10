@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const externalModules = ["better-sqlite3", "dockerode", "ssh2"];
+const externalModules = ["dockerode", "ssh2", "typeorm", "reflect-metadata", "sqlite3"];
 
 const nextConfig = {
   reactStrictMode: true,

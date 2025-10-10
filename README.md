@@ -61,8 +61,18 @@ If the dashboard shows a `502 Bad Gateway` message, the server could not reach D
 
 ## Authentication & Users
 
-- The dashboard now requires authentication. Without a valid session token no API or page is accessible.
-- On first run, create an administrator account with a single POST request (subsequent registrations are disabled so the portal stays locked down):
+- The portal now enforces authentication; without a session token, no API or page is reachable.
+- On boot, the server seeds a **default super administrator** if the user table is empty. Configure it via environment variables:
+
+  - `DEFAULT_ADMIN_EMAIL` (required in production) – login email for the bootstrap account
+  - `DEFAULT_ADMIN_PASSWORD` – optional; if omitted a strong, random password is generated and logged to stdout once
+  - `DEFAULT_ADMIN_NAME` – optional display name (defaults to “Super Administrator”)
+
+  The seeded account is marked as a permanent super admin: it cannot be deleted or demoted, guaranteeing the presence of at least one privileged operator.
+- Sign in at [http://localhost:3000/login](http://localhost:3000/login). Sessions are JWT-based and stored in `localStorage`.
+- Manage additional users and module-level permissions under **Server → User Management**. Roles (admin, operator, viewer) apply sensible defaults that you can override per permission.
+- User data is stored in SQLite (defaults to `file:/app/data/docker-gui.db`). Ensure the volume backing that path persists across restarts.
+- If you prefer provisioning the first user manually (e.g., for CI), you can still call the registration endpoint before the app boots:
 
   ```bash
   curl -X POST http://localhost:3000/api/auth/register \
@@ -70,11 +80,23 @@ If the dashboard shows a `502 Bad Gateway` message, the server could not reach D
     -d '{"email":"admin@example.com","password":"ChangeMe123!","name":"Platform Admin"}'
   ```
 
-  Replace the credentials and update them immediately after signing in.
+  Subsequent registrations are blocked; use the in-app user manager instead.
 
-- Sign in at [http://localhost:3000/login](http://localhost:3000/login). Sessions are JWT-based and stored in `localStorage`.
-- Manage additional users and their module-level permissions under **Server → User Management**. Roles (admin, operator, viewer) provide sensible defaults, and you can override access per module.
-- User and session data are stored in SQLite (`SQLITE_PATH`, default `/app/data/auth.db`). Make sure this path lives on persistent storage in production.
+## Database & TypeORM
+
+- Database access is managed through TypeORM. Entities live alongside their feature modules (for example `src/server/user/user.entity.ts`), migrations in `src/server/database/migrations`, and the shared datasource at `src/server/database/data-source.ts`.
+- `DATABASE_URL` should point to your SQLite file (defaults to `file:/app/data/docker-gui.db`). Swapping to Postgres/MySQL is supported by editing `typeorm.config.ts` and the datasource definition.
+- Common workflow:
+
+  ```bash
+  yarn db:migrate          # run pending migrations
+  yarn db:seed             # seed idempotent bootstrap data (safe to run repeatedly)
+  yarn db:migrate:revert   # rollback the latest migration
+  yarn typeorm migration:generate ./src/server/database/migrations/AddSomething
+  ```
+
+- When running inside Docker: `docker compose exec docker-gui yarn db:migrate` and `docker compose exec docker-gui yarn db:seed`.
+- The seed script is idempotent; it only creates the default super administrator when the database is empty.
 
 ## Running with Docker Compose
 
@@ -88,7 +110,7 @@ If the dashboard shows a `502 Bad Gateway` message, the server could not reach D
    docker compose up --build
    ```
 
-   The container mounts your workspace, runs `yarn install`, and executes `yarn dev`, so code edits on macOS, Linux, or Windows (via WSL2) trigger instant reloads. Generated SQLite data lives in `docker-gui-data` and the authentication database defaults to `/app/data/auth.db`; inspect them via `docker volume ls`.
+   The container mounts your workspace, installs dependencies, runs database migrations + seed in an idempotent manner, and then launches `yarn dev`, so code edits on macOS, Linux, or Windows (via WSL2) trigger instant reloads. The SQLite database file resides inside the `docker-gui-data` volume at `/app/data/docker-gui.db`; inspect it via `docker volume ls`.
 
 4. Stop the stack with `Ctrl+C` (foreground) or `docker compose down`.
 
@@ -102,16 +124,16 @@ Build and run the optimized Next.js output using the dedicated compose file:
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-This uses the `runner` stage from the `Dockerfile`, copies the standalone Next.js bundle, and keeps data in the `docker-gui-data` volume. Set `JWT_SECRET`, `SQLITE_PATH`, and any additional environment variables prior to deployment.
+This uses the `runner` stage from the `Dockerfile`, copies the standalone Next.js bundle, and keeps data in the `docker-gui-data` volume. Set `JWT_SECRET`, `DATABASE_URL`, and any additional environment variables prior to deployment. The container automatically applies migrations and seeds the default administrator before starting `node server.js`.
 
 ## Project Structure
 
 ```
 src/
-  app/                # Next.js app router pages and layouts
-  components/         # Layout, providers, and theming helpers
-  features/           # Domain-focused modules (containers, images, etc.)
-  lib/                # API client and shared utilities
+  app/                # Next.js App Router (remains at root for Next.js requirements)
+  client/             # Client-side code (React components, features, stores, theme, API clients)
+  server/             # Server-side code (auth, database, TypeORM entities/migrations, services)
+  types/              # Shared TypeScript types
 ```
 
 Each feature module contains hooks for data access and UI components. Hooks use React Query and default to mocked data, making it straightforward to swap in live Docker Engine endpoints.
