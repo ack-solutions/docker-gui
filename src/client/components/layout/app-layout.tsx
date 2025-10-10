@@ -47,7 +47,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const router = useRouter();
   const { isAuthenticated, loading } = useAuth();
 
-  const isAuthRoute = pathname === "/login";
+  const isAuthRoute = pathname === "/auth/login";
 
   useEffect(() => {
     if (loading) {
@@ -59,7 +59,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         pathname && pathname !== "/"
           ? `?redirect=${encodeURIComponent(pathname)}`
           : "";
-      router.replace(`/login${redirect}`);
+      router.replace(`/auth/login${redirect}`);
     } else if (isAuthenticated && isAuthRoute) {
       router.replace("/");
     }
@@ -166,7 +166,7 @@ const AppLayoutMain = ({ children }: AppLayoutProps) => {
 
     const lookup: Record<string, { title: string; subtitle: string }> = {
       "/": defaults,
-      "/server/docker/containers": {
+      "/docker/containers": {
         title: "Container Management",
         subtitle: "Start, stop, and inspect workload containers while tracking resource utilization."
       },
@@ -174,77 +174,53 @@ const AppLayoutMain = ({ children }: AppLayoutProps) => {
         title: "Container Management",
         subtitle: "Start, stop, and inspect workload containers while tracking resource utilization."
       },
-      "/server/docker/images": {
+      "/docker/images": {
         title: "Image Catalog",
         subtitle: "Review image versions, audit storage consumption, and prepare artifacts for deployment."
       },
-      "/images": {
-        title: "Image Catalog",
-        subtitle: "Review image versions, audit storage consumption, and prepare artifacts for deployment."
-      },
-      "/server/docker/volumes": {
+      "/docker/volumes": {
         title: "Volume Management",
         subtitle: "Manage persistent storage, monitor usage, and safely prune unused data."
       },
-      "/volumes": {
-        title: "Volume Management",
-        subtitle: "Manage persistent storage, monitor usage, and safely prune unused data."
-      },
-      "/server/docker/networks": {
+      "/docker/networks": {
         title: "Network Management",
         subtitle: "Visualize Docker networks and confirm containers communicate across the right overlays."
       },
-      "/networks": {
-        title: "Network Management",
-        subtitle: "Visualize Docker networks and confirm containers communicate across the right overlays."
-      },
-      "/server/docker/logs": {
+      "/docker/logs": {
         title: "Logs & Debugging",
         subtitle: "Follow live logs, filter output, and troubleshoot services in real-time."
       },
-      "/logs": {
-        title: "Logs & Debugging",
-        subtitle: "Follow live logs, filter output, and troubleshoot services in real-time."
-      },
-      "/server/docker/files": {
+      "/docker/files": {
         title: "File Browser",
         subtitle: "Navigate container file systems to inspect configuration and generated assets."
       },
-      "/files": {
-        title: "File Browser",
-        subtitle: "Navigate container file systems to inspect configuration and generated assets."
-      },
-      "/server/docker/images/": {
+      "/docker/images/": {
         title: "Image Detail",
         subtitle: "Inspect image metadata, layers, and history before deployment."
       },
-      "/server/domains": {
+      "/domains": {
         title: "Domain Management",
         subtitle: "Organize DNS records, hostnames, and domain-level routing policies."
       },
-      "/server/ssl": {
+      "/ssl": {
         title: "SSL Certificates",
         subtitle: "Issue, renew, and deploy TLS certificates with confidence."
       },
-      "/server/nginx": {
+      "/nginx": {
         title: "Nginx Configuration",
         subtitle: "Manage reverse proxy directives and site templates for your edge."
       },
-      "/server/proxies": {
+      "/proxies": {
         title: "Proxy Manager",
         subtitle: "Configure load-balancing rules and traffic routing across services."
       },
-      "/server/email": {
+      "/email": {
         title: "Email Management",
         subtitle: "Centralize SMTP relays, mailboxes, and deliverability monitoring."
       },
-      "/server/users": {
+      "/users": {
         title: "User Management",
         subtitle: "Invite teammates and tailor module-level permissions for each role."
-      },
-      "/images/": {
-        title: "Image Detail",
-        subtitle: "Inspect image metadata, layers, and history before deployment."
       },
       "/containers/": {
         title: "Container Detail",

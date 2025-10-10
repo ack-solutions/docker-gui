@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   Box,
-  CircularProgress,
   Paper,
   Stack,
   Typography,
@@ -27,22 +26,24 @@ import ContainerMaintenancePanel from "@/features/docker/containers/components/c
 import ContainerTableRow from "@/features/docker/containers/components/container-table-row";
 import CreateContainerDialog from "@/features/docker/containers/components/create-container-dialog";
 import {
+  useContainerActions,
   useContainerState,
-  useContainerStore
-} from "@/features/docker/containers/context/container-provider";
+  useContainers
+} from "@/features/docker/containers/hooks/use-containers";
 import { useGroupedContainers } from "@/features/docker/containers/hooks/use-grouped-containers";
 import { formatBytes } from "@/lib/utils/format";
 import type { DockerContainer } from "@/types/docker";
 
 const ContainerList = () => {
-  const { query, actions } = useContainerStore();
+  const { data, isLoading, isError, error, isFetching } = useContainers({ refetchIntervalMs: 10_000 });
+  const actions = useContainerActions();
   const containerState = useContainerState();
   const { openLogs, openTerminal } = useBottomPanel();
   const { confirm } = useConfirmationDialog();
   const router = useRouter();
 
-  const { data, isLoading, isError, error, isFetching } = query;
   const groupedContainers = useGroupedContainers(data);
+  const showSkeleton = isLoading && (!data || data.length === 0);
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
@@ -267,18 +268,7 @@ const ContainerList = () => {
 
   const totalCount = data?.length ?? 0;
 
-  if (isLoading) {
-    return (
-      <Stack alignItems="center" justifyContent="center" py={6} spacing={2}>
-        <CircularProgress />
-        <Typography variant="body2" color="text.secondary">
-          Loading container metadata...
-        </Typography>
-      </Stack>
-    );
-  }
-
-  if (isError) {
+  if (isError && !showSkeleton) {
     return (
       <Paper sx={{ p: 4 }}>
         <Typography variant="subtitle1" gutterBottom>
@@ -291,7 +281,7 @@ const ContainerList = () => {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!showSkeleton && (!data || data.length === 0)) {
     return (
       <>
         <ContainerListToolbar
@@ -320,77 +310,108 @@ const ContainerList = () => {
           isRefreshing={isFetching}
           totalCount={totalCount}
         />
-        {groupedContainers.map((group) => {
-          const bulkAction = containerState.bulkAction;
-          const isGroupBusy =
-            Boolean(bulkAction) &&
-            group.containers.some((container) => bulkAction?.targetIds.includes(container.id));
-          const loadingAction = isGroupBusy ? bulkAction?.action ?? null : null;
-
-          return (
-            <Box key={group.key}>
-              <ContainerGroupActions
-                groupLabel={group.label}
-                containerCount={group.containers.length}
-                containers={group.containers}
-                loadingAction={loadingAction}
-                onGroupStart={handleGroupStart}
-                onGroupStop={handleGroupStop}
-                onGroupRestart={handleGroupRestart}
-                onGroupLogs={handleGroupLogs}
-                onGroupDelete={handleGroupRemove}
-              />
-              {viewMode === "grid" ? (
-                <Grid container spacing={2.5}>
-                  {group.containers.map((container) => (
-                    <ContainerCard
-                      key={container.id}
-                      container={container}
-                      isLoading={containerState.isContainerActionInFlight(container.id)}
-                      onStart={handleStart}
-                      onStop={handleStop}
-                      onRestart={handleRestart}
-                      onOpenTerminal={openTerminal}
-                      onOpenLogs={openLogs}
-                      onMenuOpen={handleMenuOpen}
-                    />
+        {showSkeleton ? (
+          viewMode === "grid" ? (
+            <Grid container spacing={2.5}>
+              {Array.from({ length: 6 }).map((_, index) => (
+                <ContainerCard key={`container-skeleton-${index}`} container={null} />
+              ))}
+            </Grid>
+          ) : (
+            <Paper>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Image</TableCell>
+                    <TableCell>Ports</TableCell>
+                    <TableCell>CPU</TableCell>
+                    <TableCell>Memory</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <ContainerTableRow key={`container-table-skeleton-${index}`} container={null} />
                   ))}
-                </Grid>
-              ) : (
-                <Paper>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Name</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Image</TableCell>
-                        <TableCell>Ports</TableCell>
-                        <TableCell>CPU</TableCell>
-                        <TableCell>Memory</TableCell>
-                        <TableCell align="right">Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {group.containers.map((container) => (
-                        <ContainerTableRow
-                          key={container.id}
-                          container={container}
-                          isLoading={containerState.isContainerActionInFlight(container.id)}
-                          onStart={handleStart}
-                          onStop={handleStop}
-                          onRestart={handleRestart}
-                          onOpenTerminal={openTerminal}
-                          onOpenLogs={openLogs}
-                          onMenuOpen={handleMenuOpen}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Paper>
-              )}
-            </Box>
-          );
-        })}
+                </TableBody>
+              </Table>
+            </Paper>
+          )
+        ) : (
+          groupedContainers.map((group) => {
+            const bulkAction = containerState.bulkAction;
+            const isGroupBusy =
+              Boolean(bulkAction) &&
+              group.containers.some((container) => bulkAction?.targetIds.includes(container.id));
+            const loadingAction = isGroupBusy ? bulkAction?.action ?? null : null;
+
+            return (
+              <Box key={group.key}>
+                <ContainerGroupActions
+                  groupLabel={group.label}
+                  containerCount={group.containers.length}
+                  containers={group.containers}
+                  loadingAction={loadingAction}
+                  onGroupStart={handleGroupStart}
+                  onGroupStop={handleGroupStop}
+                  onGroupRestart={handleGroupRestart}
+                  onGroupLogs={handleGroupLogs}
+                  onGroupDelete={handleGroupRemove}
+                />
+                {viewMode === "grid" ? (
+                  <Grid container spacing={2.5}>
+                    {group.containers.map((container) => (
+                      <ContainerCard
+                        key={container.id}
+                        container={container}
+                        isLoading={containerState.isContainerActionInFlight(container.id)}
+                        onStart={handleStart}
+                        onStop={handleStop}
+                        onRestart={handleRestart}
+                        onOpenTerminal={openTerminal}
+                        onOpenLogs={openLogs}
+                        onMenuOpen={handleMenuOpen}
+                      />
+                    ))}
+                  </Grid>
+                ) : (
+                  <Paper>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Name</TableCell>
+                          <TableCell>Status</TableCell>
+                          <TableCell>Image</TableCell>
+                          <TableCell>Ports</TableCell>
+                          <TableCell>CPU</TableCell>
+                          <TableCell>Memory</TableCell>
+                          <TableCell align="right">Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {group.containers.map((container) => (
+                          <ContainerTableRow
+                            key={container.id}
+                            container={container}
+                            isLoading={containerState.isContainerActionInFlight(container.id)}
+                            onStart={handleStart}
+                            onStop={handleStop}
+                            onRestart={handleRestart}
+                            onOpenTerminal={openTerminal}
+                            onOpenLogs={openLogs}
+                            onMenuOpen={handleMenuOpen}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Paper>
+                )}
+              </Box>
+            );
+          })
+        )}
         <ContainerMaintenancePanel
           onPruneContainers={handlePruneContainers}
           onPruneImages={handlePruneImages}

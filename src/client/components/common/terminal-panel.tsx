@@ -1,6 +1,7 @@
 "use client";
 
-import ContainerShellTerminal from "@/features/docker/containers/components/container-shell-terminal";
+import CommandTerminal from "@/components/common/command-terminal";
+import { executeContainerCommand } from "@/lib/api/docker";
 
 interface TerminalPanelProps {
   containerId: string;
@@ -8,10 +9,14 @@ interface TerminalPanelProps {
 }
 
 export const TerminalPanel = ({ containerId, containerName }: TerminalPanelProps) => {
+  const sessionLabel = containerName ?? containerId;
+
   return (
-    <ContainerShellTerminal
-      containerId={containerId}
-      containerName={containerName}
+    <CommandTerminal
+      sessionName={sessionLabel}
+      promptLabel={`root@${sessionLabel}:/app`}
+      welcomeMessage={`Welcome to the container shell. Connected to ${sessionLabel}.`}
+      executeCommand={(tokens) => executeContainerCommand(containerId, tokens)}
       fitParent
     />
   );

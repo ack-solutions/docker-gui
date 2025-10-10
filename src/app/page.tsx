@@ -8,7 +8,6 @@ import TerminalIcon from "@mui/icons-material/Terminal";
 import { Avatar, Box, Card, CardContent, Chip, Grid, Stack, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import ContainerList from "@/features/docker/containers/components/container-list";
-import { ContainerProvider } from "@/features/docker/containers/context/container-provider";
 import { useContainerMetrics } from "@/features/docker/containers/hooks/use-containers";
 import { useImageStorage } from "@/features/docker/images/hooks/use-images";
 import { useNetworks } from "@/features/docker/networks/hooks/use-networks";
@@ -173,11 +172,7 @@ const DashboardPageContent = () => {
 };
 
 const DashboardPage = () => {
-  return (
-    <ContainerProvider>
-      <DashboardPageContent />
-    </ContainerProvider>
-  );
+  return <DashboardPageContent />;
 };
 
 export default DashboardPage;

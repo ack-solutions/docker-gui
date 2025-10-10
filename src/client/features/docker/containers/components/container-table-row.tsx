@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Chip, CircularProgress, TableCell, TableRow, Tooltip, Typography } from "@mui/material";
+import { Box, Chip, CircularProgress, Skeleton, TableCell, TableRow, Tooltip, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import Link from "next/link";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -30,14 +30,14 @@ const UsageBarFill = styled("div")<{ value: number }>(({ theme, value }) => ({
 }));
 
 interface ContainerTableRowProps {
-  container: DockerContainer;
+  container?: DockerContainer | null;
   isLoading?: boolean;
-  onStart: (id: string, name: string) => void;
-  onStop: (id: string, name: string) => void;
-  onRestart: (id: string, name: string) => void;
-  onOpenTerminal: (id: string, name: string) => void;
-  onOpenLogs: (id: string, name: string) => void;
-  onMenuOpen: (id: string, anchor: HTMLElement) => void;
+  onStart?: (id: string, name: string) => void;
+  onStop?: (id: string, name: string) => void;
+  onRestart?: (id: string, name: string) => void;
+  onOpenTerminal?: (id: string, name: string) => void;
+  onOpenLogs?: (id: string, name: string) => void;
+  onMenuOpen?: (id: string, anchor: HTMLElement) => void;
 }
 
 const ContainerTableRow = ({
@@ -51,6 +51,40 @@ const ContainerTableRow = ({
   onMenuOpen
 }: ContainerTableRowProps) => {
   const router = useRouter();
+  if (!container) {
+    return (
+      <TableRow>
+        <TableCell>
+          <Skeleton variant="text" width={160} />
+          <Skeleton variant="text" width={120} />
+        </TableCell>
+        <TableCell>
+          <Skeleton variant="rounded" width={72} height={24} />
+        </TableCell>
+        <TableCell>
+          <Skeleton variant="text" width={140} />
+        </TableCell>
+        <TableCell>
+          <Skeleton variant="text" width={120} />
+        </TableCell>
+        <TableCell>
+          <Skeleton variant="rounded" height={12} />
+          <Skeleton variant="text" width={60} />
+        </TableCell>
+        <TableCell>
+          <Skeleton variant="text" width={80} />
+        </TableCell>
+        <TableCell align="right">
+          <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Skeleton key={index} variant="circular" width={28} height={28} />
+            ))}
+          </Box>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
   return (
     <TableRow hover>
       <TableCell>
@@ -102,7 +136,7 @@ const ContainerTableRow = ({
               <ActionIconButton 
                 color="primary" 
                 size="small"
-                onClick={() => onStart(container.id, container.name)}
+                  onClick={() => onStart?.(container.id, container.name)}
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -119,7 +153,7 @@ const ContainerTableRow = ({
                 <ActionIconButton 
                   color="warning" 
                   size="small"
-                  onClick={() => onStop(container.id, container.name)}
+                  onClick={() => onStop?.(container.id, container.name)}
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -133,7 +167,7 @@ const ContainerTableRow = ({
                 <ActionIconButton 
                   color="secondary" 
                   size="small"
-                  onClick={() => onRestart(container.id, container.name)}
+                  onClick={() => onRestart?.(container.id, container.name)}
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -147,7 +181,7 @@ const ContainerTableRow = ({
                 <ActionIconButton
                   color="default"
                   size="small"
-                  onClick={() => onOpenTerminal(container.id, container.name)}
+                  onClick={() => onOpenTerminal?.(container.id, container.name)}
                 >
                   <TerminalIcon fontSize="small" />
                 </ActionIconButton>
@@ -156,7 +190,7 @@ const ContainerTableRow = ({
                 <ActionIconButton
                   color="default"
                   size="small"
-                  onClick={() => onOpenLogs(container.id, container.name)}
+                  onClick={() => onOpenLogs?.(container.id, container.name)}
                 >
                   <ArticleIcon fontSize="small" />
                 </ActionIconButton>
@@ -176,7 +210,7 @@ const ContainerTableRow = ({
             <ActionIconButton
               color="default"
               size="small"
-              onClick={(event) => onMenuOpen(container.id, event.currentTarget)}
+              onClick={(event) => onMenuOpen?.(container.id, event.currentTarget)}
             >
               <MoreHorizIcon fontSize="small" />
             </ActionIconButton>

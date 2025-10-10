@@ -29,8 +29,6 @@ const sanitizePermissions = (value: unknown): UserPermission[] | null => {
 const hasUserManagementPermission = (permissions: UserPermission[]) =>
   permissions.includes("users:manage");
 
-export const runtime = "nodejs";
-
 export const PATCH = withAuth(async (request, { params }, currentUser) => {
   const userId = params?.id;
   if (!userId) {

@@ -51,26 +51,26 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
     ]
   },
   {
-    label: "Server",
+    label: "Management",
     items: [
       {
         label: "Docker",
         icon: <AppsIcon />,
         children: [
-          { label: "Containers", href: "/server/docker/containers", icon: <DnsIcon />, permission: "containers:view" },
-          { label: "Images", href: "/server/docker/images", icon: <LayersIcon />, permission: "images:view" },
-          { label: "Volumes", href: "/server/docker/volumes", icon: <StorageIcon />, permission: "volumes:view" },
-          { label: "Networks", href: "/server/docker/networks", icon: <LanIcon />, permission: "networks:view" },
-          { label: "Logs", href: "/server/docker/logs", icon: <TerminalIcon />, permission: "logs:view" },
-          { label: "File Browser", href: "/server/docker/files", icon: <FolderIcon />, permission: "files:view" }
+          { label: "Containers", href: "/docker/containers", icon: <DnsIcon />, permission: "containers:view" },
+          { label: "Images", href: "/docker/images", icon: <LayersIcon />, permission: "images:view" },
+          { label: "Volumes", href: "/docker/volumes", icon: <StorageIcon />, permission: "volumes:view" },
+          { label: "Networks", href: "/docker/networks", icon: <LanIcon />, permission: "networks:view" },
+          { label: "Logs", href: "/docker/logs", icon: <TerminalIcon />, permission: "logs:view" },
+          { label: "File Browser", href: "/docker/files", icon: <FolderIcon />, permission: "files:view" }
         ]
       },
-      { label: "Domain Management", href: "/server/domains", icon: <LanguageIcon />, permission: "domains:view" },
-      { label: "SSL Certificates", href: "/server/ssl", icon: <LockIcon />, permission: "ssl:view" },
-      { label: "Nginx Config", href: "/server/nginx", icon: <SettingsEthernetIcon />, permission: "nginx:view" },
-      { label: "Proxy Manager", href: "/server/proxies", icon: <CompareArrowsIcon />, permission: "proxies:view" },
-      { label: "Email", href: "/server/email", icon: <EmailIcon />, permission: "email:view" },
-      { label: "User Management", href: "/server/users", icon: <PeopleIcon />, permission: "users:manage" }
+      { label: "Domain Management", href: "/domains", icon: <LanguageIcon />, permission: "domains:view" },
+      { label: "SSL Certificates", href: "/ssl", icon: <LockIcon />, permission: "ssl:view" },
+      { label: "Nginx Config", href: "/nginx", icon: <SettingsEthernetIcon />, permission: "nginx:view" },
+      { label: "Proxy Manager", href: "/proxies", icon: <CompareArrowsIcon />, permission: "proxies:view" },
+      { label: "Email", href: "/email", icon: <EmailIcon />, permission: "email:view" },
+      { label: "User Management", href: "/users", icon: <PeopleIcon />, permission: "users:manage" }
     ]
   }
 ];

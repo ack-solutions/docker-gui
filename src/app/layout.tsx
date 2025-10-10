@@ -4,6 +4,7 @@ import QueryProvider from "@/components/providers/query-provider";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import AppLayout from "@/components/layout/app-layout";
 import ThemeRegistry from "@/components/theme/theme-registry";
+import StoreProvider from "@/store/provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,11 +18,13 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
       <body>
         <AppRouterCacheProvider options={{ key: "mui" }}>
           <ThemeRegistry>
-            <QueryProvider>
-              <AuthProvider>
-                <AppLayout>{children}</AppLayout>
-              </AuthProvider>
-            </QueryProvider>
+            <StoreProvider>
+              <QueryProvider>
+                <AuthProvider>
+                  <AppLayout>{children}</AppLayout>
+                </AuthProvider>
+              </QueryProvider>
+            </StoreProvider>
           </ThemeRegistry>
         </AppRouterCacheProvider>
       </body>

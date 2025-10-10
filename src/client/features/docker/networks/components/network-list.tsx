@@ -1,27 +1,16 @@
 "use client";
 
-import LanIcon from "@mui/icons-material/Lan";
-import ShieldIcon from "@mui/icons-material/Shield";
-import { Box, Card, CardContent, Chip, CircularProgress, Grid, Paper, Stack, Typography } from "@mui/material";
-import moment from "moment";
+import { Grid, Paper, Stack, Typography } from "@mui/material";
 import EmptyState from "@/components/common/empty-state";
 import { useNetworks } from "@/features/docker/networks/hooks/use-networks";
+import NetworkCard from "@/features/docker/networks/components/network-card";
+import type { DockerNetwork } from "@/lib/api/docker";
 
 const NetworkList = () => {
   const { data, isLoading, isError, error } = useNetworks();
+  const networks = data as DockerNetwork[] | undefined;
 
-  if (isLoading) {
-    return (
-      <Stack alignItems="center" justifyContent="center" py={6}>
-        <CircularProgress />
-        <Typography variant="body2" color="text.secondary" mt={2}>
-          Inspecting Docker networks...
-        </Typography>
-      </Stack>
-    );
-  }
-
-  if (isError) {
+  if (isError && (!networks || networks.length === 0)) {
     return (
       <Paper sx={{ p: 4 }}>
         <Typography variant="subtitle1" gutterBottom>
@@ -34,7 +23,7 @@ const NetworkList = () => {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!isLoading && (!networks || networks.length === 0)) {
     return (
       <EmptyState
         title="No networks discovered"
@@ -45,34 +34,17 @@ const NetworkList = () => {
 
   return (
     <Grid container spacing={2.5}>
-      {data.map((network) => (
-        <Grid key={network.id} size={{ xs: 12, md: 6, lg: 4 }}>
-          <Card sx={{ height: "100%" }}>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-              <Stack direction="row" alignItems="center" spacing={1.5}>
-                <LanIcon color="primary" />
-                <Typography variant="subtitle1">
-                  {network.name}
-                </Typography>
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                {network.id}
-              </Typography>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                <Chip label={network.driver} size="small" variant="outlined" />
-                <Chip label={`${network.scope} scope`} size="small" variant="outlined" />
-                <Chip label={`${network.containers} containers`} size="small" variant="outlined" color="primary" />
-              </Box>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <ShieldIcon fontSize="small" color="secondary" />
-                <Typography variant="body2" color="text.secondary">
-                  Provisioned {moment(network.createdAt).fromNow()}
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      ))}
+      {isLoading && (!networks || networks.length === 0)
+        ? Array.from({ length: 6 }).map((_, index) => (
+            <Grid key={`network-skeleton-${index}`} size={{ xs: 12, md: 6, lg: 4 }}>
+              <NetworkCard />
+            </Grid>
+          ))
+        : networks?.map((network) => (
+            <Grid key={network.id} size={{ xs: 12, md: 6, lg: 4 }}>
+              <NetworkCard network={network} />
+            </Grid>
+          ))}
     </Grid>
   );
 };

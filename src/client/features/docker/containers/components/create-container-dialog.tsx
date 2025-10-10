@@ -32,9 +32,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import { toast } from "sonner";
 import { pullImage } from "@/lib/api/docker";
 import { useImages } from "@/features/docker/images/hooks/use-images";
-import {
-  useContainerActions
-} from "@/features/docker/containers/context/container-provider";
+import { useContainerActions } from "@/features/docker/containers/hooks/use-containers";
 import { serviceTemplates, getTemplateById } from "@/features/docker/containers/constants/service-templates";
 import ServiceIcon from "@/features/docker/containers/components/service-icon";
 import type {

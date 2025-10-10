@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Card, CardContent, Chip, CircularProgress, Divider, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Card, CardContent, Chip, CircularProgress, Divider, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import moment from "moment";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
@@ -17,14 +17,14 @@ import UsageBar from "@/features/docker/containers/components/usage-bar";
 import type { DockerContainer } from "@/types/docker";
 
 interface ContainerCardProps {
-  container: DockerContainer;
+  container?: DockerContainer | null;
   isLoading?: boolean;
-  onStart: (id: string, name: string) => void;
-  onStop: (id: string, name: string) => void;
-  onRestart: (id: string, name: string) => void;
-  onOpenTerminal: (id: string, name: string) => void;
-  onOpenLogs: (id: string, name: string) => void;
-  onMenuOpen: (id: string, anchor: HTMLElement) => void;
+  onStart?: (id: string, name: string) => void;
+  onStop?: (id: string, name: string) => void;
+  onRestart?: (id: string, name: string) => void;
+  onOpenTerminal?: (id: string, name: string) => void;
+  onOpenLogs?: (id: string, name: string) => void;
+  onMenuOpen?: (id: string, anchor: HTMLElement) => void;
 }
 
 const ContainerCard = ({
@@ -38,6 +38,41 @@ const ContainerCard = ({
   onMenuOpen
 }: ContainerCardProps) => {
   const router = useRouter();
+  if (!container) {
+    return (
+      <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+        <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Skeleton variant="text" width="70%" height={24} />
+                <Skeleton variant="text" width="55%" height={18} />
+              </Box>
+              <Skeleton variant="rounded" width={72} height={24} />
+            </Stack>
+            <Stack spacing={0.75}>
+              <Skeleton variant="text" width="80%" />
+              <Skeleton variant="text" width="64%" />
+              <Skeleton variant="text" width="50%" />
+              <Skeleton variant="text" width="60%" />
+            </Stack>
+            <Divider flexItem light />
+            <Stack spacing={1.25}>
+              <Skeleton variant="text" width="35%" height={20} />
+              <Skeleton variant="rounded" height={12} />
+              <Skeleton variant="text" width="40%" height={18} />
+            </Stack>
+            <Box sx={{ display: "flex", gap: 1, mt: "auto" }}>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} variant="circular" width={32} height={32} />
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
+    );
+  }
+
   const metadata: string[] = [];
   if (container.project) {
     metadata.push(`Project · ${container.project}`);
@@ -102,7 +137,7 @@ const ContainerCard = ({
                 <ActionIconButton 
                   color="primary" 
                   size="small"
-                  onClick={() => onStart(container.id, container.name)}
+                  onClick={() => onStart?.(container.id, container.name)}
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -119,7 +154,7 @@ const ContainerCard = ({
                   <ActionIconButton 
                     color="warning" 
                     size="small"
-                    onClick={() => onStop(container.id, container.name)}
+                    onClick={() => onStop?.(container.id, container.name)}
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -133,7 +168,7 @@ const ContainerCard = ({
                   <ActionIconButton 
                     color="secondary" 
                     size="small"
-                    onClick={() => onRestart(container.id, container.name)}
+                    onClick={() => onRestart?.(container.id, container.name)}
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -147,7 +182,7 @@ const ContainerCard = ({
                   <ActionIconButton
                     color="default"
                     size="small"
-                    onClick={() => onOpenTerminal(container.id, container.name)}
+                    onClick={() => onOpenTerminal?.(container.id, container.name)}
                   >
                     <TerminalIcon fontSize="small" />
                   </ActionIconButton>
@@ -156,7 +191,7 @@ const ContainerCard = ({
                   <ActionIconButton
                     color="default"
                     size="small"
-                    onClick={() => onOpenLogs(container.id, container.name)}
+                    onClick={() => onOpenLogs?.(container.id, container.name)}
                   >
                     <ArticleIcon fontSize="small" />
                   </ActionIconButton>
@@ -176,7 +211,7 @@ const ContainerCard = ({
               <ActionIconButton
                 color="default"
                 size="small"
-                onClick={(event) => onMenuOpen(container.id, event.currentTarget)}
+                onClick={(event) => onMenuOpen?.(container.id, event.currentTarget)}
               >
                 <MoreHorizIcon fontSize="small" />
               </ActionIconButton>

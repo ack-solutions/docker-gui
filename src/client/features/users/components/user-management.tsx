@@ -538,8 +538,3 @@ const UserManagement = () => {
 };
 
 export default UserManagement;
-  useEffect(() => {
-    if (open) {
-      setValues(createDefaultValues(user ?? undefined));
-    }
-  }, [open, user]);

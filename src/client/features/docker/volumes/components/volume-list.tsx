@@ -1,26 +1,17 @@
 "use client";
 
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
-import StorageIcon from "@mui/icons-material/Storage";
-import { Button, Card, CircularProgress, List, ListItem, ListItemIcon, ListItemText, Paper, Stack, Typography } from "@mui/material";
+import { Button, Card, List, Paper, Stack, Typography } from "@mui/material";
 import EmptyState from "@/components/common/empty-state";
 import { useVolumes } from "@/features/docker/volumes/hooks/use-volumes";
+import VolumeListItem from "@/features/docker/volumes/components/volume-list-item";
+import type { DockerVolume } from "@/lib/api/docker";
 
 const VolumeList = () => {
   const { data, isLoading, isError, error } = useVolumes();
+  const volumes = data as DockerVolume[] | undefined;
 
-  if (isLoading) {
-    return (
-      <Stack alignItems="center" justifyContent="center" py={6}>
-        <CircularProgress />
-        <Typography variant="body2" color="text.secondary" mt={2}>
-          Loading volumes from Docker daemon...
-        </Typography>
-      </Stack>
-    );
-  }
-
-  if (isError) {
+  if (isError && (!volumes || volumes.length === 0)) {
     return (
       <Paper sx={{ p: 4 }}>
         <Typography variant="subtitle1" gutterBottom>
@@ -33,7 +24,7 @@ const VolumeList = () => {
     );
   }
 
-  if (!data || data.length === 0) {
+  if (!isLoading && (!volumes || volumes.length === 0)) {
     return (
       <EmptyState
         title="No volumes detected"
@@ -51,21 +42,20 @@ const VolumeList = () => {
       </Stack>
       <Card>
         <List disablePadding>
-          {data.map((volume, index) => (
-            <ListItem 
-              key={volume.name}
-              divider={index !== data.length - 1}
-              sx={{ py: 2 }}
-            >
-              <ListItemIcon>
-                <StorageIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText
-                primary={volume.name}
-                secondary={`Driver: ${volume.driver} • Size: ${volume.size} • Mount: ${volume.mountpoint}`}
-              />
-            </ListItem>
-          ))}
+          {isLoading && (!volumes || volumes.length === 0)
+            ? Array.from({ length: 4 }).map((_, index, skeletons) => (
+                <VolumeListItem
+                  key={`volume-skeleton-${index}`}
+                  divider={index !== skeletons.length - 1}
+                />
+              ))
+            : volumes?.map((volume, index) => (
+                <VolumeListItem
+                  key={volume.name}
+                  volume={volume}
+                  divider={index !== (data?.length ?? 0) - 1}
+                />
+              ))}
         </List>
       </Card>
     </Stack>

@@ -26,8 +26,6 @@ const sanitizePermissions = (value: unknown): UserPermission[] | null => {
   return valid;
 };
 
-export const runtime = "nodejs";
-
 export const GET = withAuth(async () => {
   const users = await userService.list();
   return NextResponse.json(users);

@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { AuthError, authService } from "@/server/auth/auth-service";
 import type { User, UserPermission } from "@/types/user";

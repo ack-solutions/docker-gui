@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: base
-    command: sh -c "yarn install && yarn db:migrate && yarn db:seed && yarn dev"
+    command: sh -c "yarn db:migrate && yarn db:seed -- -s && yarn dev"
     environment:
       NODE_ENV: development
       PORT: 3000
@@ -19,6 +19,9 @@ services:
       DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
       DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
       DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
+      SEED_INCLUDE_DUMMY: ${SEED_INCLUDE_DUMMY:-false}
+      SEED_SKIP_IF_SEEDED: ${SEED_SKIP_IF_SEEDED:-true}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
     ports:
       - "3000:3000"
     volumes:

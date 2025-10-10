@@ -29,7 +29,7 @@ const withMockFallback = async <T>(factory: () => Promise<T>, mock: () => T): Pr
 export const fetchDomains = () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<ServerDomain[]>("/server/domains");
+      const { data } = await apiClient.get<ServerDomain[]>("/domains");
       return data;
     },
     () => mockDomains
@@ -38,7 +38,7 @@ export const fetchDomains = () =>
 export const fetchCertificates = () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<SSLCertificate[]>("/server/ssl/certificates");
+      const { data } = await apiClient.get<SSLCertificate[]>("/ssl/certificates");
       return data;
     },
     () => mockCertificates
@@ -47,7 +47,7 @@ export const fetchCertificates = () =>
 export const fetchNginxSites = () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<NginxSite[]>("/server/nginx/sites");
+      const { data } = await apiClient.get<NginxSite[]>("/nginx/sites");
       return data;
     },
     () => mockNginxSites
@@ -56,7 +56,7 @@ export const fetchNginxSites = () =>
 export const fetchProxyRoutes = () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<ProxyRoute[]>("/server/proxies/routes");
+      const { data } = await apiClient.get<ProxyRoute[]>("/proxies/routes");
       return data;
     },
     () => mockProxyRoutes
@@ -65,7 +65,7 @@ export const fetchProxyRoutes = () =>
 export const fetchEmailAccounts = () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<EmailAccount[]>("/server/email/accounts");
+      const { data } = await apiClient.get<EmailAccount[]>("/email/accounts");
       return data;
     },
     () => mockEmailAccounts
@@ -74,7 +74,7 @@ export const fetchEmailAccounts = () =>
 export const fetchEmailServiceInfo = () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<EmailServiceInfo>("/server/email/info");
+      const { data } = await apiClient.get<EmailServiceInfo>("/email/info");
       return data;
     },
     () => mockEmailService

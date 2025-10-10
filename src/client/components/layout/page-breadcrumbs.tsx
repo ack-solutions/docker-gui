@@ -22,26 +22,21 @@ const BreadcrumbLink = styled("a")(({ theme }) => ({
 
 const routeNames: Record<string, string> = {
   "/": "Dashboard",
-  "/server": "Server",
-  "/server/docker": "Docker",
-  "/server/docker/containers": "Containers",
-  "/server/docker/images": "Images",
-  "/server/docker/volumes": "Volumes",
-  "/server/docker/networks": "Networks",
-  "/server/docker/logs": "Logs",
-  "/server/docker/files": "File Browser",
-  "/server/domains": "Domains",
-  "/server/ssl": "SSL Certificates",
-  "/server/nginx": "Nginx Config",
-  "/server/proxies": "Proxy Manager",
-  "/server/email": "Email",
-  "/server/users": "Users",
-  "/containers": "Containers",
-  "/images": "Images",
-  "/volumes": "Volumes",
-  "/networks": "Networks",
-  "/logs": "Logs",
-  "/files": "File Browser"
+  "/auth": "Auth",
+  "/auth/login": "Login",
+  "/docker": "Docker",
+  "/docker/containers": "Containers",
+  "/docker/images": "Images",
+  "/docker/volumes": "Volumes",
+  "/docker/networks": "Networks",
+  "/docker/logs": "Logs",
+  "/docker/files": "File Browser",
+  "/domains": "Domains",
+  "/ssl": "SSL Certificates",
+  "/nginx": "Nginx Config",
+  "/proxies": "Proxy Manager",
+  "/email": "Email",
+  "/users": "Users"
 };
 
 const specialRoutes: Record<string, string> = {

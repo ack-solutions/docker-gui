@@ -1,0 +1,17 @@
+import { configureStore, type EnhancedStore } from "@reduxjs/toolkit";
+import dockerReducer from "@/store/docker";
+import nginxReducer from "@/store/nginx/slice";
+
+export const makeStore = () =>
+  configureStore({
+    reducer: {
+      docker: dockerReducer,
+      nginx: nginxReducer
+    }
+  });
+
+export type AppStore = ReturnType<typeof makeStore>;
+export type AppDispatch = AppStore["dispatch"];
+export type RootState = ReturnType<AppStore["getState"]>;
+
+export type { EnhancedStore };

@@ -298,7 +298,7 @@ const withMockFallback = async <T>(request: () => Promise<T>, mockFactory: () =>
 export const fetchContainers = async () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerContainer[]>("/containers");
+      const { data } = await apiClient.get<DockerContainer[]>("/docker/containers");
       return data;
     },
     () => mockContainers
@@ -307,7 +307,7 @@ export const fetchContainers = async () =>
 export const fetchImages = async () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerImage[]>("/images");
+      const { data } = await apiClient.get<DockerImage[]>("/docker/images");
       return data;
     },
     () => mockImages
@@ -316,7 +316,7 @@ export const fetchImages = async () =>
 export const fetchVolumes = async () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerVolume[]>("/volumes");
+      const { data } = await apiClient.get<DockerVolume[]>("/docker/volumes");
       return data;
     },
     () => mockVolumes
@@ -325,7 +325,7 @@ export const fetchVolumes = async () =>
 export const fetchNetworks = async () =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerNetwork[]>("/networks");
+      const { data } = await apiClient.get<DockerNetwork[]>("/docker/networks");
       return data;
     },
     () => mockNetworks
@@ -337,7 +337,7 @@ export const fetchContainerLogs = async (
 ) =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
+      const { data } = await apiClient.get<DockerLogEntry[]>(`/docker/containers/${containerId}/logs`, {
         params: options
       });
 
@@ -354,7 +354,7 @@ export const fetchContainerLogs = async (
 export const fetchContainerFiles = async (containerId: string, path = "/") =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<ContainerFileNode[]>(`/containers/${containerId}/files`, {
+      const { data } = await apiClient.get<ContainerFileNode[]>(`/docker/containers/${containerId}/files`, {
         params: { path }
       });
       return data;
@@ -369,7 +369,7 @@ export const fetchContainerFiles = async (containerId: string, path = "/") =>
 export const executeContainerCommand = async (containerId: string, command: string[]) =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.post<{ output: string }>(`/containers/${containerId}/exec`, {
+      const { data } = await apiClient.post<{ output: string }>(`/docker/containers/${containerId}/exec`, {
         command
       });
 
@@ -383,7 +383,7 @@ export const removeImage = async (imageId: string) => {
     return true;
   }
 
-  await apiClient.delete(`/images/${imageId}`);
+  await apiClient.delete(`/docker/images/${imageId}`);
   return true;
 };
 
@@ -392,7 +392,7 @@ export const removeContainer = async (containerId: string) => {
     return true;
   }
 
-  await apiClient.delete(`/containers/${containerId}`);
+  await apiClient.delete(`/docker/containers/${containerId}`);
   return true;
 };
 
@@ -401,7 +401,7 @@ export const startContainer = async (containerId: string) => {
     return true;
   }
 
-  await apiClient.post(`/containers/${containerId}/start`);
+  await apiClient.post(`/docker/containers/${containerId}/start`);
   return true;
 };
 
@@ -410,7 +410,7 @@ export const stopContainer = async (containerId: string) => {
     return true;
   }
 
-  await apiClient.post(`/containers/${containerId}/stop`);
+  await apiClient.post(`/docker/containers/${containerId}/stop`);
   return true;
 };
 
@@ -419,19 +419,19 @@ export const restartContainer = async (containerId: string) => {
     return true;
   }
 
-  await apiClient.post(`/containers/${containerId}/restart`);
+  await apiClient.post(`/docker/containers/${containerId}/restart`);
   return true;
 };
 
 export const createContainer = async (payload: CreateContainerRequest) => {
-  const { data } = await apiClient.post<DockerContainer>("/containers", payload);
+  const { data } = await apiClient.post<DockerContainer>("/docker/containers", payload);
   return data;
 };
 
 export const pruneStoppedContainers = async () =>
   withMockFallback<DockerPruneSummary>(
     async () => {
-      const { data } = await apiClient.post<DockerPruneSummary>("/containers/prune");
+      const { data } = await apiClient.post<DockerPruneSummary>("/docker/containers/prune");
       return data;
     },
     () => mockPruneSummary
@@ -440,7 +440,7 @@ export const pruneStoppedContainers = async () =>
 export const pruneUnusedImages = async () =>
   withMockFallback<DockerPruneSummary>(
     async () => {
-      const { data } = await apiClient.post<DockerPruneSummary>("/images/prune");
+      const { data } = await apiClient.post<DockerPruneSummary>("/docker/images/prune");
       return data;
     },
     () => ({ ...mockPruneSummary, removedCount: 3 })
@@ -449,7 +449,7 @@ export const pruneUnusedImages = async () =>
 export const pruneVolumes = async () =>
   withMockFallback<DockerPruneSummary>(
     async () => {
-      const { data } = await apiClient.post<DockerPruneSummary>("/volumes/prune");
+      const { data } = await apiClient.post<DockerPruneSummary>("/docker/volumes/prune");
       return data;
     },
     () => ({ ...mockPruneSummary, removedCount: 1 })
@@ -460,7 +460,7 @@ export const pullImage = async (image: string) => {
     return { success: true, image };
   }
 
-  const { data } = await apiClient.post<{ success: boolean; image: string }>("/images/pull", {
+  const { data } = await apiClient.post<{ success: boolean; image: string }>("/docker/images/pull", {
     image
   });
   return data;
@@ -506,7 +506,7 @@ export const attachToContainerLogs = (
         params.since = new Date(lastSeen).toISOString();
       }
 
-      const { data } = await apiClient.get<DockerLogEntry[]>(`/containers/${containerId}/logs`, {
+      const { data } = await apiClient.get<DockerLogEntry[]>(`/docker/containers/${containerId}/logs`, {
         params
       });
 
@@ -560,7 +560,7 @@ export type {
 export const fetchContainerInspect = async (containerId: string) =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerContainerInspect>(`/containers/${containerId}/inspect`);
+      const { data } = await apiClient.get<DockerContainerInspect>(`/docker/containers/${containerId}/inspect`);
       return data;
     },
     () => ({ ...mockContainerInspect, id: containerId, name: `container-${containerId}` })
@@ -569,7 +569,7 @@ export const fetchContainerInspect = async (containerId: string) =>
 export const fetchImageInspect = async (imageId: string) =>
   withMockFallback(
     async () => {
-      const { data } = await apiClient.get<DockerImageInspect>(`/images/${imageId}/inspect`);
+      const { data } = await apiClient.get<DockerImageInspect>(`/docker/images/${imageId}/inspect`);
       return data;
     },
     () => ({ ...mockImageInspect, id: imageId })

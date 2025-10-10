@@ -12,7 +12,7 @@ import Link from "next/link";
 import moment from "moment";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { useContainerState, useContainerStore } from "@/features/docker/containers/context/container-provider";
+import { useContainerActions, useContainerState } from "@/features/docker/containers/hooks/use-containers";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import type { DockerContainer, DockerContainerInspect } from "@/types/docker";
 
@@ -39,7 +39,7 @@ const ContainerDetailHeader = ({ container, inspect }: ContainerDetailHeaderProp
   const isRunning = inspect?.state.running ?? (container?.state === "running");
   const startedAt = inspect?.state.startedAt ?? container?.createdAt;
   const image = container?.image ?? inspect?.image;
-  const { actions } = useContainerStore();
+  const actions = useContainerActions();
   const containerState = useContainerState();
   const { confirm } = useConfirmationDialog();
   const router = useRouter();
@@ -98,7 +98,7 @@ const ContainerDetailHeader = ({ container, inspect }: ContainerDetailHeaderProp
     await toast.promise(actions.remove({ id: containerId, name }), {
       loading: `Removing ${name}...`,
       success: () => {
-        router.push("/containers");
+        router.push("/docker/containers");
         return `Removed ${name}`;
       },
       error: (error) => error instanceof Error ? error.message : `Unable to remove ${name}`
@@ -178,7 +178,7 @@ const ContainerDetailHeader = ({ container, inspect }: ContainerDetailHeaderProp
           <Tooltip title="View logs page">
             <Button
               component={Link}
-              href={`/logs?containerId=${containerId}`}
+              href={`/docker/logs?containerId=${containerId}`}
               variant="outlined"
               startIcon={<DescriptionIcon fontSize="small" />}
             >
