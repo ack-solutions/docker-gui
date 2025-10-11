@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
       setLoading(false);
       toast.error("Your session has expired. Please sign in again.");
-      router.replace("/login");
+      router.replace("/auth/login");
     };
 
     if (typeof window !== "undefined") {
@@ -93,7 +93,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Failed to log out", error);
     });
     setUser(null);
-    router.replace("/login");
+    router.replace("/auth/login");
   }, [router]);
 
   const refresh = useCallback(async () => {

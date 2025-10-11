@@ -26,6 +26,7 @@ export const userHasPermission = (user: User, permission: UserPermission | UserP
 };
 
 export const getTokenFromRequest = (request: Request): string => {
+  // Try Authorization header first
   const authorizationHeader =
     request.headers.get("authorization") ??
     request.headers.get("Authorization");
@@ -33,10 +34,12 @@ export const getTokenFromRequest = (request: Request): string => {
   if (authorizationHeader?.startsWith("Bearer ")) {
     const token = authorizationHeader.slice(7).trim();
     if (token) {
+      console.log("[auth] Token found in Authorization header");
       return token;
     }
   }
 
+  // Try cookies
   const cookieHeader = request.headers.get("cookie");
   if (cookieHeader) {
     const cookies = Object.fromEntries(
@@ -47,10 +50,12 @@ export const getTokenFromRequest = (request: Request): string => {
     );
     const token = cookies[AUTH_COOKIE_NAME];
     if (token) {
+      console.log("[auth] Token found in cookie");
       return decodeURIComponent(token);
     }
   }
 
+  console.log("[auth] No token found in request (checked Authorization header and cookies)");
   throw new AuthorizationError("Authentication token is required.", 401);
 };
 

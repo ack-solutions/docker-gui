@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { AuthError, AUTH_COOKIE_NAME, authService } from "@/server/auth/auth-service";
 
-export const runtime = "nodejs";
-
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -14,16 +12,20 @@ export async function POST(request: Request) {
     });
 
     const response = NextResponse.json(result);
+    
+    // Set cookie with proper options for development and production
+    // const cookieSecure = process.env.AUTH_COOKIE_SECURE === "false" || process.env.AUTH_COOKIE_SECURE === "0";
     response.cookies.set({
       name: AUTH_COOKIE_NAME,
       value: result.token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 12
+      maxAge: 60 * 60 * 12 // 12 hours
     });
 
+    console.log(`[auth/login] User logged in: ${result.user.email}, cookie set (secure: ${false})`);
     return response;
   } catch (error) {
     if (error instanceof AuthError) {
