@@ -1,0 +1,52 @@
+name: 'Deploy to Development'
+
+on:
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # Grant write access to modify files and push changes
+
+jobs:
+  build:
+    name: 'Build'
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      APP_ENV: dev
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Deploy to Live.
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          command_timeout: 30m
+          script: |
+            cd /var/www/html/inbox-army
+            git stash && git checkout develop && git pull
+            export NVM_DIR=~/.nvm
+            source ~/.nvm/nvm.sh
+            PATH="/usr/local/go/bin/:$PATH"
+            nvm install 22.
+            nvm use 22
+            cp .env-dev .env
+            npm i -g pm2 yarn
+            yarn install
+            yarn build:all
+            pm2 delete pm2.json
+            pm2 start pm2.json
+            pm2 save
