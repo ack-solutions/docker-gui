@@ -19,10 +19,11 @@ services:
       DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
       DATABASE_URL: file:/app/data/docker-gui.db
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
       DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
       DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
       DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      SYSTEM_METRICS_PROVIDER: ${SYSTEM_METRICS_PROVIDER:-docker}
     restart: unless-stopped
     networks:
       - docker-gui-network

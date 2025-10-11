@@ -5,8 +5,7 @@ services:
     container_name: docker-gui-dev
     build:
       context: .
-      dockerfile: Dockerfile
-      target: base
+      dockerfile: Dockerfile.dev
     command: sh -c "yarn db:migrate && yarn db:seed -s && yarn dev"
     environment:
       NODE_ENV: development
@@ -15,13 +14,18 @@ services:
       DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
       DATABASE_URL: file:/app/data/docker-gui.db
       JWT_SECRET: ${JWT_SECRET:-change-me-in-development}
-      NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
       DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-Admin@123}
       DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
       SEED_INCLUDE_DUMMY: ${SEED_INCLUDE_DUMMY:-false}
       SEED_SKIP_IF_SEEDED: ${SEED_SKIP_IF_SEEDED:-true}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      SYSTEM_METRICS_PROVIDER: ${SYSTEM_METRICS_PROVIDER:-docker}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      TSC_WATCHFILE: UsePolling
+      FORCE_COLOR: "1"
     ports:
       - "3000:3000"
     volumes:

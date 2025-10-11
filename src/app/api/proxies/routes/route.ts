@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { mockProxyRoutes } from "@/lib/mocks/server";
 import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export const GET = withAuth(async () => NextResponse.json(mockProxyRoutes), {
-  permission: "proxies:view"
-});
+export const GET = withAuth(
+  async () =>
+    NextResponse.json(
+      { message: "Proxy routes API is not connected to a live data source." },
+      { status: 501 }
+    ),
+  {
+    permission: "proxies:view"
+  }
+);

@@ -1,12 +1,4 @@
 import apiClient from "@/lib/api/client";
-import {
-  mockDomains,
-  mockCertificates,
-  mockNginxSites,
-  mockProxyRoutes,
-  mockEmailAccounts,
-  mockEmailService
-} from "@/lib/mocks/server";
 import type {
   ServerDomain,
   SSLCertificate,
@@ -15,70 +7,43 @@ import type {
   EmailAccount,
   EmailServiceInfo
 } from "@/types/server";
+import type { SystemMetrics } from "@/types/system";
 import type { CreateUserInput, UpdateUserInput, User } from "@/types/user";
 
-const useMockData = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
-
-const withMockFallback = async <T>(factory: () => Promise<T>, mock: () => T): Promise<T> => {
-  if (useMockData) {
-    return mock();
-  }
-  return factory();
+export const fetchDomains = async () => {
+  const { data } = await apiClient.get<ServerDomain[]>("/domains");
+  return data;
 };
 
-export const fetchDomains = () =>
-  withMockFallback(
-    async () => {
-      const { data } = await apiClient.get<ServerDomain[]>("/domains");
-      return data;
-    },
-    () => mockDomains
-  );
+export const fetchCertificates = async () => {
+  const { data } = await apiClient.get<SSLCertificate[]>("/ssl/certificates");
+  return data;
+};
 
-export const fetchCertificates = () =>
-  withMockFallback(
-    async () => {
-      const { data } = await apiClient.get<SSLCertificate[]>("/ssl/certificates");
-      return data;
-    },
-    () => mockCertificates
-  );
+export const fetchNginxSites = async () => {
+  const { data } = await apiClient.get<NginxSite[]>("/nginx/sites");
+  return data;
+};
 
-export const fetchNginxSites = () =>
-  withMockFallback(
-    async () => {
-      const { data } = await apiClient.get<NginxSite[]>("/nginx/sites");
-      return data;
-    },
-    () => mockNginxSites
-  );
+export const fetchProxyRoutes = async () => {
+  const { data } = await apiClient.get<ProxyRoute[]>("/proxies/routes");
+  return data;
+};
 
-export const fetchProxyRoutes = () =>
-  withMockFallback(
-    async () => {
-      const { data } = await apiClient.get<ProxyRoute[]>("/proxies/routes");
-      return data;
-    },
-    () => mockProxyRoutes
-  );
+export const fetchEmailAccounts = async () => {
+  const { data } = await apiClient.get<EmailAccount[]>("/email/accounts");
+  return data;
+};
 
-export const fetchEmailAccounts = () =>
-  withMockFallback(
-    async () => {
-      const { data } = await apiClient.get<EmailAccount[]>("/email/accounts");
-      return data;
-    },
-    () => mockEmailAccounts
-  );
+export const fetchEmailServiceInfo = async () => {
+  const { data } = await apiClient.get<EmailServiceInfo>("/email/info");
+  return data;
+};
 
-export const fetchEmailServiceInfo = () =>
-  withMockFallback(
-    async () => {
-      const { data } = await apiClient.get<EmailServiceInfo>("/email/info");
-      return data;
-    },
-    () => mockEmailService
-  );
+export const fetchSystemMetrics = async () => {
+  const { data } = await apiClient.get<SystemMetrics>("/system/metrics");
+  return data;
+};
 
 export const fetchUsers = async () => {
   const { data } = await apiClient.get<User[]>("/users");

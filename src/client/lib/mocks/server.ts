@@ -6,6 +6,7 @@ import type {
   SSLCertificate,
   ServerDomain
 } from "@/types/server";
+import type { SystemMetrics } from "@/types/system";
 
 const now = Date.now();
 const oneDay = 1000 * 60 * 60 * 24;
@@ -178,4 +179,53 @@ export const mockEmailService: EmailServiceInfo = {
   supportsStartTls: true,
   relayUsagePercent: 42,
   dailyRelayLimit: 10000
+};
+
+export const mockSystemMetrics: SystemMetrics = {
+  timestamp: new Date().toISOString(),
+  hostname: "mock-host",
+  platform: "linux",
+  release: "6.8.12-mock",
+  architecture: "x86_64",
+  uptimeSeconds: 42_000,
+  cpu: {
+    overallUsagePercent: 37.5,
+    loadAverage: [0.42, 0.38, 0.35],
+    cores: [
+      { id: "cpu-0", usagePercent: 32.1, speedMhz: 3200 },
+      { id: "cpu-1", usagePercent: 41.8, speedMhz: 3200 },
+      { id: "cpu-2", usagePercent: 29.5, speedMhz: 3200 },
+      { id: "cpu-3", usagePercent: 46.6, speedMhz: 3200 }
+    ]
+  },
+  memory: {
+    totalBytes: 32 * 1024 ** 3,
+    usedBytes: 18.7 * 1024 ** 3,
+    freeBytes: 13.3 * 1024 ** 3,
+    usagePercent: 58.4
+  },
+  disks: {
+    totalBytes: 512 * 1024 ** 3,
+    usedBytes: 284 * 1024 ** 3,
+    availableBytes: 228 * 1024 ** 3,
+    usagePercent: 55.5,
+    partitions: [
+      {
+        filesystem: "/dev/sda1",
+        mountpoint: "/",
+        sizeBytes: 256 * 1024 ** 3,
+        usedBytes: 190 * 1024 ** 3,
+        availableBytes: 66 * 1024 ** 3,
+        usagePercent: 74.2
+      },
+      {
+        filesystem: "/dev/sdb1",
+        mountpoint: "/data",
+        sizeBytes: 256 * 1024 ** 3,
+        usedBytes: 94 * 1024 ** 3,
+        availableBytes: 162 * 1024 ** 3,
+        usagePercent: 36.8
+      }
+    ]
+  }
 };

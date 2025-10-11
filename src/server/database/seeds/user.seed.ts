@@ -111,7 +111,7 @@ export class UserSeed extends BaseSeed {
 
     await repository.save(superAdmin);
 
-    console.info(`[seed:UserSeed] ✓ Super administrator created (${email}).`);
+    console.info(`[seed:UserSeed] ✓ Super administrator created (${email}). Password: ${password}`);
   }
 
   /**

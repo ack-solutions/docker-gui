@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import { mockEmailService } from "@/lib/mocks/server";
 import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export const GET = withAuth(async () => NextResponse.json(mockEmailService), {
-  permission: "email:view"
-});
+export const GET = withAuth(
+  async () =>
+    NextResponse.json(
+      { message: "Email service API is not connected to a live data source." },
+      { status: 501 }
+    ),
+  {
+    permission: "email:view"
+  }
+);

@@ -10,6 +10,7 @@ A Next.js + Material UI dashboard for managing Docker resources such as containe
 - **Network visibility** – explore Docker networks and understand container connectivity.
 - **Debug tooling** – follow live logs with filtering, view aggregate severity counts, and browse container file systems.
 - **Modern UI** – built with Material UI components, responsive layout, and dark theme defaults.
+- **Server health** – visualize host CPU utilization, per-core load, memory consumption, and storage pressure from live metrics.
 
 ## Getting Started
 
@@ -35,8 +36,7 @@ A Next.js + Material UI dashboard for managing Docker resources such as containe
    cp .env.example .env.local
    ```
 
-   - `NEXT_PUBLIC_USE_MOCKS=true` (default) keeps the demo data.
-   - Set `NEXT_PUBLIC_USE_MOCKS=false` to require live Docker responses.
+   - `SYSTEM_METRICS_PROVIDER=system` reads real host metrics; set to `mock` if the runtime cannot expose OS data.
    - Provide standard Docker variables (`DOCKER_HOST`, `DOCKER_TLS_VERIFY`, `DOCKER_CERT_PATH`, `DOCKER_SOCKET_PATH`) if you connect to a remote daemon or use a non-default socket location.
 
 ### Using live Docker data
@@ -49,7 +49,7 @@ A Next.js + Material UI dashboard for managing Docker resources such as containe
      ```
      On Linux you may need `sudo usermod -aG docker "$USER"` and re-login.
    - Remote/TCP: set `DOCKER_HOST=tcp://host:2375` and, if TLS is required, `DOCKER_TLS_VERIFY=1` and `DOCKER_CERT_PATH=/path/to/certs`.
-3. **Update `.env.local`** with `NEXT_PUBLIC_USE_MOCKS=false` and any Docker variables described above, then restart `npm run dev`.
+3. **Update `.env.local`** with any Docker variables described above, then restart `npm run dev`.
 4. **Test connectivity** directly to confirm Docker is reachable:
    ```bash
    curl --unix-socket /var/run/docker.sock http://localhost/containers/json
