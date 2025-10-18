@@ -8,8 +8,6 @@ import DnsIcon from "@mui/icons-material/Dns";
 import LayersIcon from "@mui/icons-material/Layers";
 import StorageIcon from "@mui/icons-material/Storage";
 import LanIcon from "@mui/icons-material/Lan";
-import TerminalIcon from "@mui/icons-material/Terminal";
-import FolderIcon from "@mui/icons-material/Folder";
 import LanguageIcon from "@mui/icons-material/Language";
 import LockIcon from "@mui/icons-material/Lock";
 import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
@@ -21,13 +19,13 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import {
   Avatar,
+  Box,
   Collapse,
   Divider,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Paper,
   Stack,
   Typography
 } from "@mui/material";
@@ -61,9 +59,7 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
           { label: "Containers", href: "/docker/containers", icon: <DnsIcon />, permission: "containers:view" },
           { label: "Images", href: "/docker/images", icon: <LayersIcon />, permission: "images:view" },
           { label: "Volumes", href: "/docker/volumes", icon: <StorageIcon />, permission: "volumes:view" },
-          { label: "Networks", href: "/docker/networks", icon: <LanIcon />, permission: "networks:view" },
-          { label: "Logs", href: "/docker/logs", icon: <TerminalIcon />, permission: "logs:view" },
-          { label: "File Browser", href: "/docker/files", icon: <FolderIcon />, permission: "files:view" }
+          { label: "Networks", href: "/docker/networks", icon: <LanIcon />, permission: "networks:view" }
         ]
       },
       { label: "Domain Management", href: "/domains", icon: <LanguageIcon />, permission: "domains:view" },
@@ -76,29 +72,18 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
   }
 ];
 
-const SidebarRoot = styled("nav")(({ theme }) => ({
-  width: 240,
-  flexShrink: 0,
-  position: "sticky",
-  top: 0,
-  alignSelf: "flex-start",
-  height: "100vh",
+const SidebarHeader = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2.5),
-  display: "flex",
-  flexDirection: "column",
-  gap: theme.spacing(2),
-  borderRight: `1px solid ${theme.palette.divider}`,
-  background: theme.palette.mode === "dark"
-    ? "linear-gradient(180deg, #0b1120 0%, #111827 100%)"
-    : theme.palette.background.paper
+  flexShrink: 0
 }));
 
 const NavList = styled(List)(({ theme }) => ({
   flex: 1,
+  overflow: "auto",
   display: "flex",
   flexDirection: "column",
   gap: theme.spacing(0.5),
-  padding: 0,
+  padding: theme.spacing(0, 2.5),
   margin: 0
 }));
 
@@ -129,15 +114,6 @@ const BrandAvatar = styled(Avatar)(({ theme }) => ({
   width: 40,
   height: 40,
   fontSize: theme.typography.pxToRem(16)
-}));
-
-const Note = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2),
-  borderRadius:
-    typeof theme.shape.borderRadius === "number"
-      ? theme.shape.borderRadius * 1.5
-      : theme.shape.borderRadius,
-  backgroundColor: theme.palette.mode === "dark" ? "rgba(148, 163, 184, 0.08)" : theme.palette.background.default
 }));
 
 const Sidebar = () => {
@@ -226,17 +202,21 @@ const Sidebar = () => {
   };
 
   return (
-    <SidebarRoot>
-      <Stack direction="row" alignItems="center" spacing={1.5}>
-        <BrandAvatar>DG</BrandAvatar>
-        <Stack spacing={0.5}>
-          <Typography variant="subtitle1">Server Control</Typography>
-          <Typography variant="caption" color="text.secondary">
-            Unified operations dashboard
-          </Typography>
+    <>
+      <SidebarHeader>
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <BrandAvatar>DG</BrandAvatar>
+          <Stack spacing={0.5}>
+            <Typography variant="subtitle1" fontWeight={600}>Server Control</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Unified dashboard
+            </Typography>
+          </Stack>
         </Stack>
-      </Stack>
-      <Divider flexItem />
+      </SidebarHeader>
+      
+      <Divider />
+      
       <NavList disablePadding>
         {filteredNavigation.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
@@ -306,15 +286,7 @@ const Sidebar = () => {
           </Stack>
         ))}
       </NavList>
-      <Note variant="outlined">
-        <Typography variant="subtitle2" gutterBottom>
-          Server Modules
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block">
-          Navigation reflects the modules granted to your account. Ask an administrator if something is missing.
-        </Typography>
-      </Note>
-    </SidebarRoot>
+    </>
   );
 };
 

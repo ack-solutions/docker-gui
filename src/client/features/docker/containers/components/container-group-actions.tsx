@@ -1,7 +1,6 @@
 "use client";
 
-import { Box, Chip, CircularProgress, Stack, Tooltip, Typography } from "@mui/material";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import { CircularProgress, Stack, Tooltip } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
@@ -36,16 +35,7 @@ const ContainerGroupActions = ({
   const isAnyLoading = loadingAction !== null;
   
   return (
-    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
-      <AccountTreeIcon fontSize="small" color="primary" />
-      <Typography variant="h6">{groupLabel}</Typography>
-      <Chip
-        size="small"
-        label={`${containerCount} container${containerCount === 1 ? "" : "s"}`}
-        variant="outlined"
-      />
-      <Box sx={{ flex: 1 }} />
-      <Stack direction="row" spacing={0.5}>
+    <Stack direction="row" alignItems="center" spacing={0.5}>
         <Tooltip title="Start all stopped containers">
           <ActionIconButton 
             color="primary" 
@@ -112,7 +102,6 @@ const ContainerGroupActions = ({
             )}
           </ActionIconButton>
         </Tooltip>
-      </Stack>
     </Stack>
   );
 };

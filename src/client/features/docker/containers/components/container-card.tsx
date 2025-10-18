@@ -1,7 +1,6 @@
 "use client";
 
 import { Box, Card, CardContent, Chip, CircularProgress, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
-import Grid from "@mui/material/Grid";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
@@ -38,40 +37,37 @@ const ContainerCard = ({
   const router = useRouter();
   if (!container) {
     return (
-      <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-        <Card sx={{ height: "100%" }}>
-          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Skeleton variant="text" width="70%" height={22} />
-                <Skeleton variant="text" width="50%" height={16} />
-              </Box>
-              <Skeleton variant="rounded" width={56} height={20} />
-            </Stack>
-            <Stack spacing={0.75}>
-              <Skeleton variant="rounded" height={10} />
-              <Skeleton variant="text" width="40%" height={14} />
-            </Stack>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Skeleton variant="text" width={80} height={16} />
-              <Skeleton variant="rounded" width={64} height={20} />
-            </Stack>
-            <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
-              {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} variant="circular" width={28} height={28} />
-              ))}
+      <Card sx={{ height: "100%" }}>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Skeleton variant="text" width="70%" height={22} />
+              <Skeleton variant="text" width="50%" height={16} />
             </Box>
-          </CardContent>
-        </Card>
-      </Grid>
+            <Skeleton variant="rounded" width={56} height={20} />
+          </Stack>
+          <Stack spacing={0.75}>
+            <Skeleton variant="rounded" height={10} />
+            <Skeleton variant="text" width="40%" height={14} />
+          </Stack>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Skeleton variant="text" width={80} height={16} />
+            <Skeleton variant="rounded" width={64} height={20} />
+          </Stack>
+          <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Skeleton key={index} variant="circular" width={28} height={28} />
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
     );
   }
 
   const isRunning = container.state === "running";
 
   return (
-    <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
-      <Card sx={{ height: "100%" }}>
+    <Card sx={{ height: "100%" }}>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -207,7 +203,6 @@ const ContainerCard = ({
           </Box>
         </CardContent>
       </Card>
-    </Grid>
   );
 };
 

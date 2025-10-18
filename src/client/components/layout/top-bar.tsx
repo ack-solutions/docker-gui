@@ -78,8 +78,8 @@ const TopBar = ({
   };
 
   return (
-    <AppBar position="sticky" elevation={0} sx={{ borderRadius: 0 }}>
-      <Toolbar sx={{ px: 3, py: 2 }}>
+    <AppBar position="static" elevation={0} sx={{ borderRadius: 0, border: 'none', flexShrink: 0 }}>
+      <Toolbar sx={{ px: 3, py: 2, minHeight: { xs: 64, sm: 70 } }}>
         <Stack spacing={0.5} flex={1}>
           <PageBreadcrumbs />
           <Typography variant="h6">

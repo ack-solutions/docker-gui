@@ -47,12 +47,34 @@ const ContainerList = () => {
   const { confirm } = useConfirmationDialog();
   const router = useRouter();
 
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
   const groupedContainers = useGroupedContainers(data);
   const showSkeleton = isLoading && (!data || data.length === 0);
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  // Filter containers based on search query
+  const filteredData = useMemo(() => {
+    if (!data || !searchQuery.trim()) {
+      return data;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    return data.filter((container) => {
+      return (
+        container.name.toLowerCase().includes(query) ||
+        container.id.toLowerCase().includes(query) ||
+        container.image.toLowerCase().includes(query) ||
+        container.state.toLowerCase().includes(query) ||
+        (container.project && container.project.toLowerCase().includes(query)) ||
+        (container.service && container.service.toLowerCase().includes(query))
+      );
+    });
+  }, [data, searchQuery]);
+
+  const filteredGroupedContainers = useGroupedContainers(filteredData);
 
   const handleViewModeChange = useCallback((mode: "grid" | "list") => {
     setViewMode(mode);
@@ -250,6 +272,18 @@ const ContainerList = () => {
   );
 
   const handlePruneContainers = useCallback(async () => {
+    const confirmed = await confirm({
+      title: "Prune stopped containers",
+      message: "Remove all stopped containers? This will permanently delete containers that are not running.",
+      confirmLabel: "Prune",
+      cancelLabel: "Cancel",
+      tone: "danger"
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     await toast.promise(actions.pruneContainers(), {
       loading: "Removing stopped containers...",
       success: (summary) =>
@@ -258,9 +292,21 @@ const ContainerList = () => {
           : "No stopped containers to remove.",
       error: (err) => (err instanceof Error ? err.message : "Unable to prune containers")
     });
-  }, [actions]);
+  }, [actions, confirm]);
 
   const handlePruneImages = useCallback(async () => {
+    const confirmed = await confirm({
+      title: "Prune unused images",
+      message: "Remove all unused and dangling images? This will free up disk space but cannot be undone.",
+      confirmLabel: "Prune",
+      cancelLabel: "Cancel",
+      tone: "danger"
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     await toast.promise(actions.pruneImages(), {
       loading: "Removing unused images...",
       success: (summary) =>
@@ -269,9 +315,10 @@ const ContainerList = () => {
           : "No unused images to clean up.",
       error: (err) => (err instanceof Error ? err.message : "Unable to prune images")
     });
-  }, [actions]);
+  }, [actions, confirm]);
 
   const totalCount = data?.length ?? 0;
+  const filteredCount = filteredData?.length ?? 0;
 
   if (isError && !showSkeleton) {
     return (
@@ -293,8 +340,15 @@ const ContainerList = () => {
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           onCreate={openCreateDialog}
+          onPruneContainers={handlePruneContainers}
+          onPruneImages={handlePruneImages}
           isRefreshing={isFetching}
+          isPruningContainers={containerState.isPruningContainers}
+          isPruningImages={containerState.isPruningImages}
           totalCount={0}
+          filteredCount={0}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
         <EmptyState
           title="No containers found"
@@ -312,14 +366,23 @@ const ContainerList = () => {
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           onCreate={openCreateDialog}
+          onPruneContainers={handlePruneContainers}
+          onPruneImages={handlePruneImages}
           isRefreshing={isFetching}
+          isPruningContainers={containerState.isPruningContainers}
+          isPruningImages={containerState.isPruningImages}
           totalCount={totalCount}
+          filteredCount={filteredCount}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
         {showSkeleton ? (
           viewMode === "grid" ? (
             <Grid container spacing={2}>
               {Array.from({ length: 6 }).map((_, index) => (
-                <ContainerCard key={`container-skeleton-${index}`} container={null} />
+                <Grid key={`container-skeleton-${index}`} size={{ xs: 12, sm: 6, lg: 4 }}>
+                  <ContainerCard container={null} />
+                </Grid>
               ))}
             </Grid>
           ) : (
@@ -327,11 +390,11 @@ const ContainerList = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>CPU</TableCell>
-                    <TableCell>Memory</TableCell>
-                    <TableCell align="right">Actions</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -342,8 +405,13 @@ const ContainerList = () => {
               </Table>
             </Paper>
           )
+        ) : filteredCount === 0 && searchQuery ? (
+          <EmptyState
+            title="No containers match your search"
+            description={`No containers found matching "${searchQuery}". Try a different search term.`}
+          />
         ) : (
-          groupedContainers.map((group) => {
+          filteredGroupedContainers.map((group) => {
             const bulkAction = containerState.bulkAction;
             const isGroupBusy =
               Boolean(bulkAction) &&
@@ -354,8 +422,17 @@ const ContainerList = () => {
 
             return (
               <Accordion key={group.key} defaultExpanded disableGutters sx={{ borderRadius: 2, overflow: "hidden" }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ width: "100%" }}>
+                <AccordionSummary 
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ 
+                    '& .MuiAccordionSummary-content': { 
+                      alignItems: 'center',
+                      gap: 1,
+                      my: 1
+                    }
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ flex: 1, mr: 2 }}>
                     <Typography variant="subtitle1" fontWeight={600} noWrap>
                       {group.label}
                     </Typography>
@@ -363,9 +440,12 @@ const ContainerList = () => {
                     <Chip size="small" label={`${runningCount} running`} color="success" variant="outlined" />
                     <Chip size="small" label={`${stoppedCount} stopped`} variant="outlined" />
                   </Stack>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Stack spacing={2}>
+                  <Stack 
+                    direction="row" 
+                    spacing={0.5}
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ mr: 1 }}
+                  >
                     <ContainerGroupActions
                       groupLabel={group.label}
                       containerCount={group.containers.length}
@@ -377,20 +457,25 @@ const ContainerList = () => {
                       onGroupLogs={handleGroupLogs}
                       onGroupDelete={handleGroupRemove}
                     />
+                  </Stack>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
                     {viewMode === "grid" ? (
                       <Grid container spacing={2}>
                         {group.containers.map((container) => (
-                          <ContainerCard
-                            key={container.id}
-                            container={container}
-                            isLoading={containerState.isContainerActionInFlight(container.id)}
-                            onStart={handleStart}
-                            onStop={handleStop}
-                            onRestart={handleRestart}
-                            onOpenTerminal={openTerminal}
-                            onOpenLogs={openLogs}
-                            onMenuOpen={handleMenuOpen}
-                          />
+                          <Grid key={container.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+                            <ContainerCard
+                              container={container}
+                              isLoading={containerState.isContainerActionInFlight(container.id)}
+                              onStart={handleStart}
+                              onStop={handleStop}
+                              onRestart={handleRestart}
+                              onOpenTerminal={openTerminal}
+                              onOpenLogs={openLogs}
+                              onMenuOpen={handleMenuOpen}
+                            />
+                          </Grid>
                         ))}
                       </Grid>
                     ) : (
@@ -398,11 +483,11 @@ const ContainerList = () => {
                         <Table size="small">
                           <TableHead>
                             <TableRow>
-                              <TableCell>Name</TableCell>
-                              <TableCell>Status</TableCell>
-                              <TableCell>CPU</TableCell>
-                              <TableCell>Memory</TableCell>
-                              <TableCell align="right">Actions</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody>
@@ -429,12 +514,6 @@ const ContainerList = () => {
             );
           })
         )}
-        <ContainerMaintenancePanel
-          onPruneContainers={handlePruneContainers}
-          onPruneImages={handlePruneImages}
-          isPruningContainers={containerState.isPruningContainers}
-          isPruningImages={containerState.isPruningImages}
-        />
       </Stack>
       <ContainerContextMenu
         anchorEl={menuAnchor?.anchor ?? null}

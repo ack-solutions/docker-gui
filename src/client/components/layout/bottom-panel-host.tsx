@@ -4,25 +4,23 @@ import { memo, useMemo } from "react";
 import { BottomPanel } from "@/components/common/bottom-panel";
 import TerminalPanel from "@/components/common/terminal-panel";
 import LogsPanel from "@/components/common/logs-panel";
-import { useBottomPanel } from "@/store/ui-store";
+import { useBottomPanel } from "@/components/common/bottom-panel-context";
 
-const renderTabContent = (tab: ReturnType<typeof useBottomPanel>["tabs"][number]) => {
-  switch (tab.kind) {
+const renderTabContent = (tab: { id: string; type: "terminal" | "logs"; containerId: string; containerName?: string }) => {
+  switch (tab.type) {
     case "terminal": {
-      const { containerId, containerName } = tab.payload ?? {};
       return (
         <TerminalPanel
-          containerId={String(containerId ?? "")}
-          containerName={typeof containerName === "string" ? containerName : undefined}
+          containerId={tab.containerId}
+          containerName={tab.containerName}
         />
       );
     }
     case "logs": {
-      const { containerId, containerName } = tab.payload ?? {};
       return (
         <LogsPanel
-          containerId={String(containerId ?? "")}
-          containerName={typeof containerName === "string" ? containerName : undefined}
+          containerId={tab.containerId}
+          containerName={tab.containerName}
         />
       );
     }
@@ -35,12 +33,10 @@ const BottomPanelHost = () => {
   const {
     tabs,
     activeTabId,
-    isMinimized,
     isOpen,
     closePanel,
     closeTab,
-    setActiveTab,
-    toggleMinimize
+    setActiveTab
   } = useBottomPanel();
 
   const panelTabs = useMemo(
@@ -61,10 +57,10 @@ const BottomPanelHost = () => {
     <BottomPanel
       tabs={panelTabs}
       activeTabId={activeTabId ?? undefined}
-      isMinimized={isMinimized}
+      isMinimized={false}
       onTabChange={setActiveTab}
       onTabClose={closeTab}
-      onToggleMinimize={toggleMinimize}
+      onToggleMinimize={() => {}}
       onClose={closePanel}
     />
   );
