@@ -27,7 +27,7 @@ import {
   ToggleButtonGroup,
   Typography
 } from "@mui/material";
-import Grid from "@mui/material/Grid2";
+import Grid from "@mui/material/Grid";
 import { styled } from "@mui/material/styles";
 import { useMemo, useState } from "react";
 import { useFiles } from "@/features/docker/files/hooks/use-files";
@@ -171,7 +171,7 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
           ) : (
             <Grid container spacing={2}>
               {nodes.map((node) => (
-                <Grid key={node.path} xs={6} sm={4} md={3} lg={2}>
+                <Grid key={node.path} size={{ xs: 6, sm: 4, md: 3, lg: 2 }}>
                   <FileCard $isDirectory={node.type === "directory"}>
                     <CardActionArea
                       onClick={() => handleNavigate(node)}
@@ -196,7 +196,7 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
                 </Grid>
               ))}
               {nodes.length === 0 && (
-                <Grid xs={12}>
+                <Grid size={{ xs: 12 }}>
                   <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
                     This directory is empty.
                   </Typography>

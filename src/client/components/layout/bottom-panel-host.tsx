@@ -29,14 +29,23 @@ const renderTabContent = (tab: { id: string; type: "terminal" | "logs"; containe
   }
 };
 
-const BottomPanelHost = () => {
+interface BottomPanelHostProps {
+  leftInset?: number;
+}
+
+const BottomPanelHost = ({ leftInset = 0 }: BottomPanelHostProps) => {
   const {
     tabs,
     activeTabId,
     isOpen,
     closePanel,
     closeTab,
-    setActiveTab
+    setActiveTab,
+    panelHeight,
+    minPanelHeight,
+    maxPanelHeight,
+    setPanelHeight,
+    commitPanelHeight
   } = useBottomPanel();
 
   const panelTabs = useMemo(
@@ -57,11 +66,15 @@ const BottomPanelHost = () => {
     <BottomPanel
       tabs={panelTabs}
       activeTabId={activeTabId ?? undefined}
-      isMinimized={false}
+      height={panelHeight}
+      minHeight={minPanelHeight}
+      maxHeight={maxPanelHeight}
+      leftOffset={leftInset}
       onTabChange={setActiveTab}
       onTabClose={closeTab}
-      onToggleMinimize={() => {}}
       onClose={closePanel}
+      onHeightChange={setPanelHeight}
+      onHeightCommit={commitPanelHeight}
     />
   );
 };

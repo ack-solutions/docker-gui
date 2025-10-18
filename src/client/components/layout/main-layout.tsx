@@ -6,6 +6,7 @@ import { styled } from "@mui/material/styles";
 import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
 import BottomPanelHost from "@/components/layout/bottom-panel-host";
+import { useBottomPanel } from "@/components/common/bottom-panel-context";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -14,66 +15,83 @@ interface MainLayoutProps {
   onRefresh?: () => void;
 }
 
-// Root container - full viewport with flexbox
-const LayoutRoot = styled(Box)({
-  display: "flex",
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  overflow: "hidden"
-});
+const SIDEBAR_WIDTH = 240;
 
-// Sidebar - fixed width, scrollable
-const SidebarWrapper = styled(Box)(({ theme }) => ({
-  width: 240,
+const LayoutRoot = styled(Box)(({ theme }) => ({
+  display: "flex",
+  minHeight: "100vh",
+  height: "100vh",
+  width: "100%",
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  overflow: "hidden",
+  position: "relative"
+}));
+
+const SidebarRail = styled("aside")(({ theme }) => ({
+  width: SIDEBAR_WIDTH,
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
   borderRight: `1px solid ${theme.palette.divider}`,
   background: theme.palette.mode === "dark"
     ? "linear-gradient(180deg, #0b1120 0%, #111827 100%)"
-    : theme.palette.background.paper,
-  overflow: "hidden"
+    : theme.palette.background.paper
 }));
 
-// Main area - flex 1, contains topbar and scrollable content
-const MainArea = styled(Box)({
+const MainColumn = styled("section")({
   flex: 1,
   display: "flex",
   flexDirection: "column",
-  overflow: "hidden"
+  minWidth: 0,
+  overflow: "hidden",
+  position: "relative"
 });
 
-// Content area - scrollable
-const ContentArea = styled(Box)(({ theme }) => ({
+const ScrollViewport = styled(Box)(({ theme }) => ({
   flex: 1,
-  overflow: "auto",
+  overflowY: "auto",
+  overflowX: "hidden",
+  minHeight: 0,
   padding: theme.spacing(3),
-  maxWidth: 1600,
-  width: "100%",
-  margin: "0 auto"
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  background: theme.palette.background.default
 }));
 
+const ContentContainer = styled(Box)({
+  width: "100%",
+  maxWidth: 1600,
+  margin: "0 auto",
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 0
+});
+
 const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLayoutProps) => {
+  const { isOpen, panelHeight } = useBottomPanel();
+  const bottomPadding = isOpen ? panelHeight + 32 : 32;
+
   return (
-    <LayoutRoot>
-      <SidebarWrapper>
-        <Sidebar />
-      </SidebarWrapper>
-      
-      <MainArea>
-        <TopBar title={topBarTitle} subtitle={topBarSubtitle} onRefresh={onRefresh} />
-        <ContentArea>
-          {children}
-        </ContentArea>
-      </MainArea>
-      
-      <BottomPanelHost />
-    </LayoutRoot>
+    <>
+      <LayoutRoot>
+        <SidebarRail>
+          <Sidebar />
+        </SidebarRail>
+
+        <MainColumn>
+          <TopBar title={topBarTitle} subtitle={topBarSubtitle} onRefresh={onRefresh} />
+          <ScrollViewport sx={{ paddingBottom: `${bottomPadding}px` }}>
+            <ContentContainer>
+              {children}
+            </ContentContainer>
+          </ScrollViewport>
+        </MainColumn>
+      </LayoutRoot>
+      <BottomPanelHost leftInset={SIDEBAR_WIDTH} />
+    </>
   );
 };
 
 export default MainLayout;
-

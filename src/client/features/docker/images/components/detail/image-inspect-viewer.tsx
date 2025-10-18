@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { styled } from "@mui/material/styles";
 import { useState } from "react";
@@ -40,23 +40,19 @@ const ImageInspectViewer = ({ inspect }: ImageInspectViewerProps) => {
   };
 
   return (
-    <Card>
-      <CardContent>
-        <Stack spacing={2}>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography variant="h6" flex={1}>
-              Raw inspect JSON
-            </Typography>
-            <Tooltip title={copied ? "Copied" : "Copy to clipboard"}>
-              <IconButton onClick={handleCopy} size="small">
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-          <JsonViewport>{json}</JsonViewport>
-        </Stack>
-      </CardContent>
-    </Card>
+    <Stack spacing={2}>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Typography variant="h6" flex={1}>
+          Raw inspect JSON
+        </Typography>
+        <Tooltip title={copied ? "Copied" : "Copy to clipboard"}>
+          <IconButton onClick={handleCopy} size="small">
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+      <JsonViewport>{json}</JsonViewport>
+    </Stack>
   );
 };
 

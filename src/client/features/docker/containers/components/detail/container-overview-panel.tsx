@@ -10,8 +10,6 @@ import TerminalIcon from "@mui/icons-material/Terminal";
 import VpnLockIcon from "@mui/icons-material/VpnLock";
 import {
   Box,
-  Card,
-  CardContent,
   Chip,
   Divider,
   List,
@@ -26,18 +24,9 @@ import {
   TableRow,
   Typography
 } from "@mui/material";
-import { styled } from "@mui/material/styles";
 import moment from "moment";
 import type { ReactNode } from "react";
 import type { DockerContainerInspect } from "@/types/docker";
-
-const InfoCard = styled(Card)(({ theme }) => ({
-  height: "100%",
-  borderRadius:
-    typeof theme.shape.borderRadius === "number"
-      ? theme.shape.borderRadius * 1.5
-      : theme.shape.borderRadius
-}));
 
 interface ContainerOverviewPanelProps {
   inspect: DockerContainerInspect;
@@ -64,13 +53,12 @@ const ContainerOverviewPanel = ({ inspect }: ContainerOverviewPanelProps) => {
 
   return (
     <Stack spacing={3}>
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-        <InfoCard sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Runtime & Status
-            </Typography>
-            <List disablePadding>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h6" gutterBottom>
+            Runtime & Status
+          </Typography>
+          <List disablePadding>
               {renderListItem(
                 <DnsIcon fontSize="small" color="primary" />,
                 "Status",
@@ -103,14 +91,12 @@ const ContainerOverviewPanel = ({ inspect }: ContainerOverviewPanelProps) => {
                 restartPolicy
               )}
             </List>
-          </CardContent>
-        </InfoCard>
-        <InfoCard sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Host & Network
-            </Typography>
-            <List disablePadding>
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h6" gutterBottom>
+            Host & Network
+          </Typography>
+          <List disablePadding>
               {renderListItem(
                 <LanIcon fontSize="small" color="primary" />,
                 "Network mode",
@@ -143,16 +129,14 @@ const ContainerOverviewPanel = ({ inspect }: ContainerOverviewPanelProps) => {
                   healthStatus
                 )}
             </List>
-          </CardContent>
-        </InfoCard>
+        </Box>
       </Stack>
 
       {inspect.networkSettings.networks && Object.keys(inspect.networkSettings.networks).length > 0 && (
-        <InfoCard>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Networks
-            </Typography>
+        <Box>
+          <Typography variant="h6" gutterBottom>
+            Networks
+          </Typography>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -175,16 +159,14 @@ const ContainerOverviewPanel = ({ inspect }: ContainerOverviewPanelProps) => {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </InfoCard>
+        </Box>
       )}
 
       {inspect.networkSettings.ports && Object.keys(inspect.networkSettings.ports).length > 0 && (
-        <InfoCard>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Published Ports
-            </Typography>
+        <Box>
+          <Typography variant="h6" gutterBottom>
+            Published Ports
+          </Typography>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -212,15 +194,13 @@ const ContainerOverviewPanel = ({ inspect }: ContainerOverviewPanelProps) => {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </InfoCard>
+        </Box>
       )}
 
-      <InfoCard>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Bind mounts
-          </Typography>
+      <Box>
+        <Typography variant="h6" gutterBottom>
+          Bind mounts
+        </Typography>
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -251,49 +231,7 @@ const ContainerOverviewPanel = ({ inspect }: ContainerOverviewPanelProps) => {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </InfoCard>
-
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-        <InfoCard sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Environment variables
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {inspect.config.env.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No environment variables defined.
-                </Typography>
-              ) : (
-                inspect.config.env.map((entry) => (
-                  <Chip key={entry} label={entry} size="small" variant="outlined" />
-                ))
-              )}
-            </Box>
-          </CardContent>
-        </InfoCard>
-        <InfoCard sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Labels
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {Object.keys(inspect.config.labels).length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No labels applied.
-                </Typography>
-              ) : (
-                Object.entries(inspect.config.labels).map(([key, value]) => (
-                  <Chip key={key} label={`${key}=${value}`} size="small" variant="outlined" />
-                ))
-              )}
-            </Box>
-          </CardContent>
-        </InfoCard>
-      </Stack>
+        </Box>
     </Stack>
   );
 };

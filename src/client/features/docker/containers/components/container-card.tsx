@@ -22,6 +22,7 @@ interface ContainerCardProps {
   onOpenTerminal?: (id: string, name: string) => void;
   onOpenLogs?: (id: string, name: string) => void;
   onMenuOpen?: (id: string, anchor: HTMLElement) => void;
+  onViewDetail?: (id: string) => void;
 }
 
 const ContainerCard = ({
@@ -32,9 +33,9 @@ const ContainerCard = ({
   onRestart,
   onOpenTerminal,
   onOpenLogs,
-  onMenuOpen
+  onMenuOpen,
+  onViewDetail
 }: ContainerCardProps) => {
-  const router = useRouter();
   if (!container) {
     return (
       <Card sx={{ height: "100%" }}>
@@ -186,7 +187,7 @@ const ContainerCard = ({
               <ActionIconButton
                 color="default"
                 size="small"
-                onClick={() => router.push(`/containers/${container.id}`)}
+                onClick={() => onViewDetail?.(container.id)}
               >
                 <InfoOutlinedIcon fontSize="small" />
               </ActionIconButton>

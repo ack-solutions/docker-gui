@@ -26,7 +26,7 @@ import {
   Typography
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import Grid from "@mui/material/Grid2";
+import Grid from "@mui/material/Grid";
 import { toast } from "sonner";
 import { useNginxSites } from "@/features/nginx/hooks/use-nginx-sites";
 import { useSslCertificates } from "@/features/ssl/hooks/use-ssl-certificates";
@@ -164,7 +164,7 @@ const NginxManager = () => {
 
   return (
     <Grid container spacing={3}>
-      <Grid xs={12} md={5}>
+      <Grid size={{ xs: 12, md: 5 }}>
         <Stack spacing={2.5}>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Typography variant="h6">Configured sites</Typography>
@@ -203,7 +203,7 @@ const NginxManager = () => {
           )}
         </Stack>
       </Grid>
-      <Grid xs={12} md={7}>
+      <Grid size={{ xs: 12, md: 7 }}>
         <Stack spacing={2.5}>
           <Paper sx={{ p: 3, borderRadius: 3, display: "flex", flexDirection: "column", gap: 2 }}>
             {isInitialLoading ? (
@@ -247,13 +247,13 @@ const NginxManager = () => {
                   />
 
                   <Grid container spacing={2}>
-                    <Grid xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <FormControlLabel
                         control={<Switch checked={form.enableHttp} onChange={(_, value) => handleInputChange("enableHttp", value)} />}
                         label="Serve HTTP"
                       />
                     </Grid>
-                    <Grid xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <FormControlLabel
                         control={<Switch checked={form.enableHttps} onChange={(_, value) => handleInputChange("enableHttps", value)} />}
                         label="Serve HTTPS"

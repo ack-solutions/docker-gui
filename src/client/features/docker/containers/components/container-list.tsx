@@ -19,7 +19,6 @@ import {
 import Grid from "@mui/material/Grid";
 import { toast } from "sonner";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useRouter } from "next/navigation";
 import { useBottomPanel } from "@/components/common/bottom-panel-context";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import EmptyState from "@/components/common/empty-state";
@@ -30,6 +29,7 @@ import ContainerListToolbar from "@/features/docker/containers/components/contai
 import ContainerMaintenancePanel from "@/features/docker/containers/components/container-maintenance-panel";
 import ContainerTableRow from "@/features/docker/containers/components/container-table-row";
 import CreateContainerDialog from "@/features/docker/containers/components/create-container-dialog";
+import ContainerDetailDialog from "@/features/docker/containers/components/container-detail-dialog";
 import {
   useContainerActions,
   useContainerState,
@@ -45,12 +45,12 @@ const ContainerList = () => {
   const containerState = useContainerState();
   const { openLogs, openTerminal } = useBottomPanel();
   const { confirm } = useConfirmationDialog();
-  const router = useRouter();
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [detailContainerId, setDetailContainerId] = useState<string | null>(null);
 
   const groupedContainers = useGroupedContainers(data);
   const showSkeleton = isLoading && (!data || data.length === 0);
@@ -93,6 +93,10 @@ const ContainerList = () => {
 
   const closeCreateDialog = useCallback(() => {
     setIsCreateOpen(false);
+  }, []);
+
+  const handleViewContainer = useCallback((containerId: string) => {
+    setDetailContainerId(containerId);
   }, []);
 
   const handleMenuOpen = useCallback((containerId: string, anchor: HTMLElement) => {
@@ -474,6 +478,7 @@ const ContainerList = () => {
                               onOpenTerminal={openTerminal}
                               onOpenLogs={openLogs}
                               onMenuOpen={handleMenuOpen}
+                              onViewDetail={handleViewContainer}
                             />
                           </Grid>
                         ))}
@@ -498,15 +503,16 @@ const ContainerList = () => {
                                 isLoading={containerState.isContainerActionInFlight(container.id)}
                                 onStart={handleStart}
                                 onStop={handleStop}
-                                onRestart={handleRestart}
-                                onOpenTerminal={openTerminal}
-                                onOpenLogs={openLogs}
-                                onMenuOpen={handleMenuOpen}
-                              />
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </Paper>
+                              onRestart={handleRestart}
+                              onOpenTerminal={openTerminal}
+                              onOpenLogs={openLogs}
+                              onMenuOpen={handleMenuOpen}
+                              onRowClick={(rowContainer) => handleViewContainer(rowContainer.id)}
+                            />
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </Paper>
                     )}
                   </Stack>
                 </AccordionDetails>
@@ -520,13 +526,17 @@ const ContainerList = () => {
         container={selectedContainer}
         onClose={handleMenuClose}
         onOpenTerminalDrawer={openTerminal}
-        onOpenTerminalTab={(id) => window.open(`/containers/${id}/shell`, "_blank", "noopener,noreferrer")}
+        onOpenTerminalTab={(id) => window.open(`/docker/containers/${id}/shell`, "_blank", "noopener,noreferrer")}
         onOpenLogsDrawer={openLogs}
-        onOpenLogsTab={(id) => window.open(`/logs?containerId=${id}`, "_blank", "noopener,noreferrer")}
+        onOpenLogsTab={(id) => window.open(`/docker/logs?containerId=${id}`, "_blank", "noopener,noreferrer")}
         onRemove={handleRemove}
-        onViewDetails={(id) => router.push(`/containers/${id}`)}
       />
       <CreateContainerDialog open={isCreateOpen} onClose={closeCreateDialog} />
+      <ContainerDetailDialog
+        open={Boolean(detailContainerId)}
+        onClose={() => setDetailContainerId(null)}
+        containerId={detailContainerId}
+      />
     </>
   );
 };

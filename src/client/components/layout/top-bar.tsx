@@ -78,16 +78,33 @@ const TopBar = ({
   };
 
   return (
-    <AppBar position="static" elevation={0} sx={{ borderRadius: 0, border: 'none', flexShrink: 0 }}>
+    <AppBar
+      color="default"
+      position="sticky"
+      elevation={0}
+      sx={{
+        top: 0,
+        borderRadius: 0,
+        border: "none",
+        flexShrink: 0,
+        backdropFilter: "blur(10px)",
+        backgroundColor: (theme) => theme.palette.mode === "dark"
+          ? "rgba(17, 24, 39, 0.82)"
+          : "rgba(255, 255, 255, 0.92)",
+        borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+        zIndex: (theme) => theme.zIndex.appBar
+      }}
+    >
       <Toolbar sx={{ px: 3, py: 2, minHeight: { xs: 64, sm: 70 } }}>
         <Stack spacing={0.5} flex={1}>
-          <PageBreadcrumbs />
           <Typography variant="h6">
             {title}
           </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: "600px" }}>
+          <PageBreadcrumbs />
+         
+          {/* <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: "600px" }}>
             {subtitle}
-          </Typography>
+          </Typography> */}
         </Stack>
         <Stack direction="row" spacing={1.5} alignItems="center">
           <SearchField

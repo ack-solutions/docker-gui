@@ -72,9 +72,22 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
   }
 ];
 
+const SidebarRoot = styled(Box)({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  overflow: "hidden"
+});
+
 const SidebarHeader = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2.5),
-  flexShrink: 0
+  flexShrink: 0,
+  position: "sticky",
+  top: 0,
+  zIndex: theme.zIndex.appBar,
+  background: theme.palette.mode === "dark"
+    ? "linear-gradient(180deg, rgba(11,17,32,0.98) 0%, rgba(17,24,39,0.94) 100%)"
+    : theme.palette.background.paper
 }));
 
 const NavList = styled(List)(({ theme }) => ({
@@ -202,9 +215,9 @@ const Sidebar = () => {
   };
 
   return (
-    <>
+    <SidebarRoot>
       <SidebarHeader>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ pb: 1.5 }}>
           <BrandAvatar>DG</BrandAvatar>
           <Stack spacing={0.5}>
             <Typography variant="subtitle1" fontWeight={600}>Server Control</Typography>
@@ -213,10 +226,9 @@ const Sidebar = () => {
             </Typography>
           </Stack>
         </Stack>
+        <Divider />
       </SidebarHeader>
-      
-      <Divider />
-      
+
       <NavList disablePadding>
         {filteredNavigation.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
@@ -286,7 +298,7 @@ const Sidebar = () => {
           </Stack>
         ))}
       </NavList>
-    </>
+    </SidebarRoot>
   );
 };
 

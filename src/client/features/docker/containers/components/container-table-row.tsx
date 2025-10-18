@@ -9,8 +9,6 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import ArticleIcon from "@mui/icons-material/Article";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import { useRouter } from "next/navigation";
 import ActionIconButton from "@/components/common/action-icon-button";
 import type { DockerContainer } from "@/types/docker";
 
@@ -38,6 +36,7 @@ interface ContainerTableRowProps {
   onOpenTerminal?: (id: string, name: string) => void;
   onOpenLogs?: (id: string, name: string) => void;
   onMenuOpen?: (id: string, anchor: HTMLElement) => void;
+  onRowClick?: (container: DockerContainer, anchor: HTMLElement) => void;
 }
 
 const ContainerTableRow = ({
@@ -48,9 +47,9 @@ const ContainerTableRow = ({
   onRestart,
   onOpenTerminal,
   onOpenLogs,
-  onMenuOpen
+  onMenuOpen,
+  onRowClick
 }: ContainerTableRowProps) => {
-  const router = useRouter();
   if (!container) {
     return (
       <TableRow>
@@ -80,11 +79,24 @@ const ContainerTableRow = ({
   }
 
   return (
-    <TableRow hover>
+    <TableRow
+      hover
+      onClick={(event) => {
+        if (container) {
+          onRowClick?.(container, event.currentTarget);
+        }
+      }}
+      sx={{ cursor: "pointer" }}
+    >
       <TableCell>
         <Box>
           <Typography variant="body2" fontWeight={600}>
-            <Link href={`/containers/${container.id}`} prefetch={false} style={{ color: "inherit", textDecoration: "none" }}>
+            <Link
+              href={`/docker/containers/${container.id}`}
+              prefetch={false}
+              style={{ color: "inherit", textDecoration: "none" }}
+              onClick={(event) => event.stopPropagation()}
+            >
               {container.name}
             </Link>
           </Typography>
@@ -123,7 +135,10 @@ const ContainerTableRow = ({
               <ActionIconButton 
                 color="primary" 
                 size="small"
-                  onClick={() => onStart?.(container.id, container.name)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onStart?.(container.id, container.name);
+                  }}
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -140,7 +155,10 @@ const ContainerTableRow = ({
                 <ActionIconButton 
                   color="warning" 
                   size="small"
-                  onClick={() => onStop?.(container.id, container.name)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onStop?.(container.id, container.name);
+                  }}
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -154,7 +172,10 @@ const ContainerTableRow = ({
                 <ActionIconButton 
                   color="secondary" 
                   size="small"
-                  onClick={() => onRestart?.(container.id, container.name)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRestart?.(container.id, container.name);
+                  }}
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -168,7 +189,10 @@ const ContainerTableRow = ({
                 <ActionIconButton
                   color="default"
                   size="small"
-                  onClick={() => onOpenTerminal?.(container.id, container.name)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenTerminal?.(container.id, container.name);
+                  }}
                 >
                   <TerminalIcon fontSize="small" />
                 </ActionIconButton>
@@ -177,27 +201,24 @@ const ContainerTableRow = ({
                 <ActionIconButton
                   color="default"
                   size="small"
-                  onClick={() => onOpenLogs?.(container.id, container.name)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenLogs?.(container.id, container.name);
+                  }}
                 >
                   <ArticleIcon fontSize="small" />
                 </ActionIconButton>
               </Tooltip>
             </>
           )}
-          <Tooltip title="View details">
-            <ActionIconButton
-              color="default"
-              size="small"
-              onClick={() => router.push(`/containers/${container.id}`)}
-            >
-              <InfoOutlinedIcon fontSize="small" />
-            </ActionIconButton>
-          </Tooltip>
           <Tooltip title="More actions">
             <ActionIconButton
               color="default"
               size="small"
-              onClick={(event) => onMenuOpen?.(container.id, event.currentTarget)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMenuOpen?.(container.id, event.currentTarget);
+              }}
             >
               <MoreHorizIcon fontSize="small" />
             </ActionIconButton>

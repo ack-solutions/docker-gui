@@ -168,7 +168,7 @@ const ContainerDetailHeader = ({ container, inspect }: ContainerDetailHeaderProp
           <Tooltip title="Open interactive shell">
             <Button
               component={Link}
-              href={`/containers/${containerId}/shell`}
+              href={`/docker/containers/${containerId}/shell`}
               variant="outlined"
               startIcon={<TerminalIcon fontSize="small" />}
             >

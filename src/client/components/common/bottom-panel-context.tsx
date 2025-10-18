@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, ReactNode, useCallback, useContext, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 
 interface PanelTab {
   id: string;
@@ -14,11 +14,16 @@ interface BottomPanelContextType {
   tabs: PanelTab[];
   activeTabId: string | null;
   isOpen: boolean;
+  panelHeight: number;
+  minPanelHeight: number;
+  maxPanelHeight: number;
   openTerminal: (containerId: string, containerName: string) => void;
   openLogs: (containerId: string, containerName: string) => void;
   closeTab: (tabId: string) => void;
   closePanel: () => void;
   setActiveTab: (tabId: string) => void;
+  setPanelHeight: (height: number) => void;
+  commitPanelHeight: (height: number) => void;
 }
 
 const BottomPanelContext = createContext<BottomPanelContextType | undefined>(undefined);
@@ -35,9 +40,45 @@ interface BottomPanelProviderProps {
   children: ReactNode;
 }
 
+const STORAGE_KEY = "docker-gui-bottom-panel-height";
+export const DEFAULT_PANEL_HEIGHT = 400;
+export const MIN_PANEL_HEIGHT = 200;
+export const MAX_PANEL_HEIGHT = 800;
+
+const clampHeight = (height: number) => Math.max(MIN_PANEL_HEIGHT, Math.min(MAX_PANEL_HEIGHT, height));
+
 export const BottomPanelProvider = ({ children }: BottomPanelProviderProps) => {
   const [tabs, setTabs] = useState<PanelTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [panelHeight, setPanelHeightState] = useState<number>(DEFAULT_PANEL_HEIGHT);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const savedHeight = window.localStorage.getItem(STORAGE_KEY);
+    if (!savedHeight) {
+      return;
+    }
+
+    const parsedHeight = parseInt(savedHeight, 10);
+    if (!Number.isNaN(parsedHeight)) {
+      setPanelHeightState(clampHeight(parsedHeight));
+    }
+  }, []);
+
+  const setPanelHeight = useCallback((height: number) => {
+    setPanelHeightState(clampHeight(height));
+  }, []);
+
+  const commitPanelHeight = useCallback((height: number) => {
+    const clampedHeight = clampHeight(height);
+    setPanelHeightState(clampedHeight);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, clampedHeight.toString());
+    }
+  }, []);
 
   const openTerminal = useCallback((containerId: string, containerName: string) => {
     const tabId = `terminal-${containerId}`;
@@ -106,11 +147,16 @@ export const BottomPanelProvider = ({ children }: BottomPanelProviderProps) => {
     tabs,
     activeTabId,
     isOpen: tabs.length > 0,
+    panelHeight,
+    minPanelHeight: MIN_PANEL_HEIGHT,
+    maxPanelHeight: MAX_PANEL_HEIGHT,
     openTerminal,
     openLogs,
     closeTab,
     closePanel,
-    setActiveTab
+    setActiveTab,
+    setPanelHeight,
+    commitPanelHeight
   };
 
   return (
@@ -119,4 +165,3 @@ export const BottomPanelProvider = ({ children }: BottomPanelProviderProps) => {
     </BottomPanelContext.Provider>
   );
 };
-

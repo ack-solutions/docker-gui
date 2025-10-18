@@ -5,7 +5,6 @@ import TerminalIcon from "@mui/icons-material/Terminal";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ArticleIcon from "@mui/icons-material/Article";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import type { DockerContainer } from "@/types/docker";
 
 interface ContainerContextMenuProps {
@@ -17,7 +16,6 @@ interface ContainerContextMenuProps {
   onOpenLogsDrawer: (id: string, name: string) => void;
   onOpenLogsTab: (id: string) => void;
   onRemove: (id: string, name: string) => void;
-  onViewDetails?: (id: string) => void;
 }
 
 const ContainerContextMenu = ({
@@ -28,8 +26,7 @@ const ContainerContextMenu = ({
   onOpenTerminalTab,
   onOpenLogsDrawer,
   onOpenLogsTab,
-  onRemove,
-  onViewDetails
+  onRemove
 }: ContainerContextMenuProps) => {
   if (!container) {
     return null;
@@ -46,18 +43,14 @@ const ContainerContextMenu = ({
     >
       <MenuItem
         onClick={() => {
-          if (onViewDetails) {
-            onViewDetails(container.id);
-          } else {
-            window.open(`/containers/${container.id}`, "_blank", "noopener,noreferrer");
-          }
+          window.open(`/docker/containers/${container.id}`, "_blank", "noopener,noreferrer");
           onClose();
         }}
       >
         <ListItemIcon>
-          <InfoOutlinedIcon fontSize="small" />
+          <OpenInNewIcon fontSize="small" />
         </ListItemIcon>
-        <ListItemText primary="View details" />
+        <ListItemText primary="Open details in new tab" />
       </MenuItem>
       <MenuItem
         onClick={() => {
