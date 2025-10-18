@@ -21,11 +21,14 @@ import {
   TableHead,
   TableRow, 
   TextField,
-  Typography 
+  Typography,
+  useMediaQuery,
+  useTheme
 } from "@mui/material";
 import EmptyState from "@/components/common/empty-state";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import ImageTableRow from "@/features/docker/images/components/image-table-row";
+import ImageListItemMobile from "@/features/docker/images/components/image-list-item-mobile";
 import ImageDetailDialog from "@/features/docker/images/components/image-detail-dialog";
 import { useImages } from "@/features/docker/images/hooks/use-images";
 import { useRouter } from "next/navigation";
@@ -34,6 +37,8 @@ import { pullImage } from "@/lib/api/docker";
 import type { DockerImage } from "@/lib/api/docker";
 
 const ImageList = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { data, isLoading, isError, error, isFetching, refetch } = useImages();
   const { confirm } = useConfirmationDialog();
   const router = useRouter();
@@ -285,6 +290,19 @@ const ImageList = () => {
           title="No images match your search"
           description={`No images found matching "${searchQuery}". Try a different search term.`}
         />
+      ) : isMobile ? (
+        // Mobile list view
+        <Stack spacing={1.5}>
+          {filteredImages?.map((image) => (
+            <ImageListItemMobile
+              key={image.id}
+              image={image}
+              onRun={(tag) => router.push(`/docker/containers?run=${encodeURIComponent(tag)}`)}
+              onDelete={handleRemoveImage}
+              onViewDetail={handleViewImage}
+            />
+          ))}
+        </Stack>
       ) : (
         <Paper variant="outlined">
           <Table size="small">

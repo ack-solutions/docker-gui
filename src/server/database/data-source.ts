@@ -9,6 +9,9 @@ import { DiskMetricsLogEntity } from "../system/disk-metrics-log.entity";
 import { SettingsEntity } from "../system/settings.entity";
 import { InitUsers1708064400000 } from "./migrations/1708064400000-InitUsers";
 import { AddSettingsAndMetricsLogs1760790304940 } from "./migrations/1760790304940-AddSettingsAndMetricsLogs";
+import { NginxSiteEntity } from "@/server/nginx/nginx-site.entity";
+import { NginxProvisionLogEntity } from "@/server/nginx/nginx-provision-log.entity";
+import { AddNginxSitesAndProvisionLogs1761400000000 } from "./migrations/1761400000000-AddNginxSitesAndProvisionLogs";
 import { initializeDefaultSettings } from "../system/settings-service";
 
 const resolveDatabasePath = () => {
@@ -26,11 +29,21 @@ const resolveDatabasePath = () => {
 export const AppDataSource = new DataSource({
   type: "sqlite",
   database: resolveDatabasePath(),
-  entities: [UserEntity, CpuMetricsLogEntity, MemoryMetricsLogEntity, DiskMetricsLogEntity, SettingsEntity],
-  // migrations: [InitUsers1708064400000, AddSettingsAndMetricsLogs1760790304940],
-  // synchronize: false,
+  entities: [
+    UserEntity,
+    CpuMetricsLogEntity,
+    MemoryMetricsLogEntity,
+    DiskMetricsLogEntity,
+    SettingsEntity,
+    NginxSiteEntity,
+    NginxProvisionLogEntity
+  ],
+  migrations: [
+    InitUsers1708064400000,
+    AddSettingsAndMetricsLogs1760790304940,
+    AddNginxSitesAndProvisionLogs1761400000000
+  ],
   migrationsTableName: "migrations",
-  // migrationsRun: false,
   logging: process.env.TYPEORM_LOGGING === "true"
 });
 

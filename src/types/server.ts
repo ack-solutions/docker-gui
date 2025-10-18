@@ -43,18 +43,43 @@ export interface SSLCertificate {
 }
 
 export type UpstreamType = "container" | "service" | "external";
+export type NginxSslMode = "none" | "lets-encrypt" | "custom";
+export type NginxSiteStatus = "draft" | "pending" | "active" | "error";
+
+export interface NginxProvisionLog {
+  id: string;
+  siteId: string;
+  level: "info" | "warn" | "error" | "success";
+  message: string;
+  details?: Record<string, unknown>;
+  createdAt: string;
+}
 
 export interface NginxSite {
   id: string;
+  primaryDomain: string;
   serverNames: string[];
-  listen: Array<{ port: number; protocol: "http" | "https" }>;
   upstreamType: UpstreamType;
   upstreamTarget: string;
+  containerId?: string;
+  containerPort?: number;
+  enableHttp: boolean;
+  enableHttps: boolean;
+  forceHttps: boolean;
+  sslMode: NginxSslMode;
+  letsEncryptEmail?: string;
   sslCertificateId?: string | null;
   enabled: boolean;
-  lastDeployedAt?: string;
+  status: NginxSiteStatus;
+  configPath?: string;
+  lastAppliedAt?: string;
+  lastValidatedAt?: string;
+  lastError?: string;
   createdAt: string;
+  updatedAt: string;
   notes?: string;
+  extraDirectives?: string;
+  lastLog?: NginxProvisionLog | null;
 }
 
 export interface ProxyRoute {

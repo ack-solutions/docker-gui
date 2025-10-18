@@ -1,11 +1,13 @@
 "use client";
 
-import { ReactNode } from "react";
-import { Box } from "@mui/material";
-import { styled } from "@mui/material/styles";
+import { ReactNode, useState } from "react";
+import { Box, Drawer, IconButton, useMediaQuery } from "@mui/material";
+import { useTheme, styled } from "@mui/material/styles";
+import MenuIcon from "@mui/icons-material/Menu";
 import Sidebar from "@/components/layout/sidebar";
 import TopBar from "@/components/layout/top-bar";
 import BottomPanelHost from "@/components/layout/bottom-panel-host";
+import MobileBottomNav from "@/components/layout/bottom-nav";
 import { useBottomPanel } from "@/components/common/bottom-panel-context";
 
 interface MainLayoutProps {
@@ -36,7 +38,10 @@ const SidebarRail = styled("aside")(({ theme }) => ({
   borderRight: `1px solid ${theme.palette.divider}`,
   background: theme.palette.mode === "dark"
     ? "linear-gradient(180deg, #0b1120 0%, #111827 100%)"
-    : theme.palette.background.paper
+    : theme.palette.background.paper,
+  [theme.breakpoints.down("md")]: {
+    display: "none"
+  }
 }));
 
 const MainColumn = styled("section")({
@@ -57,7 +62,16 @@ const ScrollViewport = styled(Box)(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  background: theme.palette.background.default
+  background: theme.palette.background.default,
+  WebkitOverflowScrolling: "touch", // Smooth scrolling on iOS
+  [theme.breakpoints.down("md")]: {
+    padding: theme.spacing(2),
+    paddingBottom: theme.spacing(10) // Space for bottom nav
+  },
+  [theme.breakpoints.down("sm")]: {
+    padding: theme.spacing(1.5),
+    paddingBottom: theme.spacing(10) // Space for bottom nav
+  }
 }));
 
 const ContentContainer = styled(Box)({
@@ -70,8 +84,15 @@ const ContentContainer = styled(Box)({
 });
 
 const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLayoutProps) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { isOpen, panelHeight } = useBottomPanel();
   const bottomPadding = isOpen ? panelHeight + 32 : 32;
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
 
   return (
     <>
@@ -80,8 +101,35 @@ const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLa
           <Sidebar />
         </SidebarRail>
 
+        {/* Mobile Drawer */}
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={handleDrawerToggle}
+          ModalProps={{
+            keepMounted: true // Better open performance on mobile
+          }}
+          sx={{
+            display: { xs: "block", md: "none" },
+            "& .MuiDrawer-paper": { 
+              boxSizing: "border-box", 
+              width: SIDEBAR_WIDTH,
+              background: theme.palette.mode === "dark"
+                ? "linear-gradient(180deg, #0b1120 0%, #111827 100%)"
+                : theme.palette.background.paper
+            }
+          }}
+        >
+          <Sidebar onNavigate={() => setMobileOpen(false)} />
+        </Drawer>
+
         <MainColumn>
-          <TopBar title={topBarTitle} subtitle={topBarSubtitle} onRefresh={onRefresh} />
+          <TopBar 
+            title={topBarTitle} 
+            subtitle={topBarSubtitle} 
+            onRefresh={onRefresh}
+            onMenuClick={isMobile ? handleDrawerToggle : undefined}
+          />
           <ScrollViewport sx={{ paddingBottom: `${bottomPadding}px` }}>
             <ContentContainer>
               {children}
@@ -89,7 +137,8 @@ const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLa
           </ScrollViewport>
         </MainColumn>
       </LayoutRoot>
-      <BottomPanelHost leftInset={SIDEBAR_WIDTH} />
+      <BottomPanelHost leftInset={isMobile ? 0 : SIDEBAR_WIDTH} />
+      <MobileBottomNav />
     </>
   );
 };

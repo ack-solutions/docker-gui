@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -8,7 +8,6 @@ import SaveIcon from "@mui/icons-material/Save";
 import {
   Alert,
   Autocomplete,
-  Box,
   Button,
   Chip,
   FormControl,
@@ -23,6 +22,7 @@ import {
   Stack,
   Switch,
   TextField,
+  Tooltip,
   Typography
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
@@ -33,40 +33,75 @@ import { useSslCertificates } from "@/features/ssl/hooks/use-ssl-certificates";
 import SiteCard from "@/features/nginx/components/site-card";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  deleteSite,
+  fetchNginxSites,
   resetForm,
   selectNginxForm,
   selectNginxSelectedId,
   setSelectedSite,
-  toggleSiteEnabled,
-  updateForm,
-  upsertSite
+  updateForm
 } from "@/store/nginx/slice";
+import { buildSitePayload, generateConfigPreview, toFormState, type NginxFormState } from "@/features/nginx/utils/form";
 import {
-  buildNginxSite,
-  generateConfigPreview,
-  type NginxFormState,
-  type SslMode
-} from "@/features/nginx/utils/form";
-import type { NginxSite, UpstreamType } from "@/types/server";
+  createNginxSite,
+  deleteNginxSite,
+  deployNginxSite,
+  updateNginxSite
+} from "@/features/nginx/api";
+import { useContainers } from "@/features/docker/containers/hooks/use-containers";
+import type { DockerContainer } from "@/types/docker";
+import type { NginxSite } from "@/types/server";
 
 const ConfigPreview = styled("pre")(({ theme }) => ({
   margin: 0,
   whiteSpace: "pre-wrap",
-  fontFamily: 'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  fontFamily:
+    'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   backgroundColor: theme.palette.mode === "dark" ? "rgba(15,23,42,0.85)" : theme.palette.grey[50],
   borderRadius: theme.shape.borderRadius,
   border: `1px solid ${theme.palette.divider}`,
-  padding: theme.spacing(2)
+  padding: theme.spacing(2),
+  minHeight: 220,
+  overflow: "auto"
 }));
 
+interface ContainerOption {
+  id: string;
+  label: string;
+  container: DockerContainer;
+}
+
+const parseContainerPorts = (container: DockerContainer) => {
+  const unique = new Set<number>();
+  container.ports.forEach((binding) => {
+    const parts = binding.split("->");
+    const candidate = (parts.length > 1 ? parts[1] : parts[0]).split("/")[0];
+    const port = Number(candidate.split(":").pop());
+    if (Number.isFinite(port)) {
+      unique.add(port);
+    }
+  });
+  return Array.from(unique).sort((a, b) => a - b);
+};
+
+const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
 const NginxManager = () => {
   const dispatch = useAppDispatch();
   const { data: sites, isLoading, isError, error } = useNginxSites();
-  const { data: certificates } = useSslCertificates();
+  const certificatesQuery = useSslCertificates();
+  const containersQuery = useContainers({ refetchOnWindowFocus: false });
+
   const selectedId = useAppSelector(selectNginxSelectedId);
   const form = useAppSelector(selectNginxForm);
+  const selectedSite = useMemo(
+    () => sites.find((site) => site.id === selectedId) ?? null,
+    [sites, selectedId]
+  );
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const isInitialLoading = isLoading && sites.length === 0;
 
   const handleSelectSite = (site: NginxSite) => {
@@ -77,67 +112,150 @@ const NginxManager = () => {
     dispatch(resetForm());
   };
 
-  const handleToggleEnabled = (siteId: string) => {
-    dispatch(toggleSiteEnabled(siteId));
-    toast.success("Toggled site state (mock)");
-  };
-
   const handleInputChange = <Key extends keyof NginxFormState>(key: Key, value: NginxFormState[Key]) => {
     dispatch(updateForm({ [key]: value } as Partial<NginxFormState>));
   };
 
-  const handleSave = () => {
-    if (!form.serverNames.length) {
-      toast.error("Add at least one domain name");
-      return;
+  const handleAliasChange = (_: unknown, values: string[]) => {
+    handleInputChange("aliases", values);
+  };
+
+  const containerOptions: ContainerOption[] = useMemo(
+    () =>
+      containersQuery.data.map((container) => ({
+        id: container.id,
+        label: `${container.name} · ${container.id.slice(0, 12)}`,
+        container
+      })),
+    [containersQuery.data]
+  );
+
+  const selectedContainer = useMemo(
+    () => containerOptions.find((option) => option.id === form.containerId) ?? null,
+    [containerOptions, form.containerId]
+  );
+
+  const containerPorts = useMemo(
+    () => (selectedContainer ? parseContainerPorts(selectedContainer.container) : []),
+    [selectedContainer]
+  );
+
+  const configPreview = useMemo(
+    () => generateConfigPreview(form, certificatesQuery.data ?? []),
+    [form, certificatesQuery.data]
+  );
+
+  const validateForm = () => {
+    if (!form.primaryDomain.trim()) {
+      toast.error("Primary domain is required");
+      return false;
     }
-    if (!form.upstreamTarget.trim()) {
-      toast.error("Specify an upstream target");
-      return;
+    if (form.upstreamType === "container") {
+      if (!form.containerId) {
+        toast.error("Select a container target");
+        return false;
+      }
+      if (!form.containerPort) {
+        toast.error("Select the container port to proxy to");
+        return false;
+      }
+    } else if (!form.upstreamTarget.trim()) {
+      toast.error("Specify the upstream target");
+      return false;
+    } else if (form.upstreamType === "external" && !isHttpUrl(form.upstreamTarget.trim())) {
+      toast.error("External upstream must start with http:// or https://");
+      return false;
     }
+
     if (form.enableHttps) {
-      if (form.sslMode === "lets-encrypt" && !form.letsEncryptEmail) {
+      if (form.sslMode === "lets-encrypt" && !form.letsEncryptEmail?.trim()) {
         toast.error("Provide an email for Let's Encrypt notifications");
-        return;
+        return false;
       }
       if (form.sslMode === "custom" && !form.customCertificateId) {
         toast.error("Select the certificate to use");
-        return;
+        return false;
       }
     }
-
-    const updated = buildNginxSite(form, certificates ?? []);
-    dispatch(upsertSite(updated));
-    toast.success("Nginx configuration saved (mock)");
+    return true;
   };
 
-  const handleDelete = () => {
+  const refreshSites = async (highlightId: string) => {
+    await dispatch(fetchNginxSites()).unwrap();
+    dispatch(setSelectedSite(highlightId));
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    const payload = buildSitePayload(form);
+    setIsSaving(true);
+    try {
+      const site = form.id
+        ? await updateNginxSite(form.id, payload)
+        : await createNginxSite(payload);
+      toast.success(form.id ? "Configuration updated" : "Configuration created");
+      await refreshSites(site.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save configuration";
+      toast.error(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
     if (!form.id) {
       toast.info("Nothing to delete yet");
       return;
     }
-    dispatch(deleteSite(form.id));
-    toast.success("Removed site (mock)");
+    setIsDeleting(true);
+    try {
+      await deleteNginxSite(form.id);
+      toast.success("Configuration removed");
+      await dispatch(fetchNginxSites()).unwrap();
+      dispatch(resetForm());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete configuration";
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const handleDeploy = () => {
-    if (!form.serverNames.length) {
-      toast.error("Configure the server names before deploying");
+  const handleDeploy = async (siteId?: string) => {
+    const targetId = siteId ?? form.id;
+    if (!targetId) {
+      toast.error("Save the configuration before deploying");
       return;
     }
-    toast.promise(
-      new Promise((resolve) => {
-        setTimeout(resolve, 1200);
-      }),
-      {
-        loading: "Deploying configuration...",
-        success: () => "Configuration deployed (mock)",
-        error: "Failed to deploy configuration"
-      }
-    );
+    setIsDeploying(true);
+    try {
+      const site = await deployNginxSite(targetId);
+      toast.success("Provisioning started");
+      await refreshSites(site.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Deployment failed";
+      toast.error(message);
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
-  const configPreview = useMemo(() => generateConfigPreview(form, certificates ?? [], form.serverNames), [form, certificates]);
+  const handleToggleEnabled = async (site: NginxSite) => {
+    const formState = toFormState(site);
+    formState.enabled = !site.enabled;
+    try {
+      await updateNginxSite(site.id, buildSitePayload(formState));
+      toast.success(site.enabled ? "Site disabled" : "Site enabled");
+      await refreshSites(site.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to toggle site state";
+      toast.error(message);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -192,186 +310,307 @@ const NginxManager = () => {
                   site={site}
                   active={site.id === selectedId}
                   onSelect={handleSelectSite}
-                  onDeploy={(selected) => {
-                    handleSelectSite(selected);
-                    handleDeploy();
-                  }}
-                  onToggle={(selected) => handleToggleEnabled(selected.id)}
+                  onDeploy={(selected) => handleDeploy(selected.id)}
+                  onToggle={handleToggleEnabled}
                 />
               ))}
             </Stack>
           )}
         </Stack>
       </Grid>
+
       <Grid size={{ xs: 12, md: 7 }}>
         <Stack spacing={2.5}>
           <Paper sx={{ p: 3, borderRadius: 3, display: "flex", flexDirection: "column", gap: 2 }}>
-            {isInitialLoading ? (
-              <Stack spacing={2}>
-                <Skeleton variant="text" width="45%" height={32} />
-                {Array.from({ length: 8 }).map((_, index) => (
-                  <Skeleton key={index} variant="rounded" height={48} />
-                ))}
-                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
-                  <Skeleton variant="rounded" width={140} height={36} />
-                  <Skeleton variant="rounded" width={120} height={36} />
-                </Stack>
-              </Stack>
-            ) : (
-              <>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="h6">
-                    {selectedId ? "Edit configuration" : "New configuration"}
-                  </Typography>
-                  {form.id && (
-                    <Button color="error" startIcon={<DeleteOutlineIcon />} size="small" onClick={handleDelete}>
-                      Delete
-                    </Button>
-                  )}
-                </Stack>
-
-                <Stack spacing={2}>
-                  <Autocomplete
-                    multiple
-                    freeSolo
-                    value={form.serverNames}
-                    options={form.serverNames}
-                    onChange={(_, value) => handleInputChange("serverNames", value)}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Server names"
-                        helperText="Primary domain and any aliases (press Enter to add)"
-                      />
-                    )}
-                  />
-
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <FormControlLabel
-                        control={<Switch checked={form.enableHttp} onChange={(_, value) => handleInputChange("enableHttp", value)} />}
-                        label="Serve HTTP"
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <FormControlLabel
-                        control={<Switch checked={form.enableHttps} onChange={(_, value) => handleInputChange("enableHttps", value)} />}
-                        label="Serve HTTPS"
-                      />
-                    </Grid>
-                  </Grid>
-
-                  {form.enableHttps && (
-                    <Stack spacing={1.5}>
-                      <FormControl>
-                        <FormLabel>SSL mode</FormLabel>
-                        <RadioGroup
-                          row
-                          value={form.sslMode}
-                          onChange={(event) => handleInputChange("sslMode", event.target.value as SslMode)}
-                        >
-                          <FormControlLabel value="lets-encrypt" control={<Radio />} label="Let's Encrypt" />
-                          <FormControlLabel value="custom" control={<Radio />} label="Custom certificate" />
-                          <FormControlLabel value="none" control={<Radio />} label="No TLS" />
-                        </RadioGroup>
-                      </FormControl>
-                      {form.sslMode === "lets-encrypt" && (
-                        <TextField
-                          label="Notification email"
-                          value={form.letsEncryptEmail}
-                          onChange={(event) => handleInputChange("letsEncryptEmail", event.target.value)}
-                          helperText="Used for Let's Encrypt expiry notices"
-                        />
-                      )}
-                      {form.sslMode === "custom" && (
-                        <TextField
-                          select
-                          label="Certificate"
-                          value={form.customCertificateId ?? ""}
-                          onChange={(event) => handleInputChange("customCertificateId", event.target.value || undefined)}
-                        >
-                          <MenuItem value="">
-                            Select certificate
-                          </MenuItem>
-                          {(certificates ?? []).map((cert) => (
-                            <MenuItem key={cert.id} value={cert.id}>
-                              {cert.commonName} · exp {new Date(cert.expiresAt).toLocaleDateString()}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                      {form.sslMode === "none" && (
-                        <Alert severity="warning">
-                          TLS is disabled. Traffic will be served via HTTP only.
-                        </Alert>
-                      )}
-                    </Stack>
-                  )}
-
-                  <TextField
-                    select
-                    label="Upstream type"
-                    value={form.upstreamType}
-                    onChange={(event) => handleInputChange("upstreamType", event.target.value as UpstreamType)}
-                  >
-                    <MenuItem value="service">Service (Docker DNS)</MenuItem>
-                    <MenuItem value="container">Container</MenuItem>
-                    <MenuItem value="external">External URL</MenuItem>
-                  </TextField>
-
-                  <TextField
-                    label={form.upstreamType === "external" ? "Destination URL" : "Service or container name"}
-                    value={form.upstreamTarget}
-                    onChange={(event) => handleInputChange("upstreamTarget", event.target.value)}
-                    InputProps={form.upstreamType === "external" ? undefined : {
-                      startAdornment: <InputAdornment position="start">http://</InputAdornment>
-                    }}
-                  />
-
-                  <TextField
-                    label="Notes"
-                    value={form.notes}
-                    onChange={(event) => handleInputChange("notes", event.target.value)}
-                    multiline
-                    minRows={2}
-                  />
-
-                  <TextField
-                    label="Additional directives"
-                    value={form.extraDirectives}
-                    onChange={(event) => handleInputChange("extraDirectives", event.target.value)}
-                    helperText="Optional raw snippets to include inside the server block"
-                    multiline
-                    minRows={4}
-                  />
-                </Stack>
-
-                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
-                  <Button startIcon={<SaveIcon />} variant="contained" onClick={handleSave}>
-                    Save configuration
-                  </Button>
-                  <Button startIcon={<CloudDoneIcon />} variant="outlined" onClick={handleDeploy}>
-                    Deploy
-                  </Button>
-                </Stack>
-              </>
+            {selectedSite?.lastError && (
+              <Alert severity="error">{selectedSite.lastError}</Alert>
             )}
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6">
+                {form.id ? "Edit configuration" : "New configuration"}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                {form.id && (
+                  <Button
+                    color="error"
+                    startIcon={<DeleteOutlineIcon />}
+                    size="small"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                  >
+                    Delete
+                  </Button>
+                )}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.enabled}
+                      onChange={(_, value) => handleInputChange("enabled", value)}
+                    />
+                  }
+                  label="Enabled"
+                />
+              </Stack>
+            </Stack>
+
+            <Stack spacing={2}>
+              <TextField
+                label="Primary domain"
+                value={form.primaryDomain}
+                placeholder="example.com"
+                onChange={(event) => handleInputChange("primaryDomain", event.target.value)}
+                fullWidth
+                required
+              />
+
+              <Autocomplete
+                multiple
+                freeSolo
+                options={form.aliases}
+                value={form.aliases}
+                onChange={handleAliasChange}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip variant="outlined" label={option} {...getTagProps({ index })} key={option} />
+                  ))
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Alias domains"
+                    placeholder="Add alias and press enter"
+                    helperText="Optional additional domains served by this site"
+                  />
+                )}
+              />
+
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                <Stack spacing={2}>
+                  <FormControl component="fieldset">
+                    <FormLabel component="legend">Upstream target</FormLabel>
+                    <RadioGroup
+                      row
+                      value={form.upstreamType}
+                      onChange={(event) => {
+                        const value = event.target.value as NginxFormState["upstreamType"];
+                        handleInputChange("upstreamType", value);
+                        if (value === "container") {
+                          handleInputChange("upstreamTarget", "");
+                        } else {
+                          handleInputChange("containerId", undefined);
+                          handleInputChange("containerPort", undefined);
+                        }
+                      }}
+                    >
+                      <FormControlLabel value="container" control={<Radio />} label="Docker container" />
+                      <FormControlLabel value="service" control={<Radio />} label="Internal service" />
+                      <FormControlLabel value="external" control={<Radio />} label="External URL" />
+                    </RadioGroup>
+                  </FormControl>
+
+                  {form.upstreamType === "container" ? (
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <Autocomplete
+                        sx={{ flex: 1 }}
+                        options={containerOptions}
+                        value={selectedContainer}
+                        onChange={(_, option) => {
+                          handleInputChange("containerId", option?.id);
+                          if (option) {
+                            const ports = parseContainerPorts(option.container);
+                            handleInputChange("containerPort", ports[0] ?? undefined);
+                          } else {
+                            handleInputChange("containerPort", undefined);
+                          }
+                        }}
+                        disabled={containersQuery.isLoading}
+                        getOptionLabel={(option) => option.label}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Container"
+                            placeholder="Select container"
+                            helperText={
+                              containersQuery.isLoading
+                                ? "Loading containers..."
+                                : "Choose a Docker container to proxy"
+                            }
+                          />
+                        )}
+                      />
+                      <TextField
+                        sx={{ width: { xs: "100%", sm: 160 } }}
+                        label="Container port"
+                        select={containerPorts.length > 0}
+                        value={form.containerPort ?? ""}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          handleInputChange("containerPort", Number.isFinite(value) ? value : undefined);
+                        }}
+                        placeholder="80"
+                        helperText="Internal container port"
+                      >
+                        {containerPorts.map((port) => (
+                          <MenuItem key={port} value={port}>
+                            {port}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Stack>
+                  ) : form.upstreamType === "service" ? (
+                    <TextField
+                      label="Service host"
+                      value={form.upstreamTarget}
+                      onChange={(event) =>
+                        handleInputChange(
+                          "upstreamTarget",
+                          event.target.value.replace(/^https?:\/\//i, "")
+                        )
+                      }
+                      placeholder="internal-service:3000"
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">http://</InputAdornment>
+                      }}
+                      helperText="Hostname or IP accessible from the Nginx host, with optional port"
+                    />
+                  ) : (
+                    <TextField
+                      label="External URL"
+                      value={form.upstreamTarget}
+                      onChange={(event) => handleInputChange("upstreamTarget", event.target.value)}
+                      placeholder="https://example.com"
+                      helperText="Full URL to proxy requests to (must include http/https)"
+                    />
+                  )}
+                </Stack>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                <Stack spacing={2}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={form.enableHttp}
+                          onChange={(_, value) => handleInputChange("enableHttp", value)}
+                        />
+                      }
+                      label="Enable HTTP (port 80)"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={form.enableHttps}
+                          onChange={(_, value) => handleInputChange("enableHttps", value)}
+                        />
+                      }
+                      label="Enable HTTPS (port 443)"
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={form.forceHttps}
+                          onChange={(_, value) => handleInputChange("forceHttps", value)}
+                          disabled={!form.enableHttps}
+                        />
+                      }
+                      label="Force HTTPS redirect"
+                    />
+                  </Stack>
+
+                  <FormControl component="fieldset">
+                    <FormLabel component="legend">TLS mode</FormLabel>
+                    <RadioGroup
+                      row
+                      value={form.sslMode}
+                      onChange={(event) =>
+                        handleInputChange("sslMode", event.target.value as NginxFormState["sslMode"])
+                      }
+                    >
+                      <FormControlLabel value="none" control={<Radio />} label="HTTP only" />
+                      <FormControlLabel value="lets-encrypt" control={<Radio />} label="Let's Encrypt" />
+                      <FormControlLabel value="custom" control={<Radio />} label="Custom certificate" />
+                    </RadioGroup>
+                  </FormControl>
+
+                  {form.enableHttps && form.sslMode === "lets-encrypt" && (
+                    <TextField
+                      label="Let's Encrypt email"
+                      value={form.letsEncryptEmail}
+                      onChange={(event) => handleInputChange("letsEncryptEmail", event.target.value)}
+                      helperText="Used for expiration notifications and recovery. Required by Let's Encrypt."
+                    />
+                  )}
+
+                  {form.enableHttps && form.sslMode === "custom" && (
+                    <TextField
+                      label="TLS certificate"
+                      select
+                      value={form.customCertificateId ?? ""}
+                      onChange={(event) => handleInputChange("customCertificateId", event.target.value || undefined)}
+                      helperText="Certificates are managed in the SSL section"
+                    >
+                      {(certificatesQuery.data ?? []).map((certificate) => (
+                        <MenuItem key={certificate.id} value={certificate.id}>
+                          {certificate.commonName} · expires {new Date(certificate.expiresAt).toLocaleDateString()}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                </Stack>
+              </Paper>
+
+              <TextField
+                label="Notes"
+                value={form.notes}
+                onChange={(event) => handleInputChange("notes", event.target.value)}
+                multiline
+                minRows={2}
+                placeholder="Optional documentation for this site"
+              />
+
+              <TextField
+                label="Extra directives"
+                value={form.extraDirectives}
+                onChange={(event) => handleInputChange("extraDirectives", event.target.value)}
+                multiline
+                minRows={3}
+                placeholder="Raw Nginx directives appended inside the server block"
+              />
+
+              <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+                <Button
+                  variant="outlined"
+                  startIcon={<CloudDoneIcon />}
+                  onClick={() => handleDeploy()}
+                  disabled={isDeploying || !form.id}
+                >
+                  {isDeploying ? "Deploying..." : "Deploy"}
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </Button>
+              </Stack>
+            </Stack>
           </Paper>
 
           <Paper sx={{ p: 3, borderRadius: 3 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-              <Typography variant="h6">Generated config preview</Typography>
-              <Button
-                size="small"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(configPreview);
-                  toast.success("Config copied to clipboard");
-                }}
-              >
-                Copy
-              </Button>
+            <Stack spacing={1.5}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="subtitle1">Configuration preview</Typography>
+                {selectedSite?.lastLog && (
+                  <Tooltip title={new Date(selectedSite.lastLog.createdAt).toLocaleString()}>
+                    <Chip size="small" label={selectedSite.lastLog.message} />
+                  </Tooltip>
+                )}
+              </Stack>
+              <ConfigPreview>{configPreview}</ConfigPreview>
             </Stack>
-            <ConfigPreview>{configPreview}</ConfigPreview>
           </Paper>
         </Stack>
       </Grid>

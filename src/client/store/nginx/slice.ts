@@ -57,32 +57,6 @@ const nginxSlice = createSlice({
     resetForm(state) {
       state.selectedId = null;
       state.form = createDefaultForm();
-    },
-    toggleSiteEnabled(state, action: PayloadAction<string>) {
-      const site = state.sites.find((item) => item.id === action.payload);
-      if (!site) {
-        return;
-      }
-      site.enabled = !site.enabled;
-      site.lastDeployedAt = new Date().toISOString();
-    },
-    upsertSite(state, action: PayloadAction<NginxSite>) {
-      const incoming = action.payload;
-      const index = state.sites.findIndex((site) => site.id === incoming.id);
-      if (index >= 0) {
-        state.sites[index] = { ...state.sites[index], ...incoming };
-      } else {
-        state.sites.push(incoming);
-      }
-      state.selectedId = incoming.id;
-      state.form = toFormState(incoming);
-    },
-    deleteSite(state, action: PayloadAction<string>) {
-      state.sites = state.sites.filter((site) => site.id !== action.payload);
-      if (state.selectedId === action.payload) {
-        state.selectedId = null;
-        state.form = createDefaultForm();
-      }
     }
   },
   extraReducers: (builder) => {
@@ -125,10 +99,7 @@ export const {
   setSelectedSite,
   updateForm,
   setForm,
-  resetForm,
-  toggleSiteEnabled,
-  upsertSite,
-  deleteSite
+  resetForm
 } = nginxSlice.actions;
 
 export const selectNginxSites = (state: RootState) => state.nginx.sites;

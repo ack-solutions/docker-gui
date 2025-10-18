@@ -2,7 +2,8 @@
 
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import { Button, Card, CardActionArea, CardContent, Chip, Skeleton, Stack, Typography } from "@mui/material";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import { Alert, Button, Card, CardActionArea, CardContent, Chip, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import type { NginxSite } from "@/types/server";
 
@@ -46,32 +47,74 @@ const SiteCard = ({ site, active = false, onSelect, onDeploy, onToggle }: SiteCa
 
   const handleSelect = () => onSelect?.(site);
 
+  const statusChipColor =
+    site.status === "active"
+      ? "success"
+      : site.status === "pending"
+        ? "warning"
+        : site.status === "error"
+          ? "error"
+          : "default";
+
+  const tlsLabel =
+    site.sslMode === "lets-encrypt"
+      ? "Let's Encrypt"
+      : site.sslMode === "custom"
+        ? "Custom TLS"
+        : "HTTP only";
+
+  const upstreamDescription =
+    site.upstreamType === "container" && site.containerId
+      ? `${site.containerId.slice(0, 12)}:${site.containerPort ?? ""}`
+      : site.upstreamTarget;
+
   return (
     <StyledCard variant={active ? "outlined" : undefined}>
       <CardActionArea onClick={handleSelect}>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Typography variant="subtitle1">
-              {site.serverNames.join(", ")}
+              {site.primaryDomain}
             </Typography>
             <Chip
-              icon={site.enabled ? <CloudDoneIcon fontSize="small" /> : <WarningAmberIcon fontSize="small" />}
-              label={site.enabled ? "Enabled" : "Disabled"}
-              color={site.enabled ? "success" : "default"}
+              icon={site.status === "active" ? <CloudDoneIcon fontSize="small" /> : <WarningAmberIcon fontSize="small" />}
+              label={site.status.toUpperCase()}
+              color={statusChipColor as any}
               size="small"
             />
           </Stack>
-          <Typography variant="body2" color="text.secondary">
-            {site.upstreamType === "external" ? site.upstreamTarget : `${site.upstreamType} · ${site.upstreamTarget}`}
-          </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            {site.listen.map((listen) => (
-              <Chip key={`${listen.protocol}-${listen.port}`} size="small" label={`${listen.protocol.toUpperCase()} · ${listen.port}`} />
-            ))}
-            {site.sslCertificateId && (
-              <Chip size="small" color="primary" label="TLS" />
-            )}
+
+          {site.serverNames.length > 1 && (
+            <Typography variant="caption" color="text.secondary">
+              Aliases: {site.serverNames.filter((name) => name !== site.primaryDomain).join(", ")}
+            </Typography>
+          )}
+
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Chip size="small" label={`${site.upstreamType} · ${upstreamDescription}`} />
+            <Chip size="small" color={site.enableHttps ? "primary" : "default"} label={tlsLabel} />
+            <Chip size="small" label={site.enableHttp ? "HTTP" : "HTTP disabled"} />
+            <Chip size="small" label={site.enableHttps ? "HTTPS" : "HTTPS disabled"} />
+            {site.forceHttps && <Chip size="small" color="success" label="Force HTTPS" />}
           </Stack>
+
+          {site.lastLog && (
+            <Tooltip title={new Date(site.lastLog.createdAt).toLocaleString()}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <InfoOutlinedIcon fontSize="small" />
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1 }}>
+                  {site.lastLog.message}
+                </Typography>
+              </Stack>
+            </Tooltip>
+          )}
+
+          {site.lastError && (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {site.lastError}
+            </Alert>
+          )}
+
           <Stack direction="row" spacing={1}>
             <Button
               size="small"

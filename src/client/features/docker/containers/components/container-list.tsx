@@ -14,7 +14,9 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TableRow
+  TableRow,
+  useMediaQuery,
+  useTheme
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { toast } from "sonner";
@@ -23,6 +25,7 @@ import { useBottomPanel } from "@/components/common/bottom-panel-context";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import EmptyState from "@/components/common/empty-state";
 import ContainerCard from "@/features/docker/containers/components/container-card";
+import ContainerListItemMobile from "@/features/docker/containers/components/container-list-item-mobile";
 import ContainerContextMenu from "@/features/docker/containers/components/container-context-menu";
 import ContainerGroupActions from "@/features/docker/containers/components/container-group-actions";
 import ContainerListToolbar from "@/features/docker/containers/components/container-list-toolbar";
@@ -40,6 +43,8 @@ import { formatBytes } from "@/lib/utils/format";
 import type { DockerContainer } from "@/types/docker";
 
 const ContainerList = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { data, isLoading, isError, error, isFetching } = useContainers({ refetchIntervalMs: 10_000 });
   const actions = useContainerActions();
   const containerState = useContainerState();
@@ -463,9 +468,27 @@ const ContainerList = () => {
                     />
                   </Stack>
                 </AccordionSummary>
-                <AccordionDetails>
-                  <Stack spacing={2}>
-                    {viewMode === "grid" ? (
+                <AccordionDetails sx={{ p: { xs: 1.5, sm: 2 } }}>
+                  <Stack spacing={{ xs: 1.5, sm: 2 }}>
+                    {isMobile ? (
+                      // Mobile list view
+                      <Stack spacing={1.5}>
+                        {group.containers.map((container) => (
+                          <ContainerListItemMobile
+                            key={container.id}
+                            container={container}
+                            isLoading={containerState.isContainerActionInFlight(container.id)}
+                            onStart={handleStart}
+                            onStop={handleStop}
+                            onRestart={handleRestart}
+                            onOpenTerminal={openTerminal}
+                            onOpenLogs={openLogs}
+                            onMenuOpen={handleMenuOpen}
+                            onViewDetail={handleViewContainer}
+                          />
+                        ))}
+                      </Stack>
+                    ) : viewMode === "grid" ? (
                       <Grid container spacing={2}>
                         {group.containers.map((container) => (
                           <Grid key={container.id} size={{ xs: 12, sm: 6, lg: 4 }}>

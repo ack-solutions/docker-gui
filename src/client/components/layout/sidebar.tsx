@@ -72,6 +72,10 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
   }
 ];
 
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
 const SidebarRoot = styled(Box)({
   display: "flex",
   flexDirection: "column",
@@ -129,7 +133,7 @@ const BrandAvatar = styled(Avatar)(({ theme }) => ({
   fontSize: theme.typography.pxToRem(16)
 }));
 
-const Sidebar = () => {
+const Sidebar = ({ onNavigate }: SidebarProps = {}) => {
   const pathname = usePathname();
   const { hasPermission } = useAuth();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});

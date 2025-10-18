@@ -38,8 +38,8 @@ const ContainerCard = ({
 }: ContainerCardProps) => {
   if (!container) {
     return (
-      <Card sx={{ height: "100%" }}>
-        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+      <Card sx={{ height: "100%", touchAction: "manipulation" }}>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: { xs: 1, sm: 1.5 }, p: { xs: 1.5, sm: 2 } }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Skeleton variant="text" width="70%" height={22} />
@@ -68,17 +68,41 @@ const ContainerCard = ({
   const isRunning = container.state === "running";
 
   return (
-    <Card sx={{ height: "100%" }}>
-        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+    <Card 
+      sx={{ 
+        height: "100%", 
+        touchAction: "manipulation",
+        transition: "transform 0.2s, box-shadow 0.2s",
+        "&:active": {
+          transform: "scale(0.98)"
+        }
+      }}
+    >
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: { xs: 1, sm: 1.5 }, p: { xs: 1.5, sm: 2 } }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={{ xs: 1, sm: 1.5 }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="subtitle2" fontWeight={600} noWrap>
+              <Typography 
+                variant="subtitle2" 
+                fontWeight={600} 
+                noWrap
+                sx={{ fontSize: { xs: "0.9rem", sm: "0.875rem" } }}
+              >
                 {container.name}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+              <Typography 
+                variant="caption" 
+                color="text.secondary" 
+                noWrap 
+                sx={{ display: "block", fontSize: { xs: "0.7rem", sm: "0.75rem" } }}
+              >
                 {container.image}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+              <Typography 
+                variant="caption" 
+                color="text.secondary" 
+                noWrap 
+                sx={{ display: { xs: "none", sm: "block" } }}
+              >
                 #{container.id.slice(0, 12)}
               </Typography>
             </Box>
@@ -86,7 +110,7 @@ const ContainerCard = ({
               size="small"
               label={isRunning ? "Running" : "Stopped"}
               color={isRunning ? "success" : "default"}
-              sx={{ flexShrink: 0 }}
+              sx={{ flexShrink: 0, fontSize: { xs: "0.7rem", sm: "0.75rem" } }}
             />
           </Stack>
 
@@ -112,9 +136,10 @@ const ContainerCard = ({
           <Box
             sx={{
               display: "flex",
-              gap: 0.5,
+              gap: { xs: 0.25, sm: 0.5 },
               justifyContent: "flex-end",
-              mt: 0.5
+              mt: { xs: 0.25, sm: 0.5 },
+              flexWrap: "wrap"
             }}
           >
             {container.state !== "running" && (

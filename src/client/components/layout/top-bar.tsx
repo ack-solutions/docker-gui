@@ -6,6 +6,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
+import MenuIcon from "@mui/icons-material/Menu";
 import {
   AppBar,
   Avatar,
@@ -30,6 +31,7 @@ interface TopBarProps {
   title?: string;
   subtitle?: string;
   onRefresh?: () => void;
+  onMenuClick?: () => void;
 }
 
 const SearchField = styled(TextField)(({ theme }) => ({
@@ -42,7 +44,8 @@ const SearchField = styled(TextField)(({ theme }) => ({
 const TopBar = ({
   title = "Dashboard",
   subtitle = "Manage Docker containers, images, networks, and volumes from a unified control plane.",
-  onRefresh
+  onRefresh,
+  onMenuClick
 }: TopBarProps) => {
   const [query, setQuery] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -95,24 +98,53 @@ const TopBar = ({
         zIndex: (theme) => theme.zIndex.appBar
       }}
     >
-      <Toolbar sx={{ px: 3, py: 2, minHeight: { xs: 64, sm: 70 } }}>
-        <Stack spacing={0.5} flex={1}>
-          <Typography variant="h6">
+      <Toolbar sx={{ px: { xs: 1.5, sm: 3 }, py: { xs: 1, sm: 2 }, minHeight: { xs: 56, sm: 70 } }}>
+        {onMenuClick && (
+          <Tooltip title="Menu">
+            <IconButton
+              edge="start"
+              onClick={onMenuClick}
+              sx={{ mr: { xs: 1, sm: 2 }, display: { xs: "flex", md: "none" } }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+        <Stack spacing={{ xs: 0, sm: 0.5 }} flex={1} minWidth={0}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              display: { xs: "none", sm: "block" },
+              fontSize: { sm: "1.1rem", md: "1.25rem" }
+            }}
+          >
             {title}
           </Typography>
-          <PageBreadcrumbs />
-         
-          {/* <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: "600px" }}>
-            {subtitle}
-          </Typography> */}
+          <Typography 
+            variant="subtitle1" 
+            sx={{ 
+              display: { xs: "block", sm: "none" },
+              fontWeight: 600,
+              fontSize: "1rem",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {title}
+          </Typography>
+          <Box sx={{ display: { xs: "none", sm: "block" } }}>
+            <PageBreadcrumbs />
+          </Box>
         </Stack>
-        <Stack direction="row" spacing={1.5} alignItems="center">
+        <Stack direction="row" spacing={{ xs: 0.5, sm: 1.5 }} alignItems="center">
           <SearchField
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search containers, images, volumes..."
+            placeholder="Search..."
             variant="outlined"
             size="small"
+            sx={{ display: { xs: "none", md: "flex" } }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -121,19 +153,28 @@ const TopBar = ({
               )
             }}
           />
-          <IconButton color="inherit" onClick={onRefresh} aria-label="Refresh data" size="small">
-            <RefreshIcon fontSize="small" />
-          </IconButton>
-          <IconButton color="inherit" onClick={toggleTheme} aria-label="Toggle theme" size="small">
-            {mode === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
-          </IconButton>
-          <IconButton color="inherit" aria-label="Notifications" size="small">
+          <Tooltip title="Refresh">
+            <IconButton color="inherit" onClick={onRefresh} aria-label="Refresh data" size="small">
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={mode === "dark" ? "Light mode" : "Dark mode"}>
+            <IconButton color="inherit" onClick={toggleTheme} aria-label="Toggle theme" size="small">
+              {mode === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <IconButton 
+            color="inherit" 
+            aria-label="Notifications" 
+            size="small"
+            sx={{ display: { xs: "none", sm: "flex" } }}
+          >
             <NotificationsNoneIcon fontSize="small" />
           </IconButton>
-          <Divider flexItem orientation="vertical" sx={{ height: 28 }} />
+          <Divider flexItem orientation="vertical" sx={{ height: 28, display: { xs: "none", sm: "flex" } }} />
           <Tooltip title="Account options">
             <Stack direction="row" spacing={1} alignItems="center">
-              <Box sx={{ textAlign: "right" }}>
+              <Box sx={{ textAlign: "right", display: { xs: "none", sm: "block" } }}>
                 <Typography variant="subtitle2">
                   {user?.name ?? user?.email ?? "Unknown user"}
                 </Typography>
@@ -146,8 +187,8 @@ const TopBar = ({
               <IconButton onClick={handleMenuOpen} size="small" sx={{ p: 0 }}>
                 <Avatar
                   sx={{
-                    width: 32,
-                    height: 32,
+                    width: { xs: 28, sm: 32 },
+                    height: { xs: 28, sm: 32 },
                     bgcolor: "primary.main",
                     color: "primary.contrastText"
                   }}

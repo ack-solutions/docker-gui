@@ -68,20 +68,25 @@ const ImageDetailDialog = ({ open, onClose, imageId }: ImageDetailDialogProps) =
 
   return (
     <>
-      <Dialog 
-        open={open && Boolean(imageId)} 
-        onClose={onClose} 
-        maxWidth="lg" 
-        fullWidth
-        PaperProps={{
-          sx: {
-            height: "90vh",
-            maxHeight: 900
-          }
-        }}
-      >
-        {/* Header with title and actions */}
-        <Box sx={{ px: 3, pt: 2.5, pb: 0 }}>
+    <Dialog 
+      open={open && Boolean(imageId)} 
+      onClose={onClose} 
+      maxWidth="lg" 
+      fullWidth
+      PaperProps={{
+        sx: {
+          m: 0,
+          borderRadius: { xs: 0, md: 2 }
+        }
+      }}
+      sx={{
+        "& .MuiDialog-container": {
+          alignItems: { xs: "stretch", md: "center" }
+        }
+      }}
+    >
+      {/* Header with title and actions */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 2.5 }, pb: 0 }}>
           <Stack spacing={2}>
             {/* Title row with action buttons and close/open icons */}
             <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
