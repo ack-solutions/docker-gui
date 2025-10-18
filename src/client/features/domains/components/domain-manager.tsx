@@ -168,7 +168,7 @@ const DomainManager = () => {
           {filteredDomains.map((domain) => {
             const status = statusConfig[domain.status];
             return (
-              <Grid size={{ xs: 12 }} key={domain.id}>
+              <Grid size={12} key={domain.id}>
                 <Card variant="outlined" sx={{ borderRadius: 3 }}>
                   <CardContent>
                     <Stack spacing={2.5}>

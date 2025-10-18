@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useMemo } from "react";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
 import {
   Box,
   Card,
   CardContent,
-  Grid,
   IconButton,
   LinearProgress,
   Skeleton,
@@ -15,6 +14,7 @@ import {
   Tooltip,
   Typography
 } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import { styled, useTheme, type Theme } from "@mui/material/styles";
 import {
   ResponsiveContainer,
@@ -25,14 +25,7 @@ import {
   CartesianGrid,
   Tooltip as RechartsTooltip
 } from "recharts";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  fetchSystemMetrics,
-  selectSystemMetrics,
-  selectSystemMetricsIsFetching,
-  selectSystemMetricsStatus,
-  selectSystemMetricsHistory
-} from "@/store/system/slice";
+import { useSystemMetrics } from "@/features/system/hooks/use-system-metrics";
 
 const ChartContainer = styled(Box)(({ theme }: { theme: Theme }) => ({
   width: "100%",
@@ -117,29 +110,7 @@ const colorPalette = (theme: Theme) => ({
 
 const SystemMetricsPanel = () => {
   const theme = useTheme();
-  const dispatch = useAppDispatch();
-  const metrics = useAppSelector(selectSystemMetrics);
-  const status = useAppSelector(selectSystemMetricsStatus);
-  const isFetching = useAppSelector(selectSystemMetricsIsFetching);
-  const history = useAppSelector(selectSystemMetricsHistory);
-
-  const refetch = useCallback(() => {
-    void dispatch(fetchSystemMetrics());
-  }, [dispatch]);
-
-  useEffect(() => {
-    const run = () => {
-      void dispatch(fetchSystemMetrics());
-    };
-
-    run();
-
-    const interval = window.setInterval(run, 15000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [dispatch]);
+  const { metrics, status, isFetching, history, refetch } = useSystemMetrics();
 
   const palette = colorPalette(theme);
 

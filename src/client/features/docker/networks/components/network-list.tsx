@@ -1,6 +1,7 @@
 "use client";
 
-import { Grid, Paper, Stack, Typography } from "@mui/material";
+import { Paper, Stack, Typography } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import EmptyState from "@/components/common/empty-state";
 import { useNetworks } from "@/features/docker/networks/hooks/use-networks";
 import NetworkCard from "@/features/docker/networks/components/network-card";

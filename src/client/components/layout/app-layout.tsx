@@ -16,6 +16,7 @@ import {
   useHeaderActionsConfig
 } from "@/components/layout/header-actions-context";
 import { useAuth } from "@/components/providers/auth-provider";
+import SystemMetricsPoller from "@/features/system/components/system-metrics-poller";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -139,6 +140,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
       <ConfirmationDialogProvider>
         <HeaderActionsProvider>
           {toaster}
+          <SystemMetricsPoller />
           <Shell>
             <Sidebar />
             <AppLayoutMain>{children}</AppLayoutMain>

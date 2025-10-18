@@ -22,7 +22,9 @@ export const userPermissions = [
   "proxies:manage",
   "email:view",
   "email:manage",
-  "users:manage"
+  "users:manage",
+  "settings:view",
+  "settings:edit"
 ] as const;
 
 export type UserPermission = (typeof userPermissions)[number];
@@ -49,7 +51,9 @@ export const rolePermissions: Record<UserRole, UserPermission[]> = {
     "ssl:view",
     "nginx:view",
     "proxies:view",
-    "email:view"
+    "email:view",
+    "settings:view",
+    "settings:edit"
   ],
   viewer: [
     "dashboard:view",
@@ -63,7 +67,8 @@ export const rolePermissions: Record<UserRole, UserPermission[]> = {
     "ssl:view",
     "nginx:view",
     "proxies:view",
-    "email:view"
+    "email:view",
+    "settings:view"
   ]
 };
 

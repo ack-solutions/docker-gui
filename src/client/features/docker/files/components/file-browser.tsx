@@ -25,9 +25,9 @@ import {
   Stack,
   ToggleButton,
   ToggleButtonGroup,
-  Typography,
-  Grid
+  Typography
 } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import { styled } from "@mui/material/styles";
 import { useMemo, useState } from "react";
 import { useFiles } from "@/features/docker/files/hooks/use-files";
@@ -196,7 +196,7 @@ const FileBrowser = ({ containerId }: FileBrowserProps) => {
                 </Grid>
               ))}
               {nodes.length === 0 && (
-                <Grid size={{ xs: 12 }}>
+                <Grid size={12}>
                   <Typography variant="body2" color="text.secondary" textAlign="center" py={4}>
                     This directory is empty.
                   </Typography>

@@ -24,10 +24,10 @@ import {
   CardActionArea,
   Typography,
   Chip,
-  Grid,
   Alert,
   LinearProgress
 } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import DownloadIcon from "@mui/icons-material/Download";
 import { toast } from "sonner";
 import { pullImage } from "@/lib/api/docker";

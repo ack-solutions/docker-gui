@@ -28,7 +28,7 @@ import {
 } from "@/store/docker/slice";
 import type { CreateContainerRequest, DockerContainer } from "@/types/docker";
 
-interface UseContainersOptions {
+export interface UseContainersOptions {
   refetchIntervalMs?: number;
   refetchOnWindowFocus?: boolean;
 }
@@ -134,8 +134,8 @@ export const useContainerState = () => {
   );
 };
 
-export const useContainerMetrics = () => {
-  const { data, ...rest } = useContainers();
+export const useContainerMetrics = (options?: UseContainersOptions) => {
+  const { data, ...rest } = useContainers(options);
 
   const metrics = useMemo(() => {
     if (!data) {

@@ -2,7 +2,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
+  Chip,
   Paper,
   Stack,
   Typography,
@@ -14,6 +18,7 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { toast } from "sonner";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useRouter } from "next/navigation";
 import { useBottomPanel } from "@/components/common/bottom-panel-context";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
@@ -312,20 +317,18 @@ const ContainerList = () => {
         />
         {showSkeleton ? (
           viewMode === "grid" ? (
-            <Grid container spacing={2.5}>
+            <Grid container spacing={2}>
               {Array.from({ length: 6 }).map((_, index) => (
                 <ContainerCard key={`container-skeleton-${index}`} container={null} />
               ))}
             </Grid>
           ) : (
-            <Paper>
-              <Table>
+            <Paper variant="outlined">
+              <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Name</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Image</TableCell>
-                    <TableCell>Ports</TableCell>
                     <TableCell>CPU</TableCell>
                     <TableCell>Memory</TableCell>
                     <TableCell align="right">Actions</TableCell>
@@ -346,53 +349,38 @@ const ContainerList = () => {
               Boolean(bulkAction) &&
               group.containers.some((container) => bulkAction?.targetIds.includes(container.id));
             const loadingAction = isGroupBusy ? bulkAction?.action ?? null : null;
+            const runningCount = group.containers.filter((container) => container.state === "running").length;
+            const stoppedCount = group.containers.length - runningCount;
 
             return (
-              <Box key={group.key}>
-                <ContainerGroupActions
-                  groupLabel={group.label}
-                  containerCount={group.containers.length}
-                  containers={group.containers}
-                  loadingAction={loadingAction}
-                  onGroupStart={handleGroupStart}
-                  onGroupStop={handleGroupStop}
-                  onGroupRestart={handleGroupRestart}
-                  onGroupLogs={handleGroupLogs}
-                  onGroupDelete={handleGroupRemove}
-                />
-                {viewMode === "grid" ? (
-                  <Grid container spacing={2.5}>
-                    {group.containers.map((container) => (
-                      <ContainerCard
-                        key={container.id}
-                        container={container}
-                        isLoading={containerState.isContainerActionInFlight(container.id)}
-                        onStart={handleStart}
-                        onStop={handleStop}
-                        onRestart={handleRestart}
-                        onOpenTerminal={openTerminal}
-                        onOpenLogs={openLogs}
-                        onMenuOpen={handleMenuOpen}
-                      />
-                    ))}
-                  </Grid>
-                ) : (
-                  <Paper>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Name</TableCell>
-                          <TableCell>Status</TableCell>
-                          <TableCell>Image</TableCell>
-                          <TableCell>Ports</TableCell>
-                          <TableCell>CPU</TableCell>
-                          <TableCell>Memory</TableCell>
-                          <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
+              <Accordion key={group.key} defaultExpanded disableGutters sx={{ borderRadius: 2, overflow: "hidden" }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ width: "100%" }}>
+                    <Typography variant="subtitle1" fontWeight={600} noWrap>
+                      {group.label}
+                    </Typography>
+                    <Chip size="small" label={`${group.containers.length} total`} variant="outlined" />
+                    <Chip size="small" label={`${runningCount} running`} color="success" variant="outlined" />
+                    <Chip size="small" label={`${stoppedCount} stopped`} variant="outlined" />
+                  </Stack>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
+                    <ContainerGroupActions
+                      groupLabel={group.label}
+                      containerCount={group.containers.length}
+                      containers={group.containers}
+                      loadingAction={loadingAction}
+                      onGroupStart={handleGroupStart}
+                      onGroupStop={handleGroupStop}
+                      onGroupRestart={handleGroupRestart}
+                      onGroupLogs={handleGroupLogs}
+                      onGroupDelete={handleGroupRemove}
+                    />
+                    {viewMode === "grid" ? (
+                      <Grid container spacing={2}>
                         {group.containers.map((container) => (
-                          <ContainerTableRow
+                          <ContainerCard
                             key={container.id}
                             container={container}
                             isLoading={containerState.isContainerActionInFlight(container.id)}
@@ -404,11 +392,40 @@ const ContainerList = () => {
                             onMenuOpen={handleMenuOpen}
                           />
                         ))}
-                      </TableBody>
-                    </Table>
-                  </Paper>
-                )}
-              </Box>
+                      </Grid>
+                    ) : (
+                      <Paper variant="outlined">
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Name</TableCell>
+                              <TableCell>Status</TableCell>
+                              <TableCell>CPU</TableCell>
+                              <TableCell>Memory</TableCell>
+                              <TableCell align="right">Actions</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {group.containers.map((container) => (
+                              <ContainerTableRow
+                                key={container.id}
+                                container={container}
+                                isLoading={containerState.isContainerActionInFlight(container.id)}
+                                onStart={handleStart}
+                                onStop={handleStop}
+                                onRestart={handleRestart}
+                                onOpenTerminal={openTerminal}
+                                onOpenLogs={openLogs}
+                                onMenuOpen={handleMenuOpen}
+                              />
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Paper>
+                    )}
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
             );
           })
         )}

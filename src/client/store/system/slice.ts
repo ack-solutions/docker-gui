@@ -94,5 +94,6 @@ export const selectSystemMetricsStatus = (state: RootState) => state.system.metr
 export const selectSystemMetricsIsFetching = (state: RootState) => state.system.metrics.isFetching;
 export const selectSystemMetricsError = (state: RootState) => state.system.metrics.error;
 export const selectSystemMetricsHistory = (state: RootState) => state.system.metrics.history;
+export const selectSystemMetricsLastFetchedAt = (state: RootState) => state.system.metrics.lastFetchedAt;
 
 export default systemMetricsSlice.reducer;

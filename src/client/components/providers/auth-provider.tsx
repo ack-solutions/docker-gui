@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import apiClient from "@/lib/api/client";
@@ -30,6 +30,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const handlingUnauthorizedRef = useRef(false);
+
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -57,22 +59,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void initialize();
   }, [initialize]);
 
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      void apiClient.post("/auth/logout").catch(() => undefined);
-      setUser(null);
-      setLoading(false);
-      toast.error("Your session has expired. Please sign in again.");
-      router.replace("/auth/login");
-    };
+  const handleUnauthorized = useCallback(() => {
+    // Prevent multiple simultaneous calls
+    if (handlingUnauthorizedRef.current) {
+      return;
+    }
+    
+    handlingUnauthorizedRef.current = true;
+    void apiClient.post("/auth/logout").catch(() => undefined);
+    setUser(null);
+    setLoading(false);
+    toast.error("Your session has expired. Please sign in again.");
+    router.replace("/auth/login");
+    
+    // Reset after a delay to allow for potential re-authentication
+    setTimeout(() => {
+      handlingUnauthorizedRef.current = false;
+    }, 1000);
+  }, [router]);
 
+  useEffect(() => {
     if (typeof window !== "undefined") {
       window.addEventListener("auth:unauthorized", handleUnauthorized);
       return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
     }
 
     return undefined;
-  }, [router]);
+  }, [handleUnauthorized]);
 
   const login = useCallback(
     async (credentials: { email: string; password: string }) => {
