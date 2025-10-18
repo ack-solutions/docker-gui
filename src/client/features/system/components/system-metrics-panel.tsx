@@ -162,13 +162,13 @@ const SystemMetricsPanel = () => {
   if (showSkeleton) {
     return (
       <Grid container spacing={2.5}>
-        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+        <Grid xs={12} md={6} lg={4}>
           <SkeletonCard />
         </Grid>
-        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+        <Grid xs={12} md={6} lg={4}>
           <SkeletonCard />
         </Grid>
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid xs={12} lg={4}>
           <SkeletonCard />
         </Grid>
       </Grid>
@@ -203,7 +203,7 @@ const SystemMetricsPanel = () => {
       </Stack>
 
       <Grid container spacing={2.5}>
-        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+        <Grid xs={12} md={6} lg={4}>
           <Card>
             <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -247,7 +247,7 @@ const SystemMetricsPanel = () => {
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+        <Grid xs={12} md={6} lg={4}>
           <Card>
             <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -284,7 +284,7 @@ const SystemMetricsPanel = () => {
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid xs={12} lg={4}>
           <Card>
             <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center">

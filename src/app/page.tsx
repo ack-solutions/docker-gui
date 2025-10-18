@@ -17,9 +17,9 @@ import {
   Skeleton,
   Stack,
   Tooltip,
-  Typography,
-  Grid
+  Typography
 } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import { useTheme } from "@mui/material/styles";
 import { useContainerMetrics } from "@/features/docker/containers/hooks/use-containers";
 import { useSystemMetrics } from "@/features/system/hooks/use-system-metrics";
@@ -72,9 +72,9 @@ const formatRelativeTime = (timestamp: number | null) => {
 };
 
 const LoadingSkeleton = () => (
-  <Grid container spacing={2.5}>
-    {Array.from({ length: 4 }).map((_, index) => (
-      <Grid key={index} size={{ xs: 12, sm: 6, lg: 3 }}>
+      <Grid container spacing={2.5}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Grid key={index} size={{ xs: 12, sm: 6, lg: 3 }}>
         <Card>
           <CardContent>
             <Stack spacing={2}>
@@ -202,7 +202,7 @@ const DashboardPageContent = () => {
       ) : systemMetrics ? (
         <>
           <Grid container spacing={2.5}>
-            <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <Grid size={{ xs: 12, md: 6, lg: 4 }}>
               <MetricCardWithChart
                 title="CPU Usage"
                 value={`${systemMetrics.cpu.overallUsagePercent.toFixed(1)}%`}
@@ -214,7 +214,7 @@ const DashboardPageContent = () => {
               />
             </Grid>
 
-            <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <Grid size={{ xs: 12, md: 6, lg: 4 }}>
               <MetricCardWithChart
                 title="Memory Usage"
                 value={`${systemMetrics.memory.usagePercent.toFixed(1)}%`}

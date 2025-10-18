@@ -62,12 +62,6 @@ const ContainerTableRow = ({
           <Skeleton variant="rounded" width={72} height={24} />
         </TableCell>
         <TableCell>
-          <Skeleton variant="text" width={140} />
-        </TableCell>
-        <TableCell>
-          <Skeleton variant="text" width={120} />
-        </TableCell>
-        <TableCell>
           <Skeleton variant="rounded" height={12} />
           <Skeleton variant="text" width={60} />
         </TableCell>
@@ -89,13 +83,16 @@ const ContainerTableRow = ({
     <TableRow hover>
       <TableCell>
         <Box>
-          <Typography variant="body2">
+          <Typography variant="body2" fontWeight={600}>
             <Link href={`/containers/${container.id}`} prefetch={false} style={{ color: "inherit", textDecoration: "none" }}>
               {container.name}
             </Link>
           </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 200 }}>
-            {container.id}
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 220 }}>
+            {container.image}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 220 }}>
+            #{container.id.slice(0, 12)}
           </Typography>
         </Box>
       </TableCell>
@@ -107,17 +104,7 @@ const ContainerTableRow = ({
         />
       </TableCell>
       <TableCell>
-        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-          {container.image}
-        </Typography>
-      </TableCell>
-      <TableCell>
-        <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-          {container.ports.length > 0 ? container.ports.join(", ") : "None"}
-        </Typography>
-      </TableCell>
-      <TableCell>
-        <Box sx={{ minWidth: 80 }}>
+        <Box sx={{ minWidth: 100 }}>
           <UsageBar>
             <UsageBarFill value={Math.min(container.cpuUsage, 100)} />
           </UsageBar>

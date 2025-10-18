@@ -1,7 +1,7 @@
 "use client";
 
 import { Paper, Stack, Typography } from "@mui/material";
-import Grid from "@mui/material/Grid";
+import Grid from "@mui/material/Grid2";
 import EmptyState from "@/components/common/empty-state";
 import { useNetworks } from "@/features/docker/networks/hooks/use-networks";
 import NetworkCard from "@/features/docker/networks/components/network-card";
@@ -37,12 +37,12 @@ const NetworkList = () => {
     <Grid container spacing={2.5}>
       {isLoading && (!networks || networks.length === 0)
         ? Array.from({ length: 6 }).map((_, index) => (
-            <Grid key={`network-skeleton-${index}`} size={{ xs: 12, md: 6, lg: 4 }}>
+            <Grid key={`network-skeleton-${index}`} xs={12} md={6} lg={4}>
               <NetworkCard />
             </Grid>
           ))
         : networks?.map((network) => (
-            <Grid key={network.id} size={{ xs: 12, md: 6, lg: 4 }}>
+            <Grid key={network.id} xs={12} md={6} lg={4}>
               <NetworkCard network={network} />
             </Grid>
           ))}

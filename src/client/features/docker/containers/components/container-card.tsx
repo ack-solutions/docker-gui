@@ -1,15 +1,13 @@
 "use client";
 
-import { Box, Card, CardContent, Chip, CircularProgress, Divider, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Card, CardContent, Chip, CircularProgress, Skeleton, Stack, Tooltip, Typography } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import moment from "moment";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import ArticleIcon from "@mui/icons-material/Article";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import TimelineIcon from "@mui/icons-material/Timeline";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { useRouter } from "next/navigation";
 import ActionIconButton from "@/components/common/action-icon-button";
@@ -40,31 +38,27 @@ const ContainerCard = ({
   const router = useRouter();
   if (!container) {
     return (
-      <Grid size={{ xs: 12, md: 6, lg: 4 }}>
-        <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Skeleton variant="text" width="70%" height={24} />
-                <Skeleton variant="text" width="55%" height={18} />
+      <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+        <Card sx={{ height: "100%" }}>
+          <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Skeleton variant="text" width="70%" height={22} />
+                <Skeleton variant="text" width="50%" height={16} />
               </Box>
-              <Skeleton variant="rounded" width={72} height={24} />
+              <Skeleton variant="rounded" width={56} height={20} />
             </Stack>
             <Stack spacing={0.75}>
-              <Skeleton variant="text" width="80%" />
-              <Skeleton variant="text" width="64%" />
-              <Skeleton variant="text" width="50%" />
-              <Skeleton variant="text" width="60%" />
+              <Skeleton variant="rounded" height={10} />
+              <Skeleton variant="text" width="40%" height={14} />
             </Stack>
-            <Divider flexItem light />
-            <Stack spacing={1.25}>
-              <Skeleton variant="text" width="35%" height={20} />
-              <Skeleton variant="rounded" height={12} />
-              <Skeleton variant="text" width="40%" height={18} />
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Skeleton variant="text" width={80} height={16} />
+              <Skeleton variant="rounded" width={64} height={20} />
             </Stack>
-            <Box sx={{ display: "flex", gap: 1, mt: "auto" }}>
+            <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
               {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} variant="circular" width={32} height={32} />
+                <Skeleton key={index} variant="circular" width={28} height={28} />
               ))}
             </Box>
           </CardContent>
@@ -73,69 +67,63 @@ const ContainerCard = ({
     );
   }
 
-  const metadata: string[] = [];
-  if (container.project) {
-    metadata.push(`Project · ${container.project}`);
-  }
-  if (container.service) {
-    metadata.push(`Service · ${container.service}`);
-  }
+  const isRunning = container.state === "running";
 
   return (
-    <Grid size={{ xs: 12, md: 6, lg: 4 }}>
-      <Card sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
-          <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="subtitle1" noWrap>{container.name}</Typography>
+    <Grid size={{ xs: 12, sm: 6, lg: 4 }}>
+      <Card sx={{ height: "100%" }}>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.5}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle2" fontWeight={600} noWrap>
+                {container.name}
+              </Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                {container.id}
+                {container.image}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                #{container.id.slice(0, 12)}
               </Typography>
             </Box>
             <Chip
               size="small"
-              label={container.state === "running" ? "Running" : "Stopped"}
-              color={container.state === "running" ? "success" : "default"}
+              label={isRunning ? "Running" : "Stopped"}
+              color={isRunning ? "success" : "default"}
               sx={{ flexShrink: 0 }}
             />
           </Stack>
+
           <Stack spacing={0.75}>
-            <Typography variant="body2" color="text.secondary">
-              Image · {container.image}
-            </Typography>
-            {metadata.length > 0 && (
-              <Typography variant="body2" color="text.secondary">
-                {metadata.join(" · ")}
-              </Typography>
-            )}
-            <Typography variant="body2" color="text.secondary">
-              Ports · {container.ports.length > 0 ? container.ports.join(", ") : "None"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {container.status} · created {moment(container.createdAt).fromNow()}
-            </Typography>
-          </Stack>
-          <Divider flexItem light />
-          <Stack spacing={1.25}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <TimelineIcon fontSize="small" color="primary" />
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Typography variant="caption" color="text.secondary">
-                CPU usage
+                CPU
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {container.cpuUsage.toFixed(1)}%
               </Typography>
             </Stack>
             <UsageBar value={container.cpuUsage} />
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Typography variant="caption" color="text.secondary">
-                Memory
-              </Typography>
-              <Chip size="small" label={`${container.memoryUsage.toFixed(0)} MiB`} color="primary" variant="outlined" />
-            </Stack>
           </Stack>
-          <Box sx={{ display: "flex", gap: 1, mt: "auto" }}>
+
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="caption" color="text.secondary">
+              Memory
+            </Typography>
+            <Chip size="small" label={`${container.memoryUsage.toFixed(0)} MiB`} variant="outlined" />
+          </Stack>
+
+          <Box
+            sx={{
+              display: "flex",
+              gap: 0.5,
+              justifyContent: "flex-end",
+              mt: 0.5
+            }}
+          >
             {container.state !== "running" && (
               <Tooltip title="Start container">
-                <ActionIconButton 
-                  color="primary" 
+                <ActionIconButton
+                  color="primary"
                   size="small"
                   onClick={() => onStart?.(container.id, container.name)}
                   disabled={isLoading}
@@ -151,8 +139,8 @@ const ContainerCard = ({
             {container.state === "running" && (
               <>
                 <Tooltip title="Stop container">
-                  <ActionIconButton 
-                    color="warning" 
+                  <ActionIconButton
+                    color="warning"
                     size="small"
                     onClick={() => onStop?.(container.id, container.name)}
                     disabled={isLoading}
@@ -165,8 +153,8 @@ const ContainerCard = ({
                   </ActionIconButton>
                 </Tooltip>
                 <Tooltip title="Restart container">
-                  <ActionIconButton 
-                    color="secondary" 
+                  <ActionIconButton
+                    color="secondary"
                     size="small"
                     onClick={() => onRestart?.(container.id, container.name)}
                     disabled={isLoading}
