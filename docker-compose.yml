@@ -15,8 +15,10 @@ services:
       - docker-gui-node-modules:/app/node_modules
       - docker-gui-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
-      - nginx-configs:/etc/nginx-managed
-      - ssl-certificates:/etc/ssl-managed
+      - nginx-sites-enabled:/etc/nginx/sites-enabled
+      - nginx-sites-available:/etc/nginx/sites-available
+      - letsencrypt-webroot:/var/www/letsencrypt
+      - letsencrypt-certs:/etc/letsencrypt
     environment:
       NODE_ENV: development
       CHOKIDAR_USEPOLLING: "true"
@@ -32,8 +34,9 @@ services:
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       SYSTEM_METRICS_PROVIDER: docker
       # Nginx integration
-      NGINX_CONTAINER_NAME: ${NGINX_CONTAINER_NAME:-nginx-proxy}
-      NGINX_CONFIG_PATH: /etc/nginx-managed
+      NGINX_CONTAINER_NAME: nginx-proxy
+      NGINX_CONFIG_PATH: /etc/nginx/sites-enabled
+      NGINX_RELOAD_COMMAND: docker exec nginx-proxy nginx -s reload
       # Email integration
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
@@ -46,10 +49,8 @@ services:
     networks:
       - docker-gui-network
     depends_on:
-      - nginx-proxy
       - mailhog
-      # PowerDNS is optional for development
-      # - powerdns
+      - powerdns
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
@@ -57,7 +58,8 @@ services:
       retries: 3
       start_period: 40s
 
-  # Nginx Reverse Proxy
+  # Nginx Reverse Proxy (Managed by Docker GUI)
+  # This nginx routes domains to your containers/services
   nginx-proxy:
     image: nginx:alpine
     container_name: nginx-proxy
@@ -65,12 +67,11 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - nginx-configs:/etc/nginx/conf.d
-      - ssl-certificates:/etc/nginx/ssl
-      - nginx-logs:/var/log/nginx
-      - ./nginx/templates:/etc/nginx/templates:ro
-    environment:
-      - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx-sites-enabled:/etc/nginx/sites-enabled
+      - nginx-sites-available:/etc/nginx/sites-available
+      - letsencrypt-webroot:/var/www/letsencrypt
+      - letsencrypt-certs:/etc/letsencrypt
     restart: unless-stopped
     networks:
       - docker-gui-network
@@ -96,20 +97,20 @@ services:
     volumes:
       - mailhog-data:/maildir
 
-  # DNS Server (PowerDNS with PostgreSQL backend)
-  # NOTE: Port 53 conflicts with macOS DNS service. Use alternate ports or comment out for development.
+  # DNS Server (PowerDNS with SQLite backend)
+  # NOTE: Ports 53 and 5353 conflict with macOS services. Using 15353 for development.
   powerdns:
     image: powerdns/pdns-auth-master:latest
     container_name: powerdns
     ports:
-      # Port 53 is used by macOS - use alternate ports or comment out
-      # Uncomment these if you stop macOS DNS service or use Linux
+      # Port 53 is used by macOS DNS, Port 5353 is used by mDNS
+      # Uncomment these for Linux or if you've disabled macOS DNS:
       # - "53:53/tcp"
       # - "53:53/udp"
-      # Use alternate ports for development:
-      - "5353:53/tcp"    # Alternate DNS port
-      - "5353:53/udp"    # Alternate DNS port
-      - "8081:8081"      # PowerDNS API
+      # Using port 15353 for development (less likely to conflict):
+      - "15353:53/tcp"    # Alternate DNS port
+      - "15353:53/udp"    # Alternate DNS port
+      - "8081:8081"       # PowerDNS API
     environment:
       PDNS_AUTH_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
       PDNS_WEBSERVER: "yes"
@@ -125,37 +126,28 @@ services:
     restart: unless-stopped
     networks:
       - docker-gui-network
-    profiles:
-      - dns  # Optional: start with --profile dns
-
-  # Let's Encrypt Certificate Manager (Optional - for SSL automation)
-  certbot:
-    image: certbot/certbot:latest
-    container_name: certbot
-    volumes:
-      - ssl-certificates:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    networks:
-      - docker-gui-network
-    depends_on:
-      - nginx-proxy
+    healthcheck:
+      test: ["CMD", "pdns_control", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   docker-gui-node-modules:
   docker-gui-data:
     driver: local
-  nginx-configs:
+  nginx-sites-enabled:
     driver: local
-  ssl-certificates:
+  nginx-sites-available:
     driver: local
-  nginx-logs:
+  letsencrypt-webroot:
+    driver: local
+  letsencrypt-certs:
     driver: local
   mailhog-data:
     driver: local
   powerdns-data:
-    driver: local
-  certbot-www:
     driver: local
 
 networks:

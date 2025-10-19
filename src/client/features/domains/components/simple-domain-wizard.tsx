@@ -261,7 +261,7 @@ export default function SimpleDomainWizard({
 
               <Paper sx={{ p: 2, bgcolor: "primary.50" }}>
                 <Typography variant="body2" color="text.secondary">
-                  💡 <strong>Tip:</strong> Update your domain&apos;s DNS settings at your registrar to point to this server before continuing.
+                  <strong>Tip:</strong> Update your domain&apos;s DNS settings at your registrar to point to this server before continuing.
                 </Typography>
               </Paper>
             </Stack>
@@ -396,7 +396,7 @@ export default function SimpleDomainWizard({
                     helperText="For SSL certificate notifications. Can be added later."
                   />
                   <Typography variant="caption" color="text.secondary">
-                    💡 You can enable or renew SSL after creating the domain
+                    You can enable or renew SSL after creating the domain
                   </Typography>
                 </Stack>
               </Collapse>
@@ -429,7 +429,7 @@ export default function SimpleDomainWizard({
 
               <Paper sx={{ p: 2, bgcolor: "success.lighter", border: "1px solid", borderColor: "success.main" }}>
                 <Typography variant="body2" fontWeight={500} gutterBottom>
-                  ✨ You&apos;re all set!
+                  You&apos;re all set!
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {targetType === "none"

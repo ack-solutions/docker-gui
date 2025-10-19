@@ -252,7 +252,7 @@ export default function DnsRecordsManager({
       {records.length > 0 && (
         <Alert severity="info" variant="outlined">
           <Typography variant="caption">
-            💡 <strong>Tip:</strong> Use &quot;@&quot; for the root domain ({domainName}) or enter a
+            <strong>Tip:</strong> Use &quot;@&quot; for the root domain ({domainName}) or enter a
             subdomain name (e.g., &quot;api&quot; for api.{domainName})
           </Typography>
         </Alert>

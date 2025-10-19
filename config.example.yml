@@ -80,19 +80,35 @@ email:
   #   from: "noreply@yourdomain.com"
 
 # DNS / Domains
+# IMPORTANT: You choose DNS provider PER DOMAIN when creating each domain!
+# API credentials are entered per-domain in the UI (stored encrypted in database)
 dns:
-  enabled: false                       # Enable DNS management features
-  provider: "powerdns"                 # Options: powerdns, cloudflare, route53
-  api_url: "http://powerdns:8081"      # PowerDNS API endpoint
-  api_key: "CHANGE_ME_REQUIRED"        # Will be auto-generated during setup
-  # For Cloudflare:
-  # provider: "cloudflare"
-  # api_token: "your-cloudflare-api-token"
-  # For AWS Route53:
-  # provider: "route53"
-  # access_key_id: "your-aws-access-key"
-  # secret_access_key: "your-aws-secret-key"
-  # region: "us-east-1"
+  enabled: false                       # Enable DNS/Domain management features
+  
+  # PowerDNS (Self-hosted DNS) - For domains using "Manage DNS Here"
+  # This is the only provider with global config (runs on this server)
+  powerdns:
+    enabled: false                     # Enable PowerDNS option in UI
+    apiUrl: "http://powerdns:8081"    # PowerDNS API endpoint
+    apiKey: "CHANGE_ME_REQUIRED"      # PowerDNS API key (global)
+  
+  # External Providers - Enable to show option in UI
+  # Users enter their own API credentials when creating each domain
+  # Credentials are stored encrypted per-domain in database
+  providers:
+    cloudflare: false     # Enable Cloudflare option in domain wizard
+    route53: false        # Enable AWS Route53 option in domain wizard
+    azure: false          # Enable Azure DNS option in domain wizard
+    digitalocean: false   # Enable DigitalOcean option in domain wizard
+  
+  # When user selects external provider in UI, they will be prompted to enter:
+  # - Cloudflare: API Token, Email (optional)
+  # - AWS Route53: Access Key ID, Secret Access Key, Region
+  # - Azure: Client ID, Client Secret, Tenant ID, Subscription ID
+  # - DigitalOcean: API Token
+  # These credentials are stored PER DOMAIN, encrypted in the database
+  
+  # Manual/Proxy Only mode is always available (no config needed)
 
 # SSL / TLS Certificate Management
 ssl:

@@ -32,6 +32,8 @@ import type { DomainUpsertInput } from "@/types/server";
 import DnsModeSelector, { type DnsMode } from "./dns-mode-selector";
 import DnsRecordsManager from "./dns-records-manager";
 import ThirdPartyDnsSetup from "./third-party-dns-setup";
+import DnsSetupInstructions from "./dns-setup-instructions";
+import SslConfiguration from "./ssl-configuration";
 
 interface EnhancedDomainWizardProps {
   open: boolean;
@@ -66,7 +68,10 @@ export default function EnhancedDomainWizard({
   const [containerPort, setContainerPort] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
   const [enableHttps, setEnableHttps] = useState(true);
+  const [sslMode, setSslMode] = useState<"none" | "lets-encrypt" | "custom">("lets-encrypt");
   const [email, setEmail] = useState("");
+  const [forceHttps, setForceHttps] = useState(true);
+  const [customCertId, setCustomCertId] = useState("");
   const [dnsRecords, setDnsRecords] = useState<DnsRecord[]>([]);
   const [thirdPartyConfig, setThirdPartyConfig] = useState<any>({ provider: "none" });
 
@@ -313,6 +318,14 @@ export default function EnhancedDomainWizard({
               </Box>
 
               <DnsModeSelector selected={dnsMode} onChange={setDnsMode} />
+
+              {/* Show DNS instructions for managed and proxy-only modes */}
+              {domainName && (dnsMode === "managed" || dnsMode === "proxy-only") && (
+                <DnsSetupInstructions
+                  dnsMode={dnsMode}
+                  domainName={domainName}
+                />
+              )}
             </Stack>
           )}
 
@@ -509,49 +522,19 @@ export default function EnhancedDomainWizard({
           {((dnsMode === "proxy-only" && activeStep === 2) ||
             (dnsMode !== "proxy-only" && activeStep === 3)) && (
             <Stack spacing={4}>
-              <Box>
-                <Typography variant="subtitle2" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
-                  Security & SSL
-                </Typography>
-                <Stack spacing={2}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={enableHttps}
-                        onChange={(e) => setEnableHttps(e.target.checked)}
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          Enable HTTPS
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Free SSL certificate from Let&apos;s Encrypt (recommended)
-                        </Typography>
-                      </Box>
-                    }
-                  />
-
-                  <Collapse in={enableHttps}>
-                    <Stack spacing={1.5}>
-                      <TextField
-                        label="Email Address (Optional)"
-                        type="email"
-                        placeholder="admin@example.com"
-                        fullWidth
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        helperText="For SSL certificate notifications. Can be added later if needed."
-                        size="small"
-                      />
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        💡 You can enable or renew SSL certificate later from the domain settings
-                      </Typography>
-                    </Stack>
-                  </Collapse>
-                </Stack>
-              </Box>
+              <SslConfiguration
+                domainName={domainName}
+                enableHttps={enableHttps}
+                sslMode={sslMode}
+                letsEncryptEmail={email}
+                certificateId={customCertId}
+                forceHttps={forceHttps}
+                onEnableHttpsChange={setEnableHttps}
+                onSslModeChange={setSslMode}
+                onLetsEncryptEmailChange={setEmail}
+                onCertificateIdChange={setCustomCertId}
+                onForceHttpsChange={setForceHttps}
+              />
 
               <Alert severity="success" variant="outlined">
                 <Typography variant="body2" fontWeight={600} gutterBottom>

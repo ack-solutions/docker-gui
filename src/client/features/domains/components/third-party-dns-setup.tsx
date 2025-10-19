@@ -71,6 +71,13 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
         </Typography>
       </Stack>
 
+      <Alert severity="info" icon={<SecurityIcon />}>
+        <Typography variant="body2">
+          API credentials are stored <strong>per-domain</strong> and encrypted in the database.
+          Different domains can use different provider accounts.
+        </Typography>
+      </Alert>
+
       <FormControl fullWidth>
         <InputLabel>DNS Provider</InputLabel>
         <Select
@@ -126,7 +133,7 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
 
             <Alert severity="info" icon={<SecurityIcon />}>
               <Typography variant="caption">
-                🔒 Credentials are encrypted and stored securely. We recommend using IAM roles with minimal Route53 permissions.
+                Credentials are encrypted and stored securely. We recommend using IAM roles with minimal Route53 permissions.
               </Typography>
             </Alert>
           </Stack>
@@ -166,7 +173,7 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
 
             <Alert severity="info" icon={<SecurityIcon />}>
               <Typography variant="caption">
-                🔒 Create a service principal in Azure AD with DNS Zone Contributor role.
+                Create a service principal in Azure AD with DNS Zone Contributor role.
               </Typography>
             </Alert>
           </Stack>
@@ -201,7 +208,7 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
 
             <Alert severity="info" icon={<SecurityIcon />}>
               <Typography variant="caption">
-                🔒 Use an API Token with &quot;Edit DNS&quot; permissions for the specific zones.
+                Use an API Token with &quot;Edit DNS&quot; permissions for the specific zones.
               </Typography>
             </Alert>
           </Stack>
@@ -228,7 +235,7 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
 
             <Alert severity="info" icon={<SecurityIcon />}>
               <Typography variant="caption">
-                🔒 The token needs &quot;read&quot; and &quot;write&quot; permissions for DNS records.
+                The token needs &quot;read&quot; and &quot;write&quot; permissions for DNS records.
               </Typography>
             </Alert>
           </Stack>
