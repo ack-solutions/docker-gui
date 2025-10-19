@@ -6,6 +6,7 @@ import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import LayersIcon from "@mui/icons-material/Layers";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import {
   Button,
   Chip,
@@ -18,9 +19,10 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
-  Typography
+  Tooltip
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useState } from "react";
 
 interface ContainerListToolbarProps {
@@ -52,6 +54,8 @@ const ContainerListToolbar = ({
   searchQuery,
   onSearchChange
 }: ContainerListToolbarProps) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [maintenanceAnchor, setMaintenanceAnchor] = useState<null | HTMLElement>(null);
   
   const handleMaintenanceClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -72,71 +76,121 @@ const ContainerListToolbar = ({
     handleMaintenanceClose();
   };
 
-  return (
-    <Stack spacing={1.5}>
-      <Stack
-        direction={{ xs: "column", lg: "row" }}
-        spacing={1.5}
-        alignItems={{ xs: "stretch", lg: "center" }}
-      >
-        <TextField
+  const toolbarContent = isMobile ? (
+    <Stack spacing={1.25}>
+      <TextField
+        size="small"
+        placeholder="Search containers"
+        value={searchQuery}
+        onChange={(e) => onSearchChange(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          )
+        }}
+        fullWidth
+      />
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={onCreate}
           size="small"
-          placeholder="Search by name, ID, image, status, or project..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            )
-          }}
-          sx={{ flex: 1, maxWidth: { lg: 500 } }}
-        />
-        
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-          <Chip
+          fullWidth
+        >
+          New container
+        </Button>
+        <Tooltip title="More actions">
+          <IconButton
             size="small"
-            label={searchQuery ? `${filteredCount} of ${totalCount}` : `${totalCount} total`}
-            variant="outlined"
-            color={searchQuery ? "primary" : "default"}
-          />
-          {isRefreshing && <CircularProgress size={16} />}
-          
-          <Tooltip title="Maintenance actions">
-            <IconButton
-              size="small"
-              onClick={handleMaintenanceClick}
-              disabled={isPruningContainers || isPruningImages}
-              sx={{ border: 1, borderColor: "divider" }}
-            >
-              <DeleteSweepIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate} size="small">
-            New
-          </Button>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={viewMode}
-            onChange={(_event, value: "grid" | "list" | null) => {
-              if (value) {
-                onViewModeChange(value);
-              }
-            }}
-            aria-label="container view switcher"
+            onClick={handleMaintenanceClick}
+            disabled={isPruningContainers || isPruningImages}
+            sx={{ border: 1, borderColor: "divider" }}
           >
-            <ToggleButton value="grid" aria-label="grid view">
-              <ViewModuleIcon fontSize="small" />
-            </ToggleButton>
-            <ToggleButton value="list" aria-label="list view">
-              <ViewListIcon fontSize="small" />
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Stack>
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Stack>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Chip
+          size="small"
+          label={searchQuery ? `${filteredCount} of ${totalCount}` : `${totalCount} total`}
+          variant="outlined"
+          color={searchQuery ? "primary" : "default"}
+        />
+        {isRefreshing && <CircularProgress size={16} />}
+      </Stack>
+    </Stack>
+  ) : (
+    <Stack
+      direction={{ xs: "column", lg: "row" }}
+      spacing={1.5}
+      alignItems={{ xs: "stretch", lg: "center" }}
+    >
+      <TextField
+        size="small"
+        placeholder="Search by name, ID, image, status, or project..."
+        value={searchQuery}
+        onChange={(e) => onSearchChange(e.target.value)}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon fontSize="small" />
+            </InputAdornment>
+          )
+        }}
+        sx={{ flex: 1, maxWidth: { lg: 500 } }}
+      />
 
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Chip
+          size="small"
+          label={searchQuery ? `${filteredCount} of ${totalCount}` : `${totalCount} total`}
+          variant="outlined"
+          color={searchQuery ? "primary" : "default"}
+        />
+        {isRefreshing && <CircularProgress size={16} />}
+
+        <Tooltip title="Maintenance actions">
+          <IconButton
+            size="small"
+            onClick={handleMaintenanceClick}
+            disabled={isPruningContainers || isPruningImages}
+            sx={{ border: 1, borderColor: "divider" }}
+          >
+            <DeleteSweepIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate} size="small">
+          New
+        </Button>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={viewMode}
+          onChange={(_event, value: "grid" | "list" | null) => {
+            if (value) {
+              onViewModeChange(value);
+            }
+          }}
+          aria-label="container view switcher"
+        >
+          <ToggleButton value="grid" aria-label="grid view">
+            <ViewModuleIcon fontSize="small" />
+          </ToggleButton>
+          <ToggleButton value="list" aria-label="list view">
+            <ViewListIcon fontSize="small" />
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+    </Stack>
+  );
+
+  return (
+    <>
+      {toolbarContent}
       <Menu
         anchorEl={maintenanceAnchor}
         open={Boolean(maintenanceAnchor)}
@@ -159,9 +213,8 @@ const ContainerListToolbar = ({
           {isPruningImages ? "Pruning images..." : "Prune unused images"}
         </MenuItem>
       </Menu>
-    </Stack>
+    </>
   );
 };
 
 export default ContainerListToolbar;
-

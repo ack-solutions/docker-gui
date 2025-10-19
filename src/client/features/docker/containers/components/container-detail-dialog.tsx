@@ -7,11 +7,11 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import { 
-  Dialog, 
-  DialogContent, 
-  IconButton, 
-  Stack, 
+import {
+  Dialog,
+  DialogContent,
+  IconButton,
+  Stack,
   Tooltip,
   Chip,
   Typography,
@@ -21,6 +21,8 @@ import {
   Divider,
   CircularProgress
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useContainerInspect } from "@/features/docker/containers/hooks/use-container-inspect";
 import { useContainers, useContainerActions, useContainerState } from "@/features/docker/containers/hooks/use-containers";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
@@ -41,6 +43,8 @@ interface ContainerDetailDialogProps {
 }
 
 const ContainerDetailDialog = ({ open, onClose, containerId }: ContainerDetailDialogProps) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const [tab, setTab] = useState("overview");
   
   const { data: containers } = useContainers();
@@ -120,11 +124,12 @@ const ContainerDetailDialog = ({ open, onClose, containerId }: ContainerDetailDi
   };
 
   return (
-    <Dialog 
-      open={open && Boolean(containerId)} 
-      onClose={onClose} 
-      maxWidth="lg" 
+    <Dialog
+      open={open && Boolean(containerId)}
+      onClose={onClose}
+      maxWidth="lg"
       fullWidth
+      fullScreen={fullScreen}
       PaperProps={{
         sx: {
           m: 0,
@@ -305,4 +310,3 @@ const ContainerDetailDialog = ({ open, onClose, containerId }: ContainerDetailDi
 };
 
 export default ContainerDetailDialog;
-

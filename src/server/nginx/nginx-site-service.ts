@@ -14,12 +14,11 @@ import {
   type NginxSiteStatus,
   type NginxSslMode
 } from "@/server/nginx/nginx-site.entity";
-import DockerService from "@/server/docker/service";
+import { dockerService } from "@/server/docker/service";
 import type { DockerContainerInspect } from "@/types/docker";
 import type { NginxSite, NginxProvisionLog, UpstreamType } from "@/types/server";
 
 const execFile = promisify(nodeExecFile);
-const dockerService = new DockerService();
 
 const defaultConfigRoot = path.join(process.cwd(), ".data", "nginx");
 const NGINX_CONFIG_ROOT = process.env.NGINX_CONFIG_ROOT ?? defaultConfigRoot;
@@ -493,12 +492,14 @@ const applySiteInternal = async (site: NginxSiteEntity) => {
     });
   } catch (error) {
     if (error instanceof CommandExecutionError) {
+      const errorOutput = error.stderr || error.stdout || "Unknown error";
       await recordProvisionLog(site.id, "error", "nginx -t failed", {
         stdout: error.stdout,
         stderr: error.stderr,
         exitCode: error.exitCode
       });
-      throw new Error("Nginx configuration test failed");
+      // Include the actual nginx error in the exception message
+      throw new Error(`Nginx configuration test failed:\n${errorOutput}`);
     }
     throw error;
   }
@@ -511,12 +512,13 @@ const applySiteInternal = async (site: NginxSiteEntity) => {
     });
   } catch (error) {
     if (error instanceof CommandExecutionError) {
+      const errorOutput = error.stderr || error.stdout || "Unknown error";
       await recordProvisionLog(site.id, "error", "Failed to reload nginx", {
         stdout: error.stdout,
         stderr: error.stderr,
         exitCode: error.exitCode
       });
-      throw new Error("Failed to reload nginx");
+      throw new Error(`Failed to reload nginx:\n${errorOutput}`);
     }
     throw error;
   }
@@ -532,12 +534,13 @@ const applySiteInternal = async (site: NginxSiteEntity) => {
       }
     } catch (error) {
       if (error instanceof CommandExecutionError) {
+        const errorOutput = error.stderr || error.stdout || "Unknown error";
         await recordProvisionLog(site.id, "error", "Failed to request Let's Encrypt certificate", {
           stdout: error.stdout,
           stderr: error.stderr,
           exitCode: error.exitCode
         });
-        throw new Error("Failed to request Let's Encrypt certificate");
+        throw new Error(`Failed to request Let's Encrypt certificate:\n${errorOutput}`);
       }
       throw error;
     }

@@ -40,6 +40,8 @@ import type {
   CreateContainerRequest,
   DockerRestartPolicy
 } from "@/types/docker";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 
 interface CreateContainerDialogProps {
   open: boolean;
@@ -132,6 +134,9 @@ const CreateContainerDialog = ({ open, onClose, initialImage }: CreateContainerD
   const [imageError, setImageError] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string>("");
   const [showProgress, setShowProgress] = useState(false);
+
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
 
   const imageOptions = useMemo(() => {
     if (!images) {
@@ -297,11 +302,12 @@ const CreateContainerDialog = ({ open, onClose, initialImage }: CreateContainerD
   };
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={isSubmitting ? undefined : handleClose} 
-      maxWidth="md" 
+    <Dialog
+      open={open}
+      onClose={isSubmitting ? undefined : handleClose}
+      maxWidth="md"
       fullWidth
+      fullScreen={fullScreen}
       disableEscapeKeyDown={isSubmitting}
     >
       <DialogTitle>Create container</DialogTitle>

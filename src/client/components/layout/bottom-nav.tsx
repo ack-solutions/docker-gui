@@ -7,18 +7,18 @@ import DnsIcon from "@mui/icons-material/Dns";
 import LayersIcon from "@mui/icons-material/Layers";
 import AppsIcon from "@mui/icons-material/Apps";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import { 
-  BottomNavigation, 
-  BottomNavigationAction, 
-  Paper, 
-  Drawer, 
-  List, 
-  ListItemButton, 
-  ListItemIcon, 
-  ListItemText, 
-  Box, 
-  IconButton, 
-  Typography, 
+import {
+  BottomNavigation,
+  BottomNavigationAction,
+  Paper,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Box,
+  IconButton,
+  Typography,
   Stack,
   Divider,
   ListSubheader
@@ -36,6 +36,7 @@ import PeopleIcon from "@mui/icons-material/People";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import FolderIcon from "@mui/icons-material/Folder";
 import ArticleIcon from "@mui/icons-material/Article";
+import { useBottomPanel } from "@/components/common/bottom-panel-context";
 
 const BottomNavContainer = styled(Paper)(({ theme }) => ({
   position: "fixed",
@@ -46,7 +47,8 @@ const BottomNavContainer = styled(Paper)(({ theme }) => ({
   borderTop: `1px solid ${theme.palette.divider}`,
   borderRadius: 0,
   display: "none",
-  paddingBottom: "env(safe-area-inset-bottom)",
+  paddingBottom: "env(safe-area-inset-bottom, 0px)",
+  transition: "bottom 0.3s ease",
   [theme.breakpoints.down("md")]: {
     display: "block"
   }
@@ -55,6 +57,7 @@ const BottomNavContainer = styled(Paper)(({ theme }) => ({
 const MobileBottomNav = () => {
   const pathname = usePathname();
   const [showMore, setShowMore] = useState(false);
+  const { isOpen, panelHeight } = useBottomPanel();
 
   const getCurrentValue = () => {
     if (pathname === "/") return "/";
@@ -76,7 +79,6 @@ const MobileBottomNav = () => {
     { label: "Domains", href: "/domains", icon: <LanguageIcon /> },
     { label: "SSL Certificates", href: "/ssl", icon: <LockIcon /> },
     { label: "Nginx Config", href: "/nginx", icon: <SettingsEthernetIcon /> },
-    { label: "Proxy Manager", href: "/proxies", icon: <CompareArrowsIcon /> },
     { label: "Email", href: "/email", icon: <EmailIcon /> }
   ];
 
@@ -86,7 +88,7 @@ const MobileBottomNav = () => {
 
   return (
     <>
-      <BottomNavContainer elevation={8}>
+      <BottomNavContainer elevation={8} sx={{ bottom: isOpen ? `${panelHeight}px` : 0 }}>
         <BottomNavigation
           value={getCurrentValue()}
           onChange={(_, newValue) => {
@@ -233,4 +235,3 @@ const MobileBottomNav = () => {
 };
 
 export default MobileBottomNav;
-

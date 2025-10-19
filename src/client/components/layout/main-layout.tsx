@@ -18,11 +18,12 @@ interface MainLayoutProps {
 }
 
 const SIDEBAR_WIDTH = 240;
+const MOBILE_NAV_HEIGHT = 72;
 
 const LayoutRoot = styled(Box)(({ theme }) => ({
   display: "flex",
   minHeight: "100vh",
-  height: "100vh",
+  height: "100dvh", // Dynamic viewport height for mobile browsers
   width: "100%",
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
@@ -64,13 +65,15 @@ const ScrollViewport = styled(Box)(({ theme }) => ({
   alignItems: "stretch",
   background: theme.palette.background.default,
   WebkitOverflowScrolling: "touch", // Smooth scrolling on iOS
+  overscrollBehavior: "contain", // Prevent scroll chaining on mobile
   [theme.breakpoints.down("md")]: {
     padding: theme.spacing(2),
-    paddingBottom: theme.spacing(10) // Space for bottom nav
+    // Fixed bottom padding: 64px nav + 16px spacing + safe area
+    paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))"
   },
   [theme.breakpoints.down("sm")]: {
     padding: theme.spacing(1.5),
-    paddingBottom: theme.spacing(10) // Space for bottom nav
+    paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))"
   }
 }));
 
@@ -87,7 +90,7 @@ const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLa
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { isOpen, panelHeight } = useBottomPanel();
-  const bottomPadding = isOpen ? panelHeight + 32 : 32;
+  const bottomInset = (isMobile ? MOBILE_NAV_HEIGHT + 16 : 16) + (isOpen ? panelHeight + 24 : 0);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleDrawerToggle = () => {
@@ -130,7 +133,7 @@ const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLa
             onRefresh={onRefresh}
             onMenuClick={isMobile ? handleDrawerToggle : undefined}
           />
-          <ScrollViewport sx={{ paddingBottom: `${bottomPadding}px` }}>
+          <ScrollViewport sx={{ paddingBottom: `${bottomInset}px` }}>
             <ContentContainer>
               {children}
             </ContentContainer>
@@ -138,7 +141,7 @@ const MainLayout = ({ children, topBarTitle, topBarSubtitle, onRefresh }: MainLa
         </MainColumn>
       </LayoutRoot>
       <BottomPanelHost leftInset={isMobile ? 0 : SIDEBAR_WIDTH} />
-      <MobileBottomNav />
+      {isMobile && <MobileBottomNav />}
     </>
   );
 };

@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import type {
-  ServerDomain,
+  Domain,
+  DomainUpsertInput,
   SSLCertificate,
   NginxSite,
   ProxyRoute,
@@ -11,7 +12,7 @@ import type { SystemMetrics } from "@/types/system";
 import type { CreateUserInput, UpdateUserInput, User } from "@/types/user";
 
 export const fetchDomains = async () => {
-  const { data } = await apiClient.get<ServerDomain[]>("/domains");
+  const { data } = await apiClient.get<Domain[]>("/domains");
   return data;
 };
 

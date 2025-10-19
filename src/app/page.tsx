@@ -28,7 +28,7 @@ import ResourceDetailsDialog from "@/features/system/components/resource-details
 import ContainerStatsCard from "@/features/docker/components/container-stats-card";
 import QuickStatsCard from "@/features/system/components/quick-stats-card";
 import ResourceAllocationCard from "@/features/system/components/resource-allocation-card";
-import RecentLogsCard from "@/features/system/components/recent-logs-card";
+import SystemLogsChart from "@/features/system/components/system-logs-chart";
 import MetricsSettingsDialog from "@/features/system/components/metrics-settings-dialog";
 
 const formatBytes = (bytes: number) => {
@@ -71,22 +71,7 @@ const formatRelativeTime = (timestamp: number | null) => {
   return `${diffDays}d ago`;
 };
 
-const LoadingSkeleton = () => (
-      <Grid container spacing={2.5}>
-        {Array.from({ length: 4 }).map((_, index) => (
-          <Grid key={index} size={{ xs: 12, sm: 6, lg: 3 }}>
-        <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Skeleton variant="text" width="60%" />
-              <Skeleton variant="rectangular" height={80} />
-            </Stack>
-          </CardContent>
-        </Card>
-      </Grid>
-    ))}
-  </Grid>
-);
+// Removed skeleton - using main loading screen instead
 
 const DashboardPageContent = () => {
   const theme = useTheme();
@@ -197,9 +182,7 @@ const DashboardPageContent = () => {
         </Alert>
       ) : null}
 
-      {isInitialLoading ? (
-        <LoadingSkeleton />
-      ) : systemMetrics ? (
+      {systemMetrics ? (
         <>
           <Grid container spacing={2.5}>
           <Grid size={{ xs: 12, md: 6, lg: 4 }}>
@@ -265,7 +248,7 @@ const DashboardPageContent = () => {
               <ContainerStatsCard containers={containers} />
             </Grid>
             <Grid size={{ xs: 12, md: 6, lg: 8 }}>
-              <RecentLogsCard autoRefreshIntervalMs={30_000} />
+              <SystemLogsChart autoRefreshMs={30_000} />
             </Grid>
           </Grid>
 

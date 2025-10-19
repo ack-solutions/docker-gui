@@ -34,7 +34,6 @@ const routeNames: Record<string, string> = {
   "/domains": "Domains",
   "/ssl": "SSL Certificates",
   "/nginx": "Nginx Config",
-  "/proxies": "Proxy Manager",
   "/email": "Email",
   "/users": "Users"
 };

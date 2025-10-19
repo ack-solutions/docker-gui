@@ -1,19 +1,29 @@
 "use client";
 
-import { Box, Card, CardContent, Chip, CircularProgress, Stack, Tooltip, Typography } from "@mui/material";
+import {
+  Card,
+  CardContent,
+  Chip,
+  Stack,
+  Typography,
+  Tooltip,
+  Box,
+  Divider,
+  CircularProgress
+} from "@mui/material";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import ArticleIcon from "@mui/icons-material/Article";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ActionIconButton from "@/components/common/action-icon-button";
-import UsageBar from "@/features/docker/containers/components/usage-bar";
 import type { DockerContainer } from "@/types/docker";
 
 interface ContainerListItemMobileProps {
   container: DockerContainer;
+  isBusy?: boolean;
   isLoading?: boolean;
   onStart?: (id: string, name: string) => void;
   onStop?: (id: string, name: string) => void;
@@ -26,7 +36,8 @@ interface ContainerListItemMobileProps {
 
 const ContainerListItemMobile = ({
   container,
-  isLoading = false,
+  isBusy,
+  isLoading,
   onStart,
   onStop,
   onRestart,
@@ -36,133 +47,129 @@ const ContainerListItemMobile = ({
   onViewDetail
 }: ContainerListItemMobileProps) => {
   const isRunning = container.state === "running";
+  const statusColor =
+    container.state === "running"
+      ? "success"
+      : container.state === "exited"
+        ? "default"
+        : "warning";
+  const busy = Boolean(isBusy ?? isLoading);
 
   return (
-    <Card 
+    <Card
       onClick={() => onViewDetail?.(container.id)}
-      sx={{ 
-        touchAction: "manipulation",
-        cursor: "pointer",
-        transition: "transform 0.15s, box-shadow 0.15s",
-        "&:active": {
-          transform: "scale(0.99)",
-          boxShadow: 1
-        }
+      sx={{
+        borderRadius: 2,
+        boxShadow: "none",
+        border: (theme) => `1px solid ${theme.palette.divider}`
       }}
     >
       <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
         <Stack spacing={1.5}>
-          {/* Header */}
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+          <Stack direction="row" alignItems="flex-start" spacing={1.5}>
             <Box flex={1} minWidth={0}>
-              <Typography variant="subtitle1" fontWeight={600} noWrap>
+              <Typography variant="subtitle1" fontSize="0.95rem" fontWeight={600} noWrap>
                 {container.name}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                 {container.image}
               </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                #{container.id.slice(0, 12)}
+              </Typography>
             </Box>
-            <Stack direction="row" spacing={0.5} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center">
               <Chip
                 size="small"
-                label={isRunning ? "Running" : "Stopped"}
-                color={isRunning ? "success" : "default"}
-                sx={{ fontSize: "0.7rem", height: 20 }}
+                color={statusColor as any}
+                label={container.state.toUpperCase()}
+                sx={{ fontSize: "0.65rem" }}
               />
               <ChevronRightIcon fontSize="small" color="action" />
             </Stack>
           </Stack>
 
-          {/* Metrics */}
-          <Stack spacing={1}>
-            <Stack spacing={0.5}>
-              <Stack direction="row" justifyContent="space-between">
-                <Typography variant="caption" color="text.secondary">CPU</Typography>
-                <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                  {container.cpuUsage.toFixed(1)}%
-                </Typography>
-              </Stack>
-              <UsageBar value={container.cpuUsage} />
-            </Stack>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="caption" color="text.secondary">Memory</Typography>
-              <Chip 
-                size="small" 
-                label={`${container.memoryUsage.toFixed(0)} MiB`} 
-                variant="outlined"
-                sx={{ fontSize: "0.7rem", height: 20 }}
-              />
-            </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center" divider={<Divider orientation="vertical" flexItem />}>
+            <Typography variant="caption" color="text.secondary">
+              CPU&nbsp;
+              <Typography component="span" variant="body2" fontWeight={600}>
+                {container.cpuUsage.toFixed(1)}%
+              </Typography>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Memory&nbsp;
+              <Typography component="span" variant="body2" fontWeight={600}>
+                {container.memoryUsage.toFixed(0)} MiB
+              </Typography>
+            </Typography>
+            {(container.project || container.service) && (
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {container.project ?? container.service}
+              </Typography>
+            )}
           </Stack>
 
-          {/* Quick Actions */}
-          <Stack 
-            direction="row" 
-            spacing={0.5} 
+          <Stack
+            direction="row"
+            spacing={0.75}
             justifyContent="flex-end"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
-            {!isRunning && (
-              <Tooltip title="Start">
-                <ActionIconButton
-                  color="primary"
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onStart?.(container.id, container.name);
-                  }}
-                  disabled={isLoading}
-                >
-                  {isLoading ? <CircularProgress size={16} /> : <PlayArrowIcon fontSize="small" />}
-                </ActionIconButton>
-              </Tooltip>
-            )}
-            {isRunning && (
+            {isRunning ? (
               <>
-                <Tooltip title="Stop">
+                <Tooltip title="Stop container">
                   <ActionIconButton
                     color="warning"
                     size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStop?.(container.id, container.name);
-                    }}
-                    disabled={isLoading}
+                    onClick={() => onStop?.(container.id, container.name)}
+                    disabled={busy}
                   >
-                    {isLoading ? <CircularProgress size={16} /> : <StopIcon fontSize="small" />}
+                    {busy ? <CircularProgress size={16} color="inherit" /> : <StopIcon fontSize="small" />}
                   </ActionIconButton>
                 </Tooltip>
-                <Tooltip title="Terminal">
+                <Tooltip title="Restart container">
+                  <ActionIconButton
+                    color="secondary"
+                    size="small"
+                    onClick={() => onRestart?.(container.id, container.name)}
+                    disabled={busy}
+                  >
+                    {busy ? <CircularProgress size={16} color="inherit" /> : <RestartAltIcon fontSize="small" />}
+                  </ActionIconButton>
+                </Tooltip>
+                <Tooltip title="Open terminal">
                   <ActionIconButton
                     size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenTerminal?.(container.id, container.name);
-                    }}
+                    onClick={() => onOpenTerminal?.(container.id, container.name)}
                   >
                     <TerminalIcon fontSize="small" />
                   </ActionIconButton>
                 </Tooltip>
-                <Tooltip title="Logs">
+                <Tooltip title="View logs">
                   <ActionIconButton
                     size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenLogs?.(container.id, container.name);
-                    }}
+                    onClick={() => onOpenLogs?.(container.id, container.name)}
                   >
                     <ArticleIcon fontSize="small" />
                   </ActionIconButton>
                 </Tooltip>
               </>
+            ) : (
+              <Tooltip title="Start container">
+                <ActionIconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => onStart?.(container.id, container.name)}
+                  disabled={busy}
+                >
+                  {busy ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon fontSize="small" />}
+                </ActionIconButton>
+              </Tooltip>
             )}
-            <Tooltip title="More">
+            <Tooltip title="More actions">
               <ActionIconButton
                 size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMenuOpen?.(container.id, e.currentTarget);
-                }}
+                onClick={(event) => onMenuOpen?.(container.id, event.currentTarget)}
               >
                 <MoreHorizIcon fontSize="small" />
               </ActionIconButton>
@@ -175,4 +182,3 @@ const ContainerListItemMobile = ({
 };
 
 export default ContainerListItemMobile;
-

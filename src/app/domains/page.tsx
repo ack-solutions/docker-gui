@@ -2,18 +2,22 @@
 
 import DomainIcon from "@mui/icons-material/Language";
 import { Stack, Typography } from "@mui/material";
-import DomainManager from "@/features/domains/components/domain-manager";
+import SimpleDomainManager from "@/features/domains/components/simple-domain-manager";
 
 const DomainsPage = () => (
-  <Stack spacing={3.5}>
-    <Stack direction="row" spacing={1.5} alignItems="center">
-      <DomainIcon color="primary" />
-      <Typography variant="h5">Domain Management</Typography>
+  <Stack spacing={3}>
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1.5} alignItems="center">
+        <DomainIcon color="primary" fontSize="large" />
+        <Typography variant="h4" fontWeight={600}>
+          Domains
+        </Typography>
+      </Stack>
+      <Typography variant="body2" color="text.secondary">
+        Connect your domains and route traffic to your containers or external services
+      </Typography>
     </Stack>
-    <Typography variant="body1" color="text.secondary">
-      Manage DNS records, attach TLS certificates, and associate domains with upstream services and reverse-proxy entries.
-    </Typography>
-    <DomainManager />
+    <SimpleDomainManager />
   </Stack>
 );
 

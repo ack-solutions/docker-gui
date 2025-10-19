@@ -1,47 +1,100 @@
 import type {
+  Domain,
   EmailAccount,
   EmailServiceInfo,
   NginxSite,
   ProxyRoute,
-  SSLCertificate,
-  ServerDomain
+  SSLCertificate
 } from "@/types/server";
 import type { SystemMetrics } from "@/types/system";
 
 const now = Date.now();
 const oneDay = 1000 * 60 * 60 * 24;
 
-export const mockDomains: ServerDomain[] = [
+export const mockDomains: Domain[] = [
   {
     id: "dom-001",
     name: "example.com",
+    aliases: ["www.example.com"],
     status: "active",
     provider: "Cloudflare",
-    managed: true,
-    sslCertificateId: "cert-001",
-    targetService: "nginx-prod",
+    mode: "managed",
     createdAt: new Date(now - oneDay * 180).toISOString(),
     updatedAt: new Date(now - oneDay).toISOString(),
     notes: "Primary production domain",
+    target: {
+      type: "service",
+      serviceHost: "nginx-prod",
+      enableHttp: true,
+      enableHttps: true,
+      forceHttps: true,
+      sslMode: "lets-encrypt",
+      letsEncryptEmail: "ops@example.com",
+      sslCertificateId: "cert-001",
+      containerId: null,
+      containerPort: null,
+      externalUrl: null,
+      staticRoot: null
+    },
+    nginxSiteId: "site-001",
+    lastError: null,
     records: [
-      { id: "rec-001", type: "A", host: "@", value: "203.0.113.10", ttl: 300, updatedAt: new Date(now - oneDay).toISOString() },
-      { id: "rec-002", type: "CNAME", host: "www", value: "@", ttl: 300, updatedAt: new Date(now - oneDay).toISOString() },
-      { id: "rec-003", type: "TXT", host: "@", value: "v=spf1 include:mailgun.org ~all", ttl: 600, updatedAt: new Date(now - oneDay * 5).toISOString() }
+      {
+        id: "rec-001",
+        type: "A",
+        host: "@",
+        value: "203.0.113.10",
+        ttl: 300,
+        priority: null,
+        createdAt: new Date(now - oneDay * 200).toISOString(),
+        updatedAt: new Date(now - oneDay).toISOString()
+      },
+      {
+        id: "rec-002",
+        type: "CNAME",
+        host: "www",
+        value: "@",
+        ttl: 300,
+        priority: null,
+        createdAt: new Date(now - oneDay * 200).toISOString(),
+        updatedAt: new Date(now - oneDay).toISOString()
+      },
+      {
+        id: "rec-003",
+        type: "TXT",
+        host: "@",
+        value: "v=spf1 include:mailgun.org ~all",
+        ttl: 600,
+        priority: null,
+        createdAt: new Date(now - oneDay * 200).toISOString(),
+        updatedAt: new Date(now - oneDay * 5).toISOString()
+      }
     ]
   },
   {
     id: "dom-002",
     name: "staging.example.com",
+    aliases: [],
     status: "pending",
     provider: "Route53",
-    managed: false,
-    sslCertificateId: null,
-    targetService: "staging-proxy",
+    mode: "external-dns",
     createdAt: new Date(now - oneDay * 30).toISOString(),
     updatedAt: new Date(now - oneDay * 3).toISOString(),
     notes: "Awaiting DNS delegation",
+    target: null,
+    nginxSiteId: null,
+    lastError: null,
     records: [
-      { id: "rec-004", type: "A", host: "@", value: "198.51.100.25", ttl: 900, updatedAt: new Date(now - oneDay * 3).toISOString() }
+      {
+        id: "rec-004",
+        type: "A",
+        host: "@",
+        value: "198.51.100.25",
+        ttl: 900,
+        priority: null,
+        createdAt: new Date(now - oneDay * 30).toISOString(),
+        updatedAt: new Date(now - oneDay * 3).toISOString()
+      }
     ]
   }
 ];

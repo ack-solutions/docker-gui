@@ -6,11 +6,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
-import { 
-  Dialog, 
-  DialogContent, 
-  IconButton, 
-  Stack, 
+import {
+  Dialog,
+  DialogContent,
+  IconButton,
+  Stack,
   Tooltip,
   Chip,
   Typography,
@@ -20,6 +20,8 @@ import {
   Divider,
   CircularProgress
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useImageInspect } from "@/features/docker/images/hooks/use-image-inspect";
 import { formatBytes } from "@/lib/utils/format";
 import ImageOverviewPanel from "@/features/docker/images/components/detail/image-overview-panel";
@@ -35,6 +37,8 @@ interface ImageDetailDialogProps {
 }
 
 const ImageDetailDialog = ({ open, onClose, imageId }: ImageDetailDialogProps) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const [tab, setTab] = useState("overview");
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false);
   const [copyLabel, setCopyLabel] = useState("Copy pull command");
@@ -68,15 +72,18 @@ const ImageDetailDialog = ({ open, onClose, imageId }: ImageDetailDialogProps) =
 
   return (
     <>
-    <Dialog 
-      open={open && Boolean(imageId)} 
-      onClose={onClose} 
-      maxWidth="lg" 
+    <Dialog
+      open={open && Boolean(imageId)}
+      onClose={onClose}
+      maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          m: 0,
-          borderRadius: { xs: 0, md: 2 }
+      fullScreen={fullScreen}
+      slotProps={{
+        paper: {
+          sx: {
+            m: 0,
+            borderRadius: { xs: 0, md: 2 }
+          }
         }
       }}
       sx={{
@@ -228,4 +235,3 @@ const ImageDetailDialog = ({ open, onClose, imageId }: ImageDetailDialogProps) =
 };
 
 export default ImageDetailDialog;
-

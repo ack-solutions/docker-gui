@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import UserRepository from "@/server/user/user-repository";
 import { rolePermissions } from "@/types/user";
 import type { User, UserPermission, UserRecord, UserRole } from "@/types/user";
+import { config } from "@/server/config";
 
 interface AuthCredentials {
   email: string;
@@ -40,9 +41,9 @@ class AuthService {
     private readonly repository = new UserRepository(),
     options: { jwtSecret?: string; tokenExpiresIn?: string; saltRounds?: number } = {}
   ) {
-    this.jwtSecret = options.jwtSecret ?? process.env.JWT_SECRET ?? process.env.AUTH_SECRET ?? "development-secret";
-    this.tokenExpiresIn = options.tokenExpiresIn ?? process.env.JWT_EXPIRES_IN ?? "12h";
-    this.saltRounds = options.saltRounds ?? Number.parseInt(process.env.BCRYPT_SALT_ROUNDS ?? "10", 10);
+    this.jwtSecret = options.jwtSecret ?? config.security.jwtSecret;
+    this.tokenExpiresIn = options.tokenExpiresIn ?? config.security.jwtExpiresIn;
+    this.saltRounds = options.saltRounds ?? config.security.bcryptRounds;
     this.bootstrapReady = this.bootstrapDefaultAdmin();
   }
 
@@ -67,9 +68,9 @@ class AuthService {
         return;
       }
 
-      const email = (process.env.DEFAULT_ADMIN_EMAIL ?? "admin@example.com").trim().toLowerCase();
-      const name = process.env.DEFAULT_ADMIN_NAME ?? "Super Administrator";
-      let password = process.env.DEFAULT_ADMIN_PASSWORD?.trim();
+      const email = config.admin.email.trim().toLowerCase();
+      const name = config.admin.name;
+      let password = config.admin.password?.trim();
 
       if (!password || password.length < 8) {
         let candidate = "";

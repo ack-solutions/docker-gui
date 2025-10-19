@@ -1,31 +1,13 @@
 version: "3.9"
 
 services:
+  # Main Docker GUI Application
   docker-gui:
-    container_name: docker-gui-dev
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command: sh -c "yarn db:migrate && yarn db:seed -s && yarn dev"
-    environment:
-      NODE_ENV: development
-      PORT: 3000
-      HOSTNAME: 0.0.0.0
-      DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
-      DATABASE_URL: file:/app/data/docker-gui.db
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-development}
-      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-Admin@123}
-      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
-      SEED_INCLUDE_DUMMY: ${SEED_INCLUDE_DUMMY:-false}
-      SEED_SKIP_IF_SEEDED: ${SEED_SKIP_IF_SEEDED:-true}
-      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
-      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
-      SYSTEM_METRICS_PROVIDER: ${SYSTEM_METRICS_PROVIDER:-docker}
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
-      TSC_WATCHFILE: UsePolling
-      FORCE_COLOR: "1"
+    container_name: docker-gui-full
+    command: sh -c "yarn db:migrate && yarn db:seed && yarn dev"
     ports:
       - "3000:3000"
     volumes:
@@ -33,13 +15,153 @@ services:
       - docker-gui-node-modules:/app/node_modules
       - docker-gui-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - nginx-configs:/etc/nginx-managed
+      - ssl-certificates:/etc/ssl-managed
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DOCKER_HOST: unix:///var/run/docker.sock
+      DATABASE_URL: file:/app/data/docker-gui.db
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      SYSTEM_METRICS_PROVIDER: docker
+      # Nginx integration
+      NGINX_CONTAINER_NAME: ${NGINX_CONTAINER_NAME:-nginx-proxy}
+      NGINX_CONFIG_PATH: /etc/nginx-managed
+      # Email integration
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # DNS integration
+      DNS_SERVER: ${DNS_SERVER:-powerdns}
+      DNS_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
+    restart: unless-stopped
     networks:
       - docker-gui-network
+    depends_on:
+      - nginx-proxy
+      - mailhog
+      # PowerDNS is optional for development
+      # - powerdns
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx Reverse Proxy
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-configs:/etc/nginx/conf.d
+      - ssl-certificates:/etc/nginx/ssl
+      - nginx-logs:/var/log/nginx
+      - ./nginx/templates:/etc/nginx/templates:ro
+    environment:
+      - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/conf.d
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Email Server (MailHog for development/testing)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "8025:8025"  # Web UI
+      - "1025:1025"  # SMTP
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    environment:
+      MH_STORAGE: maildir
+      MH_MAILDIR_PATH: /maildir
+    volumes:
+      - mailhog-data:/maildir
+
+  # DNS Server (PowerDNS with PostgreSQL backend)
+  # NOTE: Port 53 conflicts with macOS DNS service. Use alternate ports or comment out for development.
+  powerdns:
+    image: powerdns/pdns-auth-master:latest
+    container_name: powerdns
+    ports:
+      # Port 53 is used by macOS - use alternate ports or comment out
+      # Uncomment these if you stop macOS DNS service or use Linux
+      # - "53:53/tcp"
+      # - "53:53/udp"
+      # Use alternate ports for development:
+      - "5353:53/tcp"    # Alternate DNS port
+      - "5353:53/udp"    # Alternate DNS port
+      - "8081:8081"      # PowerDNS API
+    environment:
+      PDNS_AUTH_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
+      PDNS_WEBSERVER: "yes"
+      PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
+      PDNS_WEBSERVER_PORT: "8081"
+      PDNS_WEBSERVER_ALLOW_FROM: "0.0.0.0/0"
+      PDNS_API: "yes"
+      PDNS_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
+      PDNS_LAUNCH: gsqlite3
+      PDNS_GSQLITE3_DATABASE: /var/lib/powerdns/pdns.sqlite3
+    volumes:
+      - powerdns-data:/var/lib/powerdns
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    profiles:
+      - dns  # Optional: start with --profile dns
+
+  # Let's Encrypt Certificate Manager (Optional - for SSL automation)
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    volumes:
+      - ssl-certificates:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - docker-gui-network
+    depends_on:
+      - nginx-proxy
 
 volumes:
   docker-gui-node-modules:
   docker-gui-data:
+    driver: local
+  nginx-configs:
+    driver: local
+  ssl-certificates:
+    driver: local
+  nginx-logs:
+    driver: local
+  mailhog-data:
+    driver: local
+  powerdns-data:
+    driver: local
+  certbot-www:
+    driver: local
 
 networks:
   docker-gui-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+

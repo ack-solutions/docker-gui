@@ -44,7 +44,7 @@ import type { DockerContainer } from "@/types/docker";
 
 const ContainerList = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { data, isLoading, isError, error, isFetching } = useContainers({ refetchIntervalMs: 10_000 });
   const actions = useContainerActions();
   const containerState = useContainerState();
@@ -80,6 +80,7 @@ const ContainerList = () => {
   }, [data, searchQuery]);
 
   const filteredGroupedContainers = useGroupedContainers(filteredData);
+  const effectiveViewMode = isMobile ? "list" : viewMode;
 
   const handleViewModeChange = useCallback((mode: "grid" | "list") => {
     setViewMode(mode);
@@ -346,7 +347,7 @@ const ContainerList = () => {
     return (
       <>
         <ContainerListToolbar
-          viewMode={viewMode}
+          viewMode={effectiveViewMode}
           onViewModeChange={handleViewModeChange}
           onCreate={openCreateDialog}
           onPruneContainers={handlePruneContainers}
@@ -372,7 +373,7 @@ const ContainerList = () => {
     <>
       <Stack spacing={3}>
         <ContainerListToolbar
-          viewMode={viewMode}
+          viewMode={effectiveViewMode}
           onViewModeChange={handleViewModeChange}
           onCreate={openCreateDialog}
           onPruneContainers={handlePruneContainers}
@@ -386,7 +387,7 @@ const ContainerList = () => {
           onSearchChange={setSearchQuery}
         />
         {showSkeleton ? (
-          viewMode === "grid" ? (
+          effectiveViewMode === "grid" ? (
             <Grid container spacing={2}>
               {Array.from({ length: 6 }).map((_, index) => (
                 <Grid key={`container-skeleton-${index}`} size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -394,6 +395,12 @@ const ContainerList = () => {
                 </Grid>
               ))}
             </Grid>
+          ) : isMobile ? (
+            <Stack spacing={1.5}>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <ContainerCard key={`container-mobile-skeleton-${index}`} container={null} />
+              ))}
+            </Stack>
           ) : (
             <Paper variant="outlined">
               <Table size="small">
@@ -471,13 +478,12 @@ const ContainerList = () => {
                 <AccordionDetails sx={{ p: { xs: 1.5, sm: 2 } }}>
                   <Stack spacing={{ xs: 1.5, sm: 2 }}>
                     {isMobile ? (
-                      // Mobile list view
                       <Stack spacing={1.5}>
                         {group.containers.map((container) => (
                           <ContainerListItemMobile
                             key={container.id}
                             container={container}
-                            isLoading={containerState.isContainerActionInFlight(container.id)}
+                            isBusy={containerState.isContainerActionInFlight(container.id)}
                             onStart={handleStart}
                             onStop={handleStop}
                             onRestart={handleRestart}
@@ -488,7 +494,7 @@ const ContainerList = () => {
                           />
                         ))}
                       </Stack>
-                    ) : viewMode === "grid" ? (
+                    ) : effectiveViewMode === "grid" ? (
                       <Grid container spacing={2}>
                         {group.containers.map((container) => (
                           <Grid key={container.id} size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -514,18 +520,18 @@ const ContainerList = () => {
                               <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
                               <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                               <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {group.containers.map((container) => (
-                              <ContainerTableRow
-                                key={container.id}
-                                container={container}
-                                isLoading={containerState.isContainerActionInFlight(container.id)}
-                                onStart={handleStart}
-                                onStop={handleStop}
+                            <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {group.containers.map((container) => (
+                            <ContainerTableRow
+                              key={container.id}
+                              container={container}
+                              isLoading={containerState.isContainerActionInFlight(container.id)}
+                              onStart={handleStart}
+                              onStop={handleStop}
                               onRestart={handleRestart}
                               onOpenTerminal={openTerminal}
                               onOpenLogs={openLogs}

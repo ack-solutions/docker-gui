@@ -1,28 +1,29 @@
 import fs from "node:fs";
 import path from "node:path";
 import Docker, { DockerOptions } from "dockerode";
+import { config } from "@/server/config";
 
 const buildConfig = (): DockerOptions => {
-  const dockerHost = process.env.DOCKER_HOST;
+  const dockerHost = config.docker.host;
 
-  if (dockerHost) {
+  if (dockerHost && !dockerHost.startsWith("unix://") && !dockerHost.startsWith("npipe://")) {
     try {
       const url = new URL(dockerHost);
       const protocol = (url.protocol.replace(":", "") || "http") as DockerOptions["protocol"];
-      const config: DockerOptions = {
+      const dockerConfig: DockerOptions = {
         host: url.hostname,
         port: Number(url.port || 2375),
         protocol
       };
 
-      const tlsVerify = process.env.DOCKER_TLS_VERIFY === "1";
-      const certPath = process.env.DOCKER_CERT_PATH;
+      const tlsVerify = config.docker.tlsVerify;
+      const certPath = config.docker.certPath;
 
       if (tlsVerify && certPath) {
         try {
           const resolve = (file: string) => path.join(certPath, file);
           return {
-            ...config,
+            ...dockerConfig,
             ca: fs.readFileSync(resolve("ca.pem")),
             cert: fs.readFileSync(resolve("cert.pem")),
             key: fs.readFileSync(resolve("key.pem"))
@@ -32,14 +33,16 @@ const buildConfig = (): DockerOptions => {
         }
       }
 
-      return config;
+      return dockerConfig;
     } catch (error) {
       console.warn("Failed to parse DOCKER_HOST; falling back to socket", error);
     }
   }
 
+  // Handle socket paths (unix:// or npipe://)
+  const socketPath = dockerHost.replace(/^(unix|npipe):\/\//, '');
   return {
-    socketPath: process.env.DOCKER_SOCKET_PATH ?? "/var/run/docker.sock"
+    socketPath
   };
 };
 

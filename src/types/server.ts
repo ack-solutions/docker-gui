@@ -1,27 +1,68 @@
 export type DomainStatus = "active" | "pending" | "error";
 
+export type DomainDnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX" | "SRV" | "CAA" | "NS";
+export type DomainMode = "external-dns" | "pointer-only" | "managed";
+
 export interface DomainDnsRecord {
   id: string;
-  type: "A" | "AAAA" | "CNAME" | "TXT" | "MX" | "SRV" | "CAA" | "NS";
+  type: DomainDnsRecordType;
   host: string;
   value: string;
   ttl: number;
-  priority?: number;
+  priority?: number | null;
+  createdAt: string;
   updatedAt: string;
 }
 
-export interface ServerDomain {
+export type DomainTargetType = "none" | "container" | "service" | "external" | "static";
+
+export interface DomainTarget {
+  type: DomainTargetType;
+  containerId?: string | null;
+  containerPort?: number | null;
+  serviceHost?: string | null;
+  externalUrl?: string | null;
+  staticRoot?: string | null;
+  enableHttp: boolean;
+  enableHttps: boolean;
+  forceHttps: boolean;
+  sslMode: NginxSslMode;
+  letsEncryptEmail?: string | null;
+  sslCertificateId?: string | null;
+}
+
+export interface Domain {
   id: string;
   name: string;
+  aliases: string[];
+  provider?: string | null;
+  mode: DomainMode;
   status: DomainStatus;
-  provider?: string;
-  managed: boolean;
-  sslCertificateId?: string | null;
-  targetService?: string | null;
+  notes?: string | null;
+  target: DomainTarget | null;
+  nginxSiteId?: string | null;
+  lastError?: string | null;
   createdAt: string;
   updatedAt: string;
-  notes?: string;
   records: DomainDnsRecord[];
+}
+
+export interface DomainUpsertInput {
+  name: string;
+  aliases?: string[];
+  provider?: string | null;
+  mode?: DomainMode;
+  status?: DomainStatus;
+  notes?: string | null;
+  target?: DomainTarget | null;
+  records?: Array<{
+    id?: string;
+    type: DomainDnsRecordType;
+    host: string;
+    value: string;
+    ttl?: number;
+    priority?: number | null;
+  }>;
 }
 
 export type SSLCertificateType = "lets-encrypt" | "custom";

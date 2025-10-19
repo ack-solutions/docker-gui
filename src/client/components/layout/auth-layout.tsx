@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Box, Skeleton, Stack } from "@mui/material";
+import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -13,18 +13,27 @@ const AuthLayout = ({ children, loading = false }: AuthLayoutProps) => {
     return (
       <Box
         sx={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          p: 3
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          backgroundColor: 'background.default',
         }}
       >
-        <Stack spacing={2} sx={{ width: "100%", maxWidth: 400 }}>
-          <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
-          <Skeleton variant="text" height={40} />
-          <Skeleton variant="text" height={40} />
-          <Skeleton variant="rectangular" height={48} sx={{ borderRadius: 1 }} />
+        <Typography 
+          variant="h4" 
+          fontWeight={700} 
+          color="primary" 
+          sx={{ mb: 3 }}
+        >
+          Docker GUI
+        </Typography>
+        <Stack spacing={2} alignItems="center">
+          <CircularProgress size={48} thickness={4} />
+          <Typography variant="body2" color="text.secondary">
+            Loading...
+          </Typography>
         </Stack>
       </Box>
     );

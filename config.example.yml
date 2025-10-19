@@ -1,0 +1,154 @@
+# Docker GUI Configuration Example
+# Copy this file to config.yml and customize for your installation
+# This is the primary configuration file - .env is auto-generated from this
+
+# Application Settings
+app:
+  name: "Docker Control Center"
+  port: 3000                    # Port for web UI
+  hostname: "0.0.0.0"           # Bind to all interfaces (use 127.0.0.1 for localhost only)
+  environment: "production"     # Options: production, development
+  log_level: "info"             # Options: debug, info, warn, error
+
+# Security Settings
+security:
+  jwt_secret: "CHANGE_ME_REQUIRED"  # Will be auto-generated during setup
+  cookie_secure: true                # Set to false for HTTP (non-SSL)
+  bcrypt_rounds: 12                  # Password hashing rounds (10-14 recommended)
+  session_timeout: 86400             # Session duration in seconds (24 hours)
+
+# Default Admin User (created on first run)
+admin:
+  email: "admin@example.com"         # Admin login email
+  password: ""                       # Leave empty to auto-generate (shown in logs)
+  name: "Super Administrator"        # Display name
+
+# Database Configuration
+database:
+  type: "sqlite"                     # Options: sqlite, postgres, mysql
+  path: "/var/lib/docker-gui/docker-gui.db"  # SQLite database file path
+  # For PostgreSQL or MySQL, uncomment and configure:
+  # host: "localhost"
+  # port: 5432
+  # username: "dockergui"
+  # password: "secure-password"
+  # database: "dockergui"
+
+# Docker Integration
+docker:
+  host: "unix:///var/run/docker.sock"  # Unix socket or tcp://host:port
+  # For remote Docker daemon:
+  # host: "tcp://remote-host:2375"
+  # tls_verify: false
+  # cert_path: "/path/to/certs"
+  metrics_provider: "docker"           # Options: docker, system, mock
+
+# Nginx Configuration Management
+nginx:
+  enabled: false                       # Enable Nginx site management
+  container_name: "nginx-proxy"        # Nginx container name (if using Docker)
+  config_path: "/etc/nginx-managed"    # Where to store generated configs
+  reload_command: "docker exec nginx-proxy nginx -s reload"
+  # For native Nginx installation:
+  # reload_command: "sudo systemctl reload nginx"
+
+# Email / SMTP Configuration
+email:
+  enabled: false                       # Enable email features
+  smtp:
+    host: "mailhog"                    # SMTP server hostname
+    port: 1025                         # SMTP port
+    secure: false                      # Use TLS/SSL
+    user: ""                           # SMTP username (leave empty if not required)
+    password: ""                       # SMTP password
+    from: "noreply@yourdomain.com"     # From email address
+  # Gmail Example:
+  # smtp:
+  #   host: "smtp.gmail.com"
+  #   port: 587
+  #   secure: true
+  #   user: "your-email@gmail.com"
+  #   password: "your-app-password"
+  #   from: "noreply@yourdomain.com"
+  # SendGrid Example:
+  # smtp:
+  #   host: "smtp.sendgrid.net"
+  #   port: 587
+  #   secure: true
+  #   user: "apikey"
+  #   password: "your-sendgrid-api-key"
+  #   from: "noreply@yourdomain.com"
+
+# DNS / Domains
+dns:
+  enabled: false                       # Enable DNS management features
+  provider: "powerdns"                 # Options: powerdns, cloudflare, route53
+  api_url: "http://powerdns:8081"      # PowerDNS API endpoint
+  api_key: "CHANGE_ME_REQUIRED"        # Will be auto-generated during setup
+  # For Cloudflare:
+  # provider: "cloudflare"
+  # api_token: "your-cloudflare-api-token"
+  # For AWS Route53:
+  # provider: "route53"
+  # access_key_id: "your-aws-access-key"
+  # secret_access_key: "your-aws-secret-key"
+  # region: "us-east-1"
+
+# SSL / TLS Certificate Management
+ssl:
+  enabled: false                       # Enable SSL certificate management
+  provider: "letsencrypt"              # Options: letsencrypt, manual
+  email: "admin@yourdomain.com"        # Email for Let's Encrypt notifications
+  test_mode: false                     # Use Let's Encrypt staging (for testing)
+  auto_renew: true                     # Automatically renew certificates
+  renew_days_before: 30                # Renew when certificate expires in X days
+
+# Proxy Management
+proxy:
+  enabled: false                       # Enable proxy management features
+  types:
+    - "http"
+    - "https"
+    - "tcp"
+    - "udp"
+
+# Feature Toggles (enable/disable specific features)
+features:
+  containers: true                     # Container management
+  images: true                         # Image management
+  volumes: true                        # Volume management
+  networks: true                       # Network management
+  logs: true                           # Log viewer
+  terminal: true                       # Interactive terminal
+  file_browser: true                   # Container file browser
+  metrics: true                        # System metrics and monitoring
+  nginx_config: true                   # Nginx configuration management
+  domain_management: true              # Domain/DNS management
+  email_management: true               # Email account management
+  ssl_management: true                 # SSL certificate management
+  proxy_management: true               # Proxy/reverse proxy management
+  user_management: true                # User and permission management
+
+# Performance Settings
+performance:
+  container_stats_interval: 10000      # Container stats refresh interval (milliseconds)
+  metrics_retention_days: 30           # How long to keep metrics data
+  log_retention_days: 7                # How long to keep logs
+  max_log_lines: 10000                 # Maximum log lines to display
+
+# Backup Configuration
+backup:
+  enabled: false                       # Enable automatic backups
+  schedule: "0 2 * * *"                # Cron schedule (daily at 2 AM)
+  retention_days: 7                    # How long to keep backups
+  path: "/var/backups/docker-gui"      # Backup storage location
+
+# Monitoring and Notifications
+monitoring:
+  health_check_interval: 30            # Health check interval in seconds
+  enable_notifications: false          # Enable system notifications
+  notification_channels:
+    - "email"
+    # - "slack"
+    # - "webhook"
+

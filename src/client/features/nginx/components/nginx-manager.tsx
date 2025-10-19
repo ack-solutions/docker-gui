@@ -87,9 +87,17 @@ const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
 const NginxManager = () => {
   const dispatch = useAppDispatch();
-  const { data: sites, isLoading, isError, error } = useNginxSites();
+  const { data: sitesResponse, isLoading, isError, error } = useNginxSites();
   const certificatesQuery = useSslCertificates();
   const containersQuery = useContainers({ refetchOnWindowFocus: false });
+
+  // Handle both old and new API response format
+  const sites = useMemo(
+    () => (Array.isArray(sitesResponse) ? sitesResponse : sitesResponse?.sites || []),
+    [sitesResponse]
+  );
+  const isDisabled = Boolean((sitesResponse as any)?.disabled);
+  const disabledMessage = (sitesResponse as any)?.message as string | undefined;
 
   const selectedId = useAppSelector(selectNginxSelectedId);
   const form = useAppSelector(selectNginxForm);
@@ -267,16 +275,45 @@ const NginxManager = () => {
     );
   }
 
+  if (isDisabled) {
+    return (
+      <Stack spacing={3}>
+        <Alert severity="info">
+          <Typography variant="subtitle2" gutterBottom>
+            Nginx Management is Disabled
+          </Typography>
+          <Typography variant="body2" paragraph>
+            {disabledMessage || "Nginx management is not enabled in the configuration."}
+          </Typography>
+          <Typography variant="body2">
+            <strong>To enable Nginx with Docker:</strong>
+          </Typography>
+          <ol style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
+            <li>Edit <code>config.yml</code> and set <code>features.nginxManagement: true</code></li>
+            <li>Stop current containers: <code>docker-compose down</code></li>
+            <li>Start with Nginx: <code>docker-compose -f docker-compose.full.yml up -d</code></li>
+            <li>Refresh this page</li>
+          </ol>
+        </Alert>
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
+            See <strong>NGINX_SETUP_GUIDE.md</strong> or <strong>docs/DOCKER_SETUP.md</strong> for complete setup instructions.
+          </Typography>
+        </Paper>
+      </Stack>
+    );
+  }
+
   if (isError) {
     return (
-      <Paper sx={{ p: 6, borderRadius: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Unable to load Nginx configuration
+      <Alert severity="error">
+        <Typography variant="subtitle2" gutterBottom>
+          Unable to Load Nginx Configuration
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {error instanceof Error ? error.message : "Check your Nginx API connection and try again."}
+        <Typography variant="body2">
+          {error instanceof Error ? error.message : sitesResponse?.error || "Check your Nginx setup and try again."}
         </Typography>
-      </Paper>
+      </Alert>
     );
   }
 

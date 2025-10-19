@@ -1,0 +1,167 @@
+version: "3.9"
+
+# Production setup with real email server
+services:
+  # Main Docker GUI Application
+  docker-gui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: docker-gui
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - docker-gui-data:/app/data
+      - nginx-configs:/etc/nginx-managed
+      - ssl-certificates:/etc/ssl-managed
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DOCKER_HOST: unix:///var/run/docker.sock
+      DATABASE_URL: file:/app/data/docker-gui.db
+      JWT_SECRET: ${JWT_SECRET}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD}
+      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Administrator}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      SYSTEM_METRICS_PROVIDER: docker
+      # Nginx
+      NGINX_CONTAINER_NAME: nginx-proxy
+      NGINX_CONFIG_PATH: /etc/nginx-managed
+      # Email
+      SMTP_HOST: postfix
+      SMTP_PORT: 587
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM:-noreply@yourdomain.com}
+      # DNS
+      DNS_SERVER: powerdns
+      DNS_API_URL: http://powerdns:8081
+      DNS_API_KEY: ${DNS_API_KEY}
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    depends_on:
+      nginx-proxy:
+        condition: service_healthy
+      postfix:
+        condition: service_started
+      powerdns:
+        condition: service_started
+
+  # Nginx Reverse Proxy
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-configs:/etc/nginx/conf.d
+      - ssl-certificates:/etc/nginx/ssl
+      - nginx-logs:/var/log/nginx
+      - certbot-www:/var/www/certbot:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    command: >
+      /bin/sh -c "
+      if [ ! -f /etc/nginx/ssl/default.key ]; then
+        apk add --no-cache openssl &&
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 
+        -keyout /etc/nginx/ssl/default.key 
+        -out /etc/nginx/ssl/default.crt 
+        -subj '/CN=localhost';
+      fi &&
+      nginx -g 'daemon off;'
+      "
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Postfix Email Server
+  postfix:
+    image: boky/postfix:latest
+    container_name: postfix
+    environment:
+      ALLOWED_SENDER_DOMAINS: ${ALLOWED_SENDER_DOMAINS:-yourdomain.com}
+      HOSTNAME: ${MAIL_HOSTNAME:-mail.yourdomain.com}
+      RELAYHOST: ${RELAY_HOST:-}
+      RELAYHOST_USERNAME: ${RELAY_USERNAME:-}
+      RELAYHOST_PASSWORD: ${RELAY_PASSWORD:-}
+    ports:
+      - "587:587"  # Submission
+    volumes:
+      - postfix-spool:/var/spool/postfix
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  # PowerDNS Authoritative Server
+  powerdns:
+    image: powerdns/pdns-auth-master:latest
+    container_name: powerdns
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8081:8081"
+    environment:
+      PDNS_AUTH_API_KEY: ${DNS_API_KEY}
+      PDNS_WEBSERVER: "yes"
+      PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
+      PDNS_WEBSERVER_PORT: "8081"
+      PDNS_WEBSERVER_ALLOW_FROM: "0.0.0.0/0"
+      PDNS_API: "yes"
+      PDNS_API_KEY: ${DNS_API_KEY}
+      PDNS_LAUNCH: gsqlite3
+      PDNS_GSQLITE3_DATABASE: /var/lib/powerdns/pdns.sqlite3
+    volumes:
+      - powerdns-data:/var/lib/powerdns
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  # Let's Encrypt Certificate Manager
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    volumes:
+      - ssl-certificates:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    depends_on:
+      - nginx-proxy
+
+volumes:
+  docker-gui-data:
+    driver: local
+  nginx-configs:
+    driver: local
+  ssl-certificates:
+    driver: local
+  nginx-logs:
+    driver: local
+  postfix-spool:
+    driver: local
+  powerdns-data:
+    driver: local
+  certbot-www:
+    driver: local
+
+networks:
+  docker-gui-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+

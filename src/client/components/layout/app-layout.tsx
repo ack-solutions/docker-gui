@@ -45,7 +45,7 @@ const pageMetadata: Record<string, { title: string; subtitle: string }> = {
     subtitle: "Inspect image metadata, layers, and history before deployment."
   },
   "/domains": {
-    title: "Domain Management",
+    title: "Domains",
     subtitle: "Organize DNS records, hostnames, and domain-level routing policies."
   },
   "/ssl": {
@@ -55,10 +55,6 @@ const pageMetadata: Record<string, { title: string; subtitle: string }> = {
   "/nginx": {
     title: "Nginx Configuration",
     subtitle: "Manage reverse proxy directives and site templates for your edge."
-  },
-  "/proxies": {
-    title: "Proxy Manager",
-    subtitle: "Configure load-balancing rules and traffic routing across services."
   },
   "/email": {
     title: "Email Management",

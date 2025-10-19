@@ -62,10 +62,9 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
           { label: "Networks", href: "/docker/networks", icon: <LanIcon />, permission: "networks:view" }
         ]
       },
-      { label: "Domain Management", href: "/domains", icon: <LanguageIcon />, permission: "domains:view" },
+      { label: "Domains", href: "/domains", icon: <LanguageIcon />, permission: "domains:view" },
       { label: "SSL Certificates", href: "/ssl", icon: <LockIcon />, permission: "ssl:view" },
       { label: "Nginx Config", href: "/nginx", icon: <SettingsEthernetIcon />, permission: "nginx:view" },
-      { label: "Proxy Manager", href: "/proxies", icon: <CompareArrowsIcon />, permission: "proxies:view" },
       { label: "Email", href: "/email", icon: <EmailIcon />, permission: "email:view" },
       { label: "User Management", href: "/users", icon: <PeopleIcon />, permission: "users:manage" }
     ]
