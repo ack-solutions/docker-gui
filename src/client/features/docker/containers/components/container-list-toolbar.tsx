@@ -8,6 +8,7 @@ import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import LayersIcon from "@mui/icons-material/Layers";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import {
+  Box,
   Button,
   Chip,
   CircularProgress,
@@ -77,30 +78,29 @@ const ContainerListToolbar = ({
   };
 
   const toolbarContent = isMobile ? (
-    <Stack spacing={1.25}>
-      <TextField
-        size="small"
-        placeholder="Search containers"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          )
-        }}
-        fullWidth
-      />
+    <Stack spacing={1}>
       <Stack direction="row" spacing={1} alignItems="center">
+        <TextField
+          size="small"
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            )
+          }}
+          sx={{ flex: 1 }}
+        />
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={onCreate}
           size="small"
-          fullWidth
         >
-          New container
+          New
         </Button>
         <Tooltip title="More actions">
           <IconButton
@@ -113,25 +113,27 @@ const ContainerListToolbar = ({
           </IconButton>
         </Tooltip>
       </Stack>
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={0.5} alignItems="center">
         <Chip
           size="small"
-          label={searchQuery ? `${filteredCount} of ${totalCount}` : `${totalCount} total`}
+          label={searchQuery ? `${filteredCount}/${totalCount}` : `${totalCount}`}
           variant="outlined"
           color={searchQuery ? "primary" : "default"}
+          sx={{ height: 24, fontSize: "0.75rem" }}
         />
-        {isRefreshing && <CircularProgress size={16} />}
+        {isRefreshing && <CircularProgress size={14} />}
       </Stack>
     </Stack>
   ) : (
     <Stack
-      direction={{ xs: "column", lg: "row" }}
-      spacing={1.5}
-      alignItems={{ xs: "stretch", lg: "center" }}
+      direction="row"
+      spacing={1}
+      alignItems="center"
+      sx={{ flexWrap: "wrap", gap: 1 }}
     >
       <TextField
         size="small"
-        placeholder="Search by name, ID, image, status, or project..."
+        placeholder="Search containers..."
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         InputProps={{
@@ -141,50 +143,55 @@ const ContainerListToolbar = ({
             </InputAdornment>
           )
         }}
-        sx={{ flex: 1, maxWidth: { lg: 500 } }}
+        sx={{ minWidth: 280, maxWidth: 400 }}
       />
 
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-        <Chip
-          size="small"
-          label={searchQuery ? `${filteredCount} of ${totalCount}` : `${totalCount} total`}
-          variant="outlined"
-          color={searchQuery ? "primary" : "default"}
-        />
-        {isRefreshing && <CircularProgress size={16} />}
+      <Chip
+        size="small"
+        label={searchQuery ? `${filteredCount}/${totalCount}` : `${totalCount}`}
+        variant="outlined"
+        color={searchQuery ? "primary" : "default"}
+        sx={{ height: 28 }}
+      />
+      {isRefreshing && <CircularProgress size={16} />}
 
-        <Tooltip title="Maintenance actions">
-          <IconButton
-            size="small"
-            onClick={handleMaintenanceClick}
-            disabled={isPruningContainers || isPruningImages}
-            sx={{ border: 1, borderColor: "divider" }}
-          >
-            <DeleteSweepIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate} size="small">
-          New
-        </Button>
-        <ToggleButtonGroup
+      <Box flex={1} />
+
+      <Tooltip title="Maintenance">
+        <IconButton
           size="small"
-          exclusive
-          value={viewMode}
-          onChange={(_event, value: "grid" | "list" | null) => {
-            if (value) {
-              onViewModeChange(value);
-            }
-          }}
-          aria-label="container view switcher"
+          onClick={handleMaintenanceClick}
+          disabled={isPruningContainers || isPruningImages}
+          sx={{ border: 1, borderColor: "divider" }}
         >
-          <ToggleButton value="grid" aria-label="grid view">
+          <DeleteSweepIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate} size="small">
+        New
+      </Button>
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={viewMode}
+        onChange={(_event, value: "grid" | "list" | null) => {
+          if (value) {
+            onViewModeChange(value);
+          }
+        }}
+        aria-label="container view switcher"
+      >
+        <ToggleButton value="grid" aria-label="grid view">
+          <Tooltip title="Grid view">
             <ViewModuleIcon fontSize="small" />
-          </ToggleButton>
-          <ToggleButton value="list" aria-label="list view">
+          </Tooltip>
+        </ToggleButton>
+        <ToggleButton value="list" aria-label="list view">
+          <Tooltip title="List view">
             <ViewListIcon fontSize="small" />
-          </ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
+          </Tooltip>
+        </ToggleButton>
+      </ToggleButtonGroup>
     </Stack>
   );
 

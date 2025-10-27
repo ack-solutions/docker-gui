@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Box } from "@mui/material";
+import { useCallback, useEffect, useRef, useState } from "react";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import { Box, IconButton, Stack, Tooltip } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { Terminal } from "@xterm/xterm";
+import { toast } from "sonner";
 import "@xterm/xterm/css/xterm.css";
 
 const parseCommand = (input: string) =>
@@ -39,6 +42,7 @@ const CommandTerminal = ({
   const promptRef = useRef<string>("");
   const initializedRef = useRef(false);
   const lastOutputRef = useRef<string | null>(null);
+  const allOutputRef = useRef<string[]>([]);
 
   const resolvedSession = sessionName ?? "session";
   const resolvedPrompt = promptLabel ?? `${resolvedSession}`;
@@ -48,6 +52,9 @@ const CommandTerminal = ({
   const notifyOutput = useCallback(
     (output: string | null) => {
       lastOutputRef.current = output;
+      if (output) {
+        allOutputRef.current.push(output);
+      }
       onLastOutputChange?.(output);
     },
     [onLastOutputChange]
@@ -84,6 +91,7 @@ const CommandTerminal = ({
 
       if (line === "clear") {
         term.clear();
+        allOutputRef.current = [];
         writePrompt(false);
         return;
       }
@@ -104,7 +112,7 @@ const CommandTerminal = ({
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        term.writeln(`Error: ${message}`);
+        term.writeln(`\x1b[31mError: ${message}\x1b[0m`);
         notifyOutput(message);
       }
 
@@ -112,6 +120,30 @@ const CommandTerminal = ({
     },
     [executeCommand, notifyOutput, writePrompt]
   );
+
+  const handleCopyAll = async () => {
+    const allText = allOutputRef.current.join("\n\n");
+    if (!allText) {
+      toast.info("No output to copy");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(allText);
+      toast.success("Terminal output copied");
+    } catch (error) {
+      toast.error("Failed to copy output");
+    }
+  };
+
+  const handleClearTerminal = () => {
+    const term = terminalRef.current;
+    if (term) {
+      term.clear();
+      allOutputRef.current = [];
+      writePrompt(false);
+      toast.success("Terminal cleared");
+    }
+  };
 
   useEffect(() => {
     if (!terminalContainerRef.current || initializedRef.current) {
@@ -128,7 +160,8 @@ const CommandTerminal = ({
         foreground: theme.palette.text.primary,
         cursor: theme.palette.primary.main,
         selectionBackground: theme.palette.primary.main
-      }
+      },
+      scrollback: 10000
     });
 
     terminalRef.current = term;
@@ -139,7 +172,10 @@ const CommandTerminal = ({
     const handleResize = () => {
       try {
         const width = terminalContainerRef.current?.offsetWidth ?? 640;
-        term.resize(Math.max(80, Math.floor(width / 8)), 24);
+        const height = terminalContainerRef.current?.offsetHeight ?? 400;
+        const cols = Math.max(80, Math.floor(width / 8.5));
+        const rows = Math.max(10, Math.floor(height / 17));
+        term.resize(cols, rows);
       } catch {
         // ignore xterm resize errors
       }
@@ -218,18 +254,48 @@ const CommandTerminal = ({
   }, [resolvedPrompt, writePrompt]);
 
   return (
-    <Box
-      ref={terminalContainerRef}
-      sx={{
-        width: "100%",
-        height: fitParent ? "100%" : { xs: minHeight, md: minHeight + 60 },
-        borderRadius: 1,
-        overflow: "hidden",
-        backgroundColor: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc",
-        px: 1,
-        pt: 1
-      }}
-    />
+    <Stack sx={{ height: "100%", position: "relative" }}>
+      {/* Action Buttons */}
+      <Stack 
+        direction="row" 
+        spacing={0.5} 
+        sx={{ 
+          position: "absolute", 
+          top: 8, 
+          right: 8, 
+          zIndex: 1,
+          backgroundColor: (theme) => theme.palette.mode === "dark" ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.5)",
+          borderRadius: 1,
+          backdropFilter: "blur(4px)",
+          p: 0.25
+        }}
+      >
+        <Tooltip title="Copy all output">
+          <IconButton size="small" onClick={handleCopyAll}>
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Clear terminal">
+          <IconButton size="small" onClick={handleClearTerminal}>
+            <DeleteSweepIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+
+      {/* Terminal */}
+      <Box
+        ref={terminalContainerRef}
+        sx={{
+          width: "100%",
+          height: fitParent ? "100%" : { xs: minHeight, md: minHeight + 60 },
+          borderRadius: 0,
+          overflow: "hidden",
+          backgroundColor: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc",
+          px: 1,
+          pt: 1
+        }}
+      />
+    </Stack>
   );
 };
 

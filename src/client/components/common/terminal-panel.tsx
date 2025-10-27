@@ -1,5 +1,6 @@
 "use client";
 
+import { Stack } from "@mui/material";
 import CommandTerminal from "@/components/common/command-terminal";
 import { executeContainerCommand } from "@/lib/api/docker";
 
@@ -12,13 +13,15 @@ export const TerminalPanel = ({ containerId, containerName }: TerminalPanelProps
   const sessionLabel = containerName ?? containerId;
 
   return (
-    <CommandTerminal
-      sessionName={sessionLabel}
-      promptLabel={`root@${sessionLabel}:/app`}
-      welcomeMessage={`Welcome to the container shell. Connected to ${sessionLabel}.`}
-      executeCommand={(tokens) => executeContainerCommand(containerId, tokens)}
-      fitParent
-    />
+    <Stack sx={{ height: "100%", overflow: "hidden" }}>
+      <CommandTerminal
+        sessionName={sessionLabel}
+        promptLabel={`root@${sessionLabel}:/app`}
+        welcomeMessage={`Welcome to ${sessionLabel}. Type commands and press Enter.`}
+        executeCommand={(tokens) => executeContainerCommand(containerId, tokens)}
+        fitParent
+      />
+    </Stack>
   );
 };
 

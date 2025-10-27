@@ -6,6 +6,7 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
+  Button,
   Chip,
   Paper,
   Stack,
@@ -332,14 +333,40 @@ const ContainerList = () => {
 
   if (isError && !showSkeleton) {
     return (
-      <Paper sx={{ p: 4 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Unable to load containers
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {error instanceof Error ? error.message : "Check your Docker connection and try again."}
-        </Typography>
-      </Paper>
+      <Stack spacing={2}>
+        <ContainerListToolbar
+          viewMode={effectiveViewMode}
+          onViewModeChange={handleViewModeChange}
+          onCreate={openCreateDialog}
+          onPruneContainers={handlePruneContainers}
+          onPruneImages={handlePruneImages}
+          isRefreshing={isFetching}
+          isPruningContainers={containerState.isPruningContainers}
+          isPruningImages={containerState.isPruningImages}
+          totalCount={0}
+          filteredCount={0}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
+        <Paper sx={{ p: 3 }}>
+          <Stack spacing={2} alignItems="center">
+            <Typography variant="h6" color="error.main">
+              Unable to load containers
+            </Typography>
+            <Typography variant="body2" color="text.secondary" textAlign="center">
+              {error instanceof Error ? error.message : "Failed to connect to Docker. Please ensure Docker is running and accessible."}
+            </Typography>
+            <Button 
+              variant="outlined" 
+              onClick={() => window.location.reload()}
+              size="small"
+            >
+              Retry
+            </Button>
+          </Stack>
+        </Paper>
+        <CreateContainerDialog open={isCreateOpen} onClose={closeCreateDialog} />
+      </Stack>
     );
   }
 

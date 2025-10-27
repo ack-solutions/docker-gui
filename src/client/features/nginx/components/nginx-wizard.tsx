@@ -37,6 +37,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
 import InfoIcon from "@mui/icons-material/Info";
 import LockIcon from "@mui/icons-material/Lock";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import type { DockerContainer } from "@/types/docker";
 
 interface NginxWizardProps {
@@ -252,7 +253,7 @@ export default function NginxWizard({ open, onClose, onSubmit, containers = [] }
           {activeStep === 3 && (
             <Stack spacing={3}>
               <Alert severity="success" icon={<CheckCircleIcon />}>
-                Everything looks good! Click "Create" to set it up.
+                Everything looks good! Click &quot;Create&quot; to set it up.
               </Alert>
 
               <Card variant="outlined">

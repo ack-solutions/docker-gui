@@ -406,7 +406,7 @@ export default function DomainStatusCard({
                   <Typography variant="body2">
                     <strong>Domain has errors</strong>
                     <br />
-                    Check the test results above for details on what's failing.
+                    Check the test results above for details on what&apos;s failing.
                   </Typography>
                 </Alert>
               )}
