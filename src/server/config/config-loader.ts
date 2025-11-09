@@ -49,82 +49,15 @@ class ConfigLoader {
 
       const fileContents = readFileSync(this.configPath, 'utf8');
       const yamlConfig = parseYaml(fileContents) as PartialConfig;
-      
+      const interpolated = this.interpolateEnvVariables(yamlConfig);
+
       console.log('✓ Loaded configuration from config.yml');
-      return yamlConfig || {};
+      return interpolated || {};
     } catch (error) {
       console.error(`Error loading config.yml: ${error}`);
       console.warn('Falling back to environment variables');
       return {};
     }
-  }
-
-  /**
-   * Load configuration from environment variables
-   * Provides backward compatibility with .env files
-   */
-  private loadFromEnv(): PartialConfig {
-    const env = process.env;
-
-    return {
-      app: {
-        port: env.PORT ? parseInt(env.PORT, 10) : undefined,
-        hostname: env.HOSTNAME,
-        environment: env.NODE_ENV as any,
-        baseUrl: env.BASE_URL,
-      },
-      admin: {
-        email: env.DEFAULT_ADMIN_EMAIL || '',
-        password: env.DEFAULT_ADMIN_PASSWORD || '',
-        name: env.DEFAULT_ADMIN_NAME || '',
-      },
-      docker: {
-        host: env.DOCKER_HOST || '',
-        tlsVerify: env.DOCKER_TLS_VERIFY === '1',
-        certPath: env.DOCKER_CERT_PATH,
-      },
-      database: {
-        type: 'sqlite',
-        path: env.DATABASE_URL?.replace('file:', ''),
-      },
-      nginx: {
-        enabled: env.NGINX_ENABLED === 'true',
-        containerName: env.NGINX_CONTAINER_NAME,
-        configPath: env.NGINX_CONFIG_PATH,
-      },
-      email: {
-        enabled: env.EMAIL_ENABLED === 'true',
-        smtp: {
-          host: env.SMTP_HOST || '',
-          port: env.SMTP_PORT ? parseInt(env.SMTP_PORT, 10) : 587,
-          secure: env.SMTP_SECURE === 'true',
-          user: env.SMTP_USER,
-          pass: env.SMTP_PASSWORD,
-        },
-        from: env.EMAIL_FROM_ADDRESS ? {
-          name: env.EMAIL_FROM_NAME || 'Docker GUI',
-          address: env.EMAIL_FROM_ADDRESS,
-        } : undefined,
-      },
-      dns: {
-        enabled: env.DNS_ENABLED === 'true',
-        provider: env.DNS_PROVIDER as any,
-        apiUrl: env.DNS_API_URL,
-        apiKey: env.DNS_API_KEY,
-      },
-      ssl: {
-        enabled: env.SSL_ENABLED === 'true',
-        provider: env.SSL_PROVIDER as any,
-        email: env.SSL_EMAIL,
-        staging: env.SSL_STAGING === 'true',
-      },
-      security: {
-        jwtSecret: env.JWT_SECRET || '',
-        jwtExpiresIn: env.JWT_EXPIRES_IN || '24h',
-        bcryptRounds: env.BCRYPT_SALT_ROUNDS ? parseInt(env.BCRYPT_SALT_ROUNDS, 10) : 10,
-        cookieSecure: env.AUTH_COOKIE_SECURE === 'true',
-      },
-    } as PartialConfig;
   }
 
   /**
@@ -157,6 +90,12 @@ class ConfigLoader {
       merged.security.jwtSecret = crypto.randomBytes(32).toString('hex');
     }
 
+    if (merged.setup?.initialSecret && merged.setup.initialSecret.length < 12) {
+      console.warn('[config] setup.initialSecret too short, generating secure random secret');
+      const crypto = require('crypto');
+      merged.setup.initialSecret = crypto.randomBytes(12).toString('hex');
+    }
+
     return merged as Config;
   }
 
@@ -177,14 +116,15 @@ class ConfigLoader {
   public load(): Config {
     // Load from different sources
     const defaultConfig = getDefaultConfig();
-    const envConfig = this.loadFromEnv();
     const yamlConfig = this.loadFromYaml();
 
-    // Merge with priority: YAML > ENV > Defaults
-    const config = this.mergeConfigs(defaultConfig, envConfig, yamlConfig);
+    // Merge with priority: defaults < config.yml < env
+    const config = this.mergeConfigs(defaultConfig, yamlConfig);
+    this.applyProcessEnv(config);
 
     // Validate configuration
     const validation = validateConfig(config);
+    
     if (!validation.valid) {
       console.error('Configuration validation errors:');
       validation.errors.forEach(error => console.error(`  - ${error}`));
@@ -229,6 +169,74 @@ class ConfigLoader {
    */
   public isFeatureEnabled(feature: keyof Config['features']): boolean {
     return this.config.features[feature];
+  }
+
+  private applyProcessEnv(config: Config): void {
+    if (config.app?.port && !process.env.PORT) {
+      process.env.PORT = String(config.app.port);
+    }
+    if (config.app?.hostname && !process.env.HOSTNAME) {
+      process.env.HOSTNAME = config.app.hostname;
+    }
+    if (config.app?.environment && !process.env.NODE_ENV) {
+      (process.env as any).NODE_ENV = config.app.environment;
+    }
+    if (config.app?.baseUrl && !process.env.BASE_URL) {
+      process.env.BASE_URL = config.app.baseUrl;
+    }
+  }
+
+  /**
+   * Replace ${ENV_VAR} or ${ENV_VAR:-fallback} tokens inside YAML config values.
+   */
+  private interpolateEnvVariables<T>(input: T): T {
+    const envPattern = /\$\{([^}:]+)(?::-(.*?))?\}/g;
+
+    const substitute = (value: unknown): unknown => {
+      if (Array.isArray(value)) {
+        return value.map((entry) => substitute(entry));
+      }
+
+      if (value && typeof value === 'object') {
+        return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, entry]) => {
+          acc[key] = substitute(entry);
+          return acc;
+        }, {});
+      }
+
+      if (typeof value !== 'string') {
+        return value;
+      }
+
+      if (!envPattern.test(value)) {
+        return value;
+      }
+
+      const replaced = value.replace(envPattern, (_match, name, fallback) => {
+        const envValue = process.env[name];
+        if (envValue === undefined || envValue === '') {
+          return fallback ?? '';
+        }
+        return envValue;
+      });
+
+      const trimmedOriginal = value.trim();
+      const trimmedResult = replaced.trim();
+      const isPurePlaceholder = /^\$\{[^}]+\}$/.test(trimmedOriginal);
+
+      if (isPurePlaceholder) {
+        if (/^(true|false)$/i.test(trimmedResult)) {
+          return trimmedResult.toLowerCase() === 'true';
+        }
+        if (trimmedResult !== '' && !Number.isNaN(Number(trimmedResult))) {
+          return Number(trimmedResult);
+        }
+      }
+
+      return trimmedResult;
+    };
+
+    return substitute(input) as T;
   }
 }
 

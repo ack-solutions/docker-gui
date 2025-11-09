@@ -1,0 +1,78 @@
+# Central configuration. Override any value by setting the corresponding
+# environment variable (see .env.example for suggested variables).
+
+app:
+  port: ${PORT}
+  hostname: "${HOSTNAME}"
+  environment: "${NODE_ENV}"
+  baseUrl: "${BASE_URL}"
+
+setup:
+  initialSecret: "${SETUP_SECRET}"
+
+security:
+  jwtSecret: "${JWT_SECRET}"
+  jwtExpiresIn: "24h"
+  bcryptRounds: 10
+  cookieSecure: ${AUTH_COOKIE_SECURE:-false}
+
+docker:
+  host: "${DOCKER_HOST}"
+
+nginx:
+  enabled: true
+  containerName: "nginx-proxy"
+  configPath: "/etc/nginx/sites-enabled"
+  sitesPath: "/etc/nginx/sites-available"
+  reloadCommand: "docker exec nginx-proxy nginx -s reload"
+
+email:
+  enabled: true
+  smtp:
+    host: "mailhog"
+    port: 1025
+    secure: false
+  from:
+    name: "Docker GUI"
+    address: "noreply@docker-gui.local"
+
+dns:
+  enabled: true
+  provider: "powerdns"
+  apiUrl: "http://powerdns:8081"
+  apiKey: ${DNS_API_KEY}
+
+
+proxies:
+  enabled: true
+  autoDiscovery: false
+
+features:
+  containerManagement: true
+  imageManagement: true
+  volumeManagement: true
+  networkManagement: true
+  nginxManagement: true
+  emailManagement: true
+  dnsManagement: true
+  sslManagement: true
+  proxyManagement: true
+  userManagement: true
+  systemMetrics: true
+
+performance:
+  metricsRefreshInterval: 5000
+  logsRefreshInterval: 2000
+  containerStatsInterval: 3000
+  metricsRetentionDays: 30
+  logsRetentionDays: 7
+  maxLogLines: 1000
+
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  path: "./backups"
+  retention: 7
+  includeDatabase: true
+  includeConfigs: true
+  includeLogs: false

@@ -1,6 +1,5 @@
-import type { Repository } from "typeorm";
-import { getDataSource } from "@/server/database/data-source";
-import { UserEntity } from "@/server/user/user.entity";
+import type { Prisma, User } from "@prisma/client";
+import { prisma } from "@/server/database/client";
 import { userPermissions } from "@/types/user";
 import type { UserPermission, UserRecord, UserRole } from "@/types/user";
 
@@ -11,20 +10,17 @@ class UserRepository {
     return input.filter((permission) => VALID_PERMISSION_SET.has(permission));
   }
 
-  private async getRepository(): Promise<Repository<UserEntity>> {
-    const dataSource = await getDataSource();
-    return dataSource.getRepository(UserEntity);
-  }
-
-  private mapPermissions(raw: unknown): UserPermission[] {
+  private mapPermissions(raw: Prisma.JsonValue | null): UserPermission[] {
     if (!Array.isArray(raw)) {
       return [];
     }
-    return raw
-      .filter((entry): entry is UserPermission => typeof entry === "string" && VALID_PERMISSION_SET.has(entry as UserPermission));
+    return raw.filter(
+      (entry): entry is UserPermission =>
+        typeof entry === "string" && VALID_PERMISSION_SET.has(entry as UserPermission)
+    );
   }
 
-  private mapUser(user: UserEntity): UserRecord {
+  private mapUser(user: User): UserRecord {
     return {
       id: user.id,
       email: user.email,
@@ -38,27 +34,23 @@ class UserRepository {
   }
 
   async findByEmail(email: string): Promise<UserRecord | null> {
-    const repository = await this.getRepository();
     const normalizedEmail = email.trim().toLowerCase();
-    const user = await repository.findOne({ where: { email: normalizedEmail } });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     return user ? this.mapUser(user) : null;
   }
 
   async findById(id: string): Promise<UserRecord | null> {
-    const repository = await this.getRepository();
-    const user = await repository.findOne({ where: { id } });
+    const user = await prisma.user.findUnique({ where: { id } });
     return user ? this.mapUser(user) : null;
   }
 
   async all(): Promise<UserRecord[]> {
-    const repository = await this.getRepository();
-    const users = await repository.find({ order: { email: "ASC" } });
+    const users = await prisma.user.findMany({ orderBy: { email: "asc" } });
     return users.map((user) => this.mapUser(user));
   }
 
   async count(): Promise<number> {
-    const repository = await this.getRepository();
-    return repository.count();
+    return prisma.user.count();
   }
 
   async create(input: {
@@ -69,18 +61,17 @@ class UserRepository {
     permissions: UserPermission[];
     isSuperAdmin?: boolean;
   }): Promise<UserRecord> {
-    const repository = await this.getRepository();
     const normalizedEmail = input.email.trim().toLowerCase();
-    const user = repository.create({
-      email: normalizedEmail,
-      passwordHash: input.passwordHash,
-      name: input.name ?? null,
-      role: input.role,
-      permissions: this.normalizePermissions(input.permissions),
-      isSuperAdmin: Boolean(input.isSuperAdmin)
+    const user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        passwordHash: input.passwordHash,
+        name: input.name ?? null,
+        role: input.role,
+        permissions: this.normalizePermissions(input.permissions),
+        isSuperAdmin: Boolean(input.isSuperAdmin)
+      }
     });
-
-    await repository.save(user);
 
     return this.mapUser(user);
   }
@@ -96,44 +87,49 @@ class UserRepository {
       isSuperAdmin?: boolean;
     }
   ): Promise<UserRecord | null> {
-    const repository = await this.getRepository();
-    const existing = await repository.findOne({ where: { id } });
+    const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) {
       return null;
     }
 
+    const data: Prisma.UserUpdateInput = {};
+
     if (input.email !== undefined) {
-      existing.email = input.email.trim().toLowerCase();
+      data.email = input.email.trim().toLowerCase();
     }
     if (input.passwordHash !== undefined) {
-      existing.passwordHash = input.passwordHash;
+      data.passwordHash = input.passwordHash;
     }
     if (input.name !== undefined) {
-      existing.name = input.name ?? null;
+      data.name = input.name ?? null;
     }
     if (input.role !== undefined) {
-      existing.role = input.role;
+      data.role = input.role;
     }
     if (input.permissions !== undefined) {
-      existing.permissions = this.normalizePermissions(input.permissions);
+      data.permissions = this.normalizePermissions(input.permissions);
     }
     if (input.isSuperAdmin !== undefined) {
-      existing.isSuperAdmin = input.isSuperAdmin;
+      data.isSuperAdmin = input.isSuperAdmin;
     }
 
-    await repository.save(existing);
-    return this.mapUser(existing);
+    const updated = await prisma.user.update({
+      where: { id },
+      data
+    });
+    return this.mapUser(updated);
   }
 
   async delete(id: string): Promise<boolean> {
-    const repository = await this.getRepository();
-    const existing = await repository.findOne({ where: { id } });
-    if (!existing) {
-      return false;
+    try {
+      await prisma.user.delete({ where: { id } });
+      return true;
+    } catch (error: any) {
+      if (error?.code === "P2025") {
+        return false;
+      }
+      throw error;
     }
-
-    await repository.remove(existing);
-    return true;
   }
 }
 

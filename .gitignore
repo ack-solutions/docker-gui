@@ -5,6 +5,7 @@
 /.next
 /out
 /.data
+.env
 
 # Production
 npm-debug.log*
@@ -15,11 +16,6 @@ npm-debug.log*
 .env.production.local
 
 # Editor directories and files
-.vscode
 .idea
 *.swp
 db/docker-gui.db
-
-
-# Configuration
-config.yml

@@ -77,6 +77,7 @@ const MetricsSettingsDialog = ({ open, onClose }: MetricsSettingsDialogProps) =>
     if (open) {
       loadSettings();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const loadSettings = async () => {

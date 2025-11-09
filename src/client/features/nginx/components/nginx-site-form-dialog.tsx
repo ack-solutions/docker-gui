@@ -370,7 +370,7 @@ export default function NginxSiteFormDialog({
 
               {enableHttps && (
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{xs: 12, sm:6}}>
                     <FormControl fullWidth>
                       <InputLabel>SSL Mode</InputLabel>
                       <Select
@@ -385,7 +385,7 @@ export default function NginxSiteFormDialog({
                     </FormControl>
                   </Grid>
                   {sslMode === "lets-encrypt" && (
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{xs: 12, sm:6}}>
                       <TextField
                         label="Email for Let's Encrypt"
                         type="email"

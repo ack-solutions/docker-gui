@@ -14,7 +14,6 @@ export async function POST(request: Request) {
     const response = NextResponse.json(result);
     
     // Set cookie with proper options for development and production
-    // const cookieSecure = process.env.AUTH_COOKIE_SECURE === "false" || process.env.AUTH_COOKIE_SECURE === "0";
     response.cookies.set({
       name: AUTH_COOKIE_NAME,
       value: result.token,

@@ -77,7 +77,7 @@ export const mockDomains: Domain[] = [
     aliases: [],
     status: "pending",
     provider: "Route53",
-    mode: "external-dns",
+    mode: "manual",
     createdAt: new Date(now - oneDay * 30).toISOString(),
     updatedAt: new Date(now - oneDay * 3).toISOString(),
     notes: "Awaiting DNS delegation",
@@ -130,34 +130,7 @@ export const mockCertificates: SSLCertificate[] = [
   }
 ];
 
-export const mockNginxSites: NginxSite[] = [
-  {
-    id: "site-001",
-    serverNames: ["example.com", "www.example.com"],
-    listen: [
-      { port: 80, protocol: "http" },
-      { port: 443, protocol: "https" }
-    ],
-    upstreamType: "service",
-    upstreamTarget: "web-frontend",
-    sslCertificateId: "cert-001",
-    enabled: true,
-    lastDeployedAt: new Date(now - oneDay).toISOString(),
-    createdAt: new Date(now - oneDay * 200).toISOString(),
-    notes: "Blue/green capable"
-  },
-  {
-    id: "site-002",
-    serverNames: ["api.example.com"],
-    listen: [{ port: 443, protocol: "https" }],
-    upstreamType: "container",
-    upstreamTarget: "api-gateway",
-    sslCertificateId: "cert-002",
-    enabled: true,
-    lastDeployedAt: new Date(now - oneDay * 2).toISOString(),
-    createdAt: new Date(now - oneDay * 210).toISOString()
-  }
-];
+
 
 export const mockProxyRoutes: ProxyRoute[] = [
   {

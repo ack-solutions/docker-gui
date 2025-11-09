@@ -78,6 +78,12 @@ export default function DomainCard({ domain, onEdit, onDelete, onClick }: Domain
   const status = getStatusConfig();
   const target = getTargetInfo();
   const hasSSL = domain.target?.enableHttps || false;
+  const modeChip =
+    domain.mode === "managed"
+      ? { label: "Nameserver Managed", color: "primary" as const }
+      : domain.mode === "provider"
+        ? { label: domain.dnsProvider?.type ? `${domain.dnsProvider.type} API` : "Provider API", color: "info" as const }
+        : { label: "Manual DNS", color: "default" as const, variant: "outlined" as const };
 
   return (
     <>
@@ -118,6 +124,14 @@ export default function DomainCard({ domain, onEdit, onDelete, onClick }: Domain
                 color={status.color}
                 icon={status.icon}
               />
+              {modeChip && (
+                <Chip
+                  label={modeChip.label}
+                  size="small"
+                  color={modeChip.color}
+                  variant={modeChip.variant ?? "filled"}
+                />
+              )}
               {hasSSL && (
                 <Chip
                   label="HTTPS"
@@ -127,12 +141,11 @@ export default function DomainCard({ domain, onEdit, onDelete, onClick }: Domain
                   variant="outlined"
                 />
               )}
-              {domain.mode === "external-dns" && (
-                <Chip
-                  label="External DNS"
-                  size="small"
-                  variant="outlined"
-                />
+              {domain.parentDomainName && (
+                <Chip label={`Subdomain of ${domain.parentDomainName}`} size="small" variant="outlined" />
+              )}
+              {domain.dnsProvider?.type && (
+                <Chip label={`API: ${domain.dnsProvider.type}`} size="small" variant="outlined" />
               )}
             </Stack>
 
@@ -232,4 +245,3 @@ export default function DomainCard({ domain, onEdit, onDelete, onClick }: Domain
     </>
   );
 }
-

@@ -1,7 +1,7 @@
 export type DomainStatus = "active" | "pending" | "error";
 
 export type DomainDnsRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "MX" | "SRV" | "CAA" | "NS";
-export type DomainMode = "external-dns" | "pointer-only" | "managed";
+export type DomainMode = "managed" | "provider" | "manual";
 
 export interface DomainDnsRecord {
   id: string;
@@ -29,6 +29,13 @@ export interface DomainTarget {
   sslMode: NginxSslMode;
   letsEncryptEmail?: string | null;
   sslCertificateId?: string | null;
+  customNginxConfig?: string | null;
+}
+
+export interface DomainDnsProviderInfo {
+  type: string;
+  configured: boolean;
+  configKeys?: string[];
 }
 
 export interface Domain {
@@ -42,9 +49,12 @@ export interface Domain {
   target: DomainTarget | null;
   nginxSiteId?: string | null;
   lastError?: string | null;
+  parentDomainId?: string | null;
+  parentDomainName?: string | null;
   createdAt: string;
   updatedAt: string;
   records: DomainDnsRecord[];
+  dnsProvider?: DomainDnsProviderInfo | null;
 }
 
 export interface DomainUpsertInput {
@@ -55,6 +65,7 @@ export interface DomainUpsertInput {
   status?: DomainStatus;
   notes?: string | null;
   target?: DomainTarget | null;
+  parentDomainId?: string | null;
   records?: Array<{
     id?: string;
     type: DomainDnsRecordType;
@@ -63,6 +74,10 @@ export interface DomainUpsertInput {
     ttl?: number;
     priority?: number | null;
   }>;
+  dnsProvider?: {
+    type: string;
+    config?: Record<string, unknown>;
+  } | null;
 }
 
 export type SSLCertificateType = "lets-encrypt" | "custom";

@@ -34,12 +34,14 @@ interface DnsProviderConfig {
   azureTenantId?: string;
   cloudflareApiToken?: string;
   cloudflareEmail?: string;
+  cloudflareZoneId?: string;
   digitalOceanToken?: string;
 }
 
 interface ThirdPartyDnsSetupProps {
   config: DnsProviderConfig;
   onChange: (config: DnsProviderConfig) => void;
+  configured?: boolean;
 }
 
 const DNS_PROVIDERS = [
@@ -49,7 +51,7 @@ const DNS_PROVIDERS = [
   { value: "digitalocean", label: "DigitalOcean DNS", docsUrl: "https://www.digitalocean.com/products/dns" },
 ];
 
-export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSetupProps) {
+export default function ThirdPartyDnsSetup({ config, onChange, configured }: ThirdPartyDnsSetupProps) {
   const [showHelp, setShowHelp] = useState(false);
 
   const handleProviderChange = (provider: DnsProvider) => {
@@ -77,6 +79,11 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
           Different domains can use different provider accounts.
         </Typography>
       </Alert>
+      {configured && (
+        <Alert severity="success">
+          <Typography variant="body2">Credentials already configured. Update the fields below to rotate tokens.</Typography>
+        </Alert>
+      )}
 
       <FormControl fullWidth>
         <InputLabel>DNS Provider</InputLabel>
@@ -199,6 +206,14 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
             />
 
             <TextField
+              label="Zone ID"
+              fullWidth
+              value={config.cloudflareZoneId || ""}
+              onChange={(e) => handleFieldChange("cloudflareZoneId", e.target.value)}
+              helperText="Found under Overview → API (requires DNS:Edit permissions)"
+            />
+
+            <TextField
               label="Account Email"
               type="email"
               fullWidth
@@ -288,4 +303,3 @@ export default function ThirdPartyDnsSetup({ config, onChange }: ThirdPartyDnsSe
     </Stack>
   );
 }
-

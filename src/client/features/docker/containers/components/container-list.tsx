@@ -42,6 +42,7 @@ import {
 import { useGroupedContainers } from "@/features/docker/containers/hooks/use-grouped-containers";
 import { formatBytes } from "@/lib/utils/format";
 import type { DockerContainer } from "@/types/docker";
+import { usePersistentState } from "@/client/hooks/use-persistent-state";
 
 const ContainerList = () => {
   const theme = useTheme();
@@ -52,7 +53,7 @@ const ContainerList = () => {
   const { openLogs, openTerminal } = useBottomPanel();
   const { confirm } = useConfirmationDialog();
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [viewMode, setViewMode] = usePersistentState<"grid" | "list">("docker:containers:view-mode", "list");
   const [searchQuery, setSearchQuery] = useState("");
   const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -83,9 +84,12 @@ const ContainerList = () => {
   const filteredGroupedContainers = useGroupedContainers(filteredData);
   const effectiveViewMode = isMobile ? "list" : viewMode;
 
-  const handleViewModeChange = useCallback((mode: "grid" | "list") => {
-    setViewMode(mode);
-  }, []);
+  const handleViewModeChange = useCallback(
+    (mode: "grid" | "list") => {
+      setViewMode(mode);
+    },
+    [setViewMode]
+  );
 
   const selectedContainer = useMemo(() => {
     if (!menuAnchor?.id || !data) {

@@ -1,8 +1,4 @@
-import { LessThan } from "typeorm";
-import { getDataSource } from "../database/data-source";
-import { CpuMetricsLogEntity } from "./cpu-metrics-log.entity";
-import { MemoryMetricsLogEntity } from "./memory-metrics-log.entity";
-import { DiskMetricsLogEntity } from "./disk-metrics-log.entity";
+import { prisma } from "../database/client";
 import { SettingsService } from "./settings-service";
 import type { SystemMetrics } from "@/types/system";
 
@@ -195,34 +191,47 @@ export class MetricsLoggingService {
     this.setProcessingFlag(type, true);
 
     try {
-      const dataSource = await getDataSource();
       const batchToSave = [...queue];
       this.clearQueue(type);
 
       if (batchToSave.length > 0) {
         switch (type) {
           case "cpu": {
-            const repository = dataSource.getRepository(CpuMetricsLogEntity);
-            const entities = batchToSave.map((batch: CpuBatch) =>
-              repository.create(batch)
-            );
-            await repository.save(entities);
+            await prisma.cpuMetricsLog.createMany({
+              data: batchToSave.map((batch: CpuBatch) => ({
+                timestamp: batch.timestamp,
+                usagePercent: batch.usagePercent,
+                loadAverage1m: batch.loadAverage1m,
+                loadAverage5m: batch.loadAverage5m,
+                loadAverage15m: batch.loadAverage15m,
+                coresUsage: batch.coresUsage
+              }))
+            });
             break;
           }
           case "memory": {
-            const repository = dataSource.getRepository(MemoryMetricsLogEntity);
-            const entities = batchToSave.map((batch: MemoryBatch) =>
-              repository.create(batch)
-            );
-            await repository.save(entities);
+            await prisma.memoryMetricsLog.createMany({
+              data: batchToSave.map((batch: MemoryBatch) => ({
+                timestamp: batch.timestamp,
+                usagePercent: batch.usagePercent,
+                usedBytes: batch.usedBytes,
+                totalBytes: batch.totalBytes,
+                freeBytes: batch.freeBytes
+              }))
+            });
             break;
           }
           case "disk": {
-            const repository = dataSource.getRepository(DiskMetricsLogEntity);
-            const entities = batchToSave.map((batch: DiskBatch) =>
-              repository.create(batch)
-            );
-            await repository.save(entities);
+            await prisma.diskMetricsLog.createMany({
+              data: batchToSave.map((batch: DiskBatch) => ({
+                timestamp: batch.timestamp,
+                usagePercent: batch.usagePercent,
+                usedBytes: batch.usedBytes,
+                totalBytes: batch.totalBytes,
+                availableBytes: batch.availableBytes,
+                partitions: batch.partitions
+              }))
+            });
             break;
           }
         }
@@ -335,28 +344,30 @@ export class MetricsLoggingService {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-        const dataSource = await getDataSource();
         let deletedCount = 0;
 
         switch (metricType) {
           case "cpu": {
-            const repository = dataSource.getRepository(CpuMetricsLogEntity);
-            const result = await repository.delete({ timestamp: LessThan(cutoffDate) });
-            deletedCount = result.affected ?? 0;
+            const result = await prisma.cpuMetricsLog.deleteMany({
+              where: { timestamp: { lt: cutoffDate } }
+            });
+            deletedCount = result.count;
             results.cpu = deletedCount;
             break;
           }
           case "memory": {
-            const repository = dataSource.getRepository(MemoryMetricsLogEntity);
-            const result = await repository.delete({ timestamp: LessThan(cutoffDate) });
-            deletedCount = result.affected ?? 0;
+            const result = await prisma.memoryMetricsLog.deleteMany({
+              where: { timestamp: { lt: cutoffDate } }
+            });
+            deletedCount = result.count;
             results.memory = deletedCount;
             break;
           }
           case "disk": {
-            const repository = dataSource.getRepository(DiskMetricsLogEntity);
-            const result = await repository.delete({ timestamp: LessThan(cutoffDate) });
-            deletedCount = result.affected ?? 0;
+            const result = await prisma.diskMetricsLog.deleteMany({
+              where: { timestamp: { lt: cutoffDate } }
+            });
+            deletedCount = result.count;
             results.disk = deletedCount;
             break;
           }
@@ -441,33 +452,25 @@ export class MetricsLoggingService {
    * Get recent logs for a specific metric type
    */
   async getRecentLogs(type: MetricType, limit = 100, offset = 0): Promise<any[]> {
-    const dataSource = await getDataSource();
-
     switch (type) {
-      case "cpu": {
-        const repository = dataSource.getRepository(CpuMetricsLogEntity);
-        return repository.find({
-          order: { timestamp: "DESC" },
+      case "cpu":
+        return prisma.cpuMetricsLog.findMany({
+          orderBy: { timestamp: "desc" },
           take: limit,
           skip: offset
         });
-      }
-      case "memory": {
-        const repository = dataSource.getRepository(MemoryMetricsLogEntity);
-        return repository.find({
-          order: { timestamp: "DESC" },
+      case "memory":
+        return prisma.memoryMetricsLog.findMany({
+          orderBy: { timestamp: "desc" },
           take: limit,
           skip: offset
         });
-      }
-      case "disk": {
-        const repository = dataSource.getRepository(DiskMetricsLogEntity);
-        return repository.find({
-          order: { timestamp: "DESC" },
+      case "disk":
+        return prisma.diskMetricsLog.findMany({
+          orderBy: { timestamp: "desc" },
           take: limit,
           skip: offset
         });
-      }
     }
   }
 
@@ -480,39 +483,25 @@ export class MetricsLoggingService {
     endDate: Date,
     limit = 1000
   ): Promise<any[]> {
-    const dataSource = await getDataSource();
-
     switch (type) {
-      case "cpu": {
-        const repository = dataSource.getRepository(CpuMetricsLogEntity);
-        return repository
-          .createQueryBuilder("log")
-          .where("log.timestamp >= :startDate", { startDate })
-          .andWhere("log.timestamp <= :endDate", { endDate })
-          .orderBy("log.timestamp", "DESC")
-          .limit(limit)
-          .getMany();
-      }
-      case "memory": {
-        const repository = dataSource.getRepository(MemoryMetricsLogEntity);
-        return repository
-          .createQueryBuilder("log")
-          .where("log.timestamp >= :startDate", { startDate })
-          .andWhere("log.timestamp <= :endDate", { endDate })
-          .orderBy("log.timestamp", "DESC")
-          .limit(limit)
-          .getMany();
-      }
-      case "disk": {
-        const repository = dataSource.getRepository(DiskMetricsLogEntity);
-        return repository
-          .createQueryBuilder("log")
-          .where("log.timestamp >= :startDate", { startDate })
-          .andWhere("log.timestamp <= :endDate", { endDate })
-          .orderBy("log.timestamp", "DESC")
-          .limit(limit)
-          .getMany();
-      }
+      case "cpu":
+        return prisma.cpuMetricsLog.findMany({
+          where: { timestamp: { gte: startDate, lte: endDate } },
+          orderBy: { timestamp: "desc" },
+          take: limit
+        });
+      case "memory":
+        return prisma.memoryMetricsLog.findMany({
+          where: { timestamp: { gte: startDate, lte: endDate } },
+          orderBy: { timestamp: "desc" },
+          take: limit
+        });
+      case "disk":
+        return prisma.diskMetricsLog.findMany({
+          where: { timestamp: { gte: startDate, lte: endDate } },
+          orderBy: { timestamp: "desc" },
+          take: limit
+        });
     }
   }
 

@@ -1,22 +1,13 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile as nodeExecFile } from "node:child_process";
 import { promisify } from "node:util";
-import { z } from "zod";
-import { getDataSource } from "@/server/database/data-source";
-import {
-  NginxProvisionLogEntity,
-  type NginxProvisionLogLevel
-} from "@/server/nginx/nginx-provision-log.entity";
-import {
-  NginxSiteEntity,
-  type NginxSiteStatus,
-  type NginxSslMode
-} from "@/server/nginx/nginx-site.entity";
+import * as yup from "yup";
+import type { InferType } from "yup";
+import type { Prisma, NginxProvisionLog as PrismaProvisionLog, NginxSite as PrismaNginxSite } from "@prisma/client";
+import { prisma } from "@/server/database/client";
 import { dockerService } from "@/server/docker/service";
-import type { DockerContainerInspect } from "@/types/docker";
-import type { NginxSite, NginxProvisionLog, UpstreamType } from "@/types/server";
+import type { NginxSite, NginxProvisionLog, UpstreamType, NginxSiteStatus, NginxSslMode } from "@/types/server";
 
 const execFile = promisify(nodeExecFile);
 
@@ -38,7 +29,7 @@ const splitCommand = (command: string) => {
   return { command: head, args: tail };
 };
 
-const reloadParts = splitCommand(process.env.NGINX_RELOAD_COMMAND ?? `${NGINX_BINARY} -s reload`);
+const reloadParts = splitCommand(`${NGINX_BINARY} -s reload`);
 const NGINX_RELOAD_COMMAND = reloadParts.command;
 const NGINX_RELOAD_ARGS = process.env.NGINX_RELOAD_ARGS?.split(" ").filter(Boolean) ?? reloadParts.args;
 const NGINX_APPLY_DRY_RUN = process.env.NGINX_APPLY_DRY_RUN === "true";
@@ -46,91 +37,138 @@ const NGINX_APPLY_DRY_RUN = process.env.NGINX_APPLY_DRY_RUN === "true";
 const domainPattern = /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(?:\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$/;
 const containerIdPattern = /^[a-f0-9]{12,64}$/i;
 
-const domainSchema = z
+type NginxProvisionLogLevel = NginxProvisionLog["level"];
+
+const domainSchema = yup
   .string()
   .trim()
   .min(3)
   .max(255)
-  .refine((value) => domainPattern.test(value), "Invalid domain name");
+  .test("valid-domain", "Invalid domain name", (value) => !value || domainPattern.test(value))
+  .required();
 
-const upstreamTypeSchema = z.enum(["container", "service", "external"] as const satisfies readonly UpstreamType[]);
-const sslModeSchema = z.enum(["none", "lets-encrypt", "custom"] as const satisfies readonly NginxSslMode[]);
+const upstreamTypeSchema = yup
+  .mixed<UpstreamType>()
+  .oneOf(["container", "service", "external"])
+  .required();
 
-const siteInputSchema = z
+const sslModeSchema = yup
+  .mixed<NginxSslMode>()
+  .oneOf(["none", "lets-encrypt", "custom"])
+  .default("lets-encrypt")
+  .required();
+
+const coerceNullableString = () =>
+  yup
+    .string()
+    .trim()
+    .transform((value, originalValue) => (originalValue === undefined || originalValue === null || originalValue === "" ? undefined : value))
+    .nullable();
+
+const nullableString = () =>
+  coerceNullableString()
+    .max(255)
+    .nullable()
+    .transform((value) => (value === undefined ? null : value));
+
+const siteInputSchema = yup
   .object({
-    primaryDomain: domainSchema,
-    serverNames: z.array(domainSchema).min(1),
+    primaryDomain: domainSchema.required(),
+    serverNames: yup.array().of(domainSchema).min(1).required(),
     upstreamType: upstreamTypeSchema,
-    upstreamTarget: z.string().trim().min(1).max(512).optional(),
-    containerId: z.string().trim().regex(containerIdPattern).optional().nullable(),
-    containerPort: z
-      .number({ coerce: true })
-      .int()
+    upstreamTarget: coerceNullableString().max(512),
+    containerId: coerceNullableString()
+      .matches(containerIdPattern, "Invalid container id")
+      .nullable()
+      .transform((value) => (value === undefined ? null : value)),
+    containerPort: yup
+      .number()
+      .transform((value, originalValue) => {
+        if (originalValue === undefined || originalValue === null || originalValue === "") {
+          return null;
+        }
+        const parsed = Number(originalValue);
+        return Number.isNaN(parsed) ? value : parsed;
+      })
+      .integer()
       .positive()
       .max(65535)
-      .optional()
-      .nullable(),
-    enableHttp: z.boolean().default(true),
-    enableHttps: z.boolean().default(true),
-    forceHttps: z.boolean().default(false),
-    sslMode: sslModeSchema.default("lets-encrypt"),
-    letsEncryptEmail: z.string().trim().email().optional().nullable(),
-    sslCertificateId: z.string().trim().max(255).optional().nullable(),
-    enabled: z.boolean().default(true),
-    notes: z.string().trim().max(2000).optional().nullable(),
-    extraDirectives: z.string().trim().max(4000).optional().nullable()
+      .nullable()
+      .default(null),
+    enableHttp: yup.boolean().default(true).required(),
+    enableHttps: yup.boolean().default(true).required(),
+    forceHttps: yup.boolean().default(false).required(),
+    sslMode: sslModeSchema,
+    letsEncryptEmail: coerceNullableString().email("Invalid email address").nullable().transform((value) => (value === undefined ? null : value)),
+    sslCertificateId: nullableString(),
+    enabled: yup.boolean().default(true).required(),
+    notes: coerceNullableString().max(2000).nullable().transform((value) => (value === undefined ? null : value)),
+    extraDirectives: coerceNullableString().max(4000).nullable().transform((value) => (value === undefined ? null : value))
   })
-  .superRefine((value, ctx) => {
-    const normalized = Array.from(new Set(value.serverNames.map((name) => name.toLowerCase())));
-    if (!normalized.includes(value.primaryDomain.toLowerCase())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["serverNames"],
-        message: "Primary domain must be included in server names list"
-      });
+  .noUnknown()
+  .test("primary-domain-in-server-names", "Primary domain must be included in server names list", function (value) {
+    if (!value) {
+      return false;
+    }
+    const normalized = new Set(value.serverNames.map((name) => name.toLowerCase()));
+    return normalized.has(value.primaryDomain.toLowerCase());
+  })
+  .test("upstream-requirements", "Upstream configuration incomplete", function (value) {
+    if (!value) {
+      return false;
     }
 
     if (value.upstreamType === "container") {
       if (!value.containerId) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["containerId"],
+        return this.createError({
+          path: "containerId",
           message: "Container ID is required when upstream type is container"
         });
       }
       if (!value.containerPort) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["containerPort"],
+        return this.createError({
+          path: "containerPort",
           message: "Container port is required when upstream type is container"
         });
       }
-    } else if (!value.upstreamTarget) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["upstreamTarget"],
+      return true;
+    }
+
+    if (!value.upstreamTarget) {
+      return this.createError({
+        path: "upstreamTarget",
         message: "Upstream target is required"
       });
     }
 
+    return true;
+  })
+  .test("lets-encrypt-email", "Email address is required when using Let's Encrypt", function (value) {
+    if (!value) {
+      return false;
+    }
     if (value.sslMode === "lets-encrypt" && value.enableHttps && !value.letsEncryptEmail) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["letsEncryptEmail"],
+      return this.createError({
+        path: "letsEncryptEmail",
         message: "Email address is required when using Let's Encrypt"
       });
     }
-
+    return true;
+  })
+  .test("custom-cert-id", "Certificate identifier is required when using custom certificates", function (value) {
+    if (!value) {
+      return false;
+    }
     if (value.sslMode === "custom" && !value.sslCertificateId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["sslCertificateId"],
+      return this.createError({
+        path: "sslCertificateId",
         message: "Certificate identifier is required when using custom certificates"
       });
     }
+    return true;
   });
 
-export type NginxSiteInput = z.infer<typeof siteInputSchema>;
+export type NginxSiteInput = InferType<typeof siteInputSchema>;
 
 class CommandExecutionError extends Error {
   constructor(
@@ -159,6 +197,13 @@ const sanitizeServerNames = (primaryDomain: string, serverNames: string[]) => {
   return Array.from(normalized);
 };
 
+const jsonToStringArray = (value: Prisma.JsonValue | null | undefined): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string");
+};
+
 const runCommandStrict = async (command: string, args: string[] = []) => {
   try {
     const result = await execFile(command, args, { env: process.env });
@@ -179,39 +224,39 @@ const runCommandStrict = async (command: string, args: string[] = []) => {
   }
 };
 
-const mapLogEntity = (log?: NginxProvisionLogEntity | null): NginxProvisionLog | null => {
+const mapLogEntity = (log?: PrismaProvisionLog | null): NginxProvisionLog | null => {
   if (!log) {
     return null;
   }
   return {
     id: log.id,
     siteId: log.siteId,
-    level: log.level,
+    level: log.level as NginxProvisionLogLevel,
     message: log.message,
-    details: log.details ?? undefined,
+    details: log.details ?? {} as any,
     createdAt: log.createdAt.toISOString()
   };
 };
 
 const mapSiteEntity = (
-  entity: NginxSiteEntity,
-  lastLog?: NginxProvisionLogEntity | null
+  entity: PrismaNginxSite,
+  lastLog?: PrismaProvisionLog | null
 ): NginxSite => ({
   id: entity.id,
   primaryDomain: entity.primaryDomain,
-  serverNames: entity.serverNames,
-  upstreamType: entity.upstreamType,
+  serverNames: jsonToStringArray(entity.serverNames),
+  upstreamType: entity.upstreamType as UpstreamType,
   upstreamTarget: entity.upstreamTarget,
   containerId: entity.containerId ?? undefined,
   containerPort: entity.containerPort ?? undefined,
   enableHttp: entity.enableHttp,
   enableHttps: entity.enableHttps,
   forceHttps: entity.forceHttps,
-  sslMode: entity.sslMode,
+  sslMode: entity.sslMode as NginxSslMode,
   letsEncryptEmail: entity.letsEncryptEmail ?? undefined,
   sslCertificateId: entity.sslCertificateId ?? undefined,
   enabled: entity.enabled,
-  status: entity.status,
+  status: entity.status as NginxSiteStatus,
   configPath: entity.configPath ?? undefined,
   lastAppliedAt: entity.lastAppliedAt ? entity.lastAppliedAt.toISOString() : undefined,
   lastValidatedAt: entity.lastValidatedAt ? entity.lastValidatedAt.toISOString() : undefined,
@@ -229,19 +274,17 @@ const recordProvisionLog = async (
   message: string,
   details?: Record<string, unknown>
 ) => {
-  const dataSource = await getDataSource();
-  const repo = dataSource.getRepository(NginxProvisionLogEntity);
-  const log = repo.create({
-    siteId,
-    level,
-    message,
-    details: details ? JSON.parse(JSON.stringify(details)) : undefined
+  return prisma.nginxProvisionLog.create({
+    data: {
+      siteId,
+      level,
+      message,
+      details: details ? JSON.parse(JSON.stringify(details)) : undefined
+    }
   });
-  await repo.save(log);
-  return log;
 };
 
-const resolveContainerUpstream = async (site: NginxSiteEntity): Promise<{
+const resolveContainerUpstream = async (site: PrismaNginxSite): Promise<{
   targetUrl: string;
   description: string;
 }> => {
@@ -264,7 +307,7 @@ const resolveContainerUpstream = async (site: NginxSiteEntity): Promise<{
 };
 
 const resolveProxyTarget = async (
-  site: NginxSiteEntity
+  site: PrismaNginxSite
 ): Promise<{ targetUrl: string; description: string }> => {
   if (site.upstreamType === "container") {
     return resolveContainerUpstream(site);
@@ -301,9 +344,10 @@ const buildProxyHeaders = () => [
   "proxy_set_header Connection \"\";"
 ];
 
-const generateNginxConfig = (site: NginxSiteEntity, proxyTarget: string) => {
+const generateNginxConfig = (site: PrismaNginxSite, proxyTarget: string) => {
   const lines: string[] = [];
-  const serverNamesDirective = `server_name ${site.serverNames.join(" ")};`;
+  const serverNames = jsonToStringArray(site.serverNames);
+  const serverNamesDirective = `server_name ${serverNames.join(" ")};`;
   const alsoHandlesHttps = site.enableHttps;
 
   lines.push(`# Generated by docker-gui at ${new Date().toISOString()}`);
@@ -445,7 +489,7 @@ const reloadNginx = async () => {
   return runCommandStrict(NGINX_RELOAD_COMMAND, NGINX_RELOAD_ARGS);
 };
 
-const requestLetsEncryptCertificate = async (site: NginxSiteEntity) => {
+const requestLetsEncryptCertificate = async (site: PrismaNginxSite) => {
   if (!site.enableHttps || site.sslMode !== "lets-encrypt") {
     return null;
   }
@@ -469,14 +513,14 @@ const requestLetsEncryptCertificate = async (site: NginxSiteEntity) => {
     "--no-eff-email",
     "-m",
     site.letsEncryptEmail,
-    ...site.serverNames.flatMap((name) => ["-d", name]),
+    ...jsonToStringArray(site.serverNames).flatMap((name) => ["-d", name]),
     ...CERTBOT_ADDL_ARGS
   ];
 
   return runCommandStrict(CERTBOT_BINARY, args);
 };
 
-const applySiteInternal = async (site: NginxSiteEntity) => {
+const applySiteInternal = async (site: PrismaNginxSite) => {
   const { targetUrl, description } = await resolveProxyTarget(site);
   await recordProvisionLog(site.id, "info", `Resolved upstream target to ${description}`);
 
@@ -548,151 +592,154 @@ const applySiteInternal = async (site: NginxSiteEntity) => {
 };
 
 export const listNginxSites = async (): Promise<NginxSite[]> => {
-  const dataSource = await getDataSource();
-  const siteRepo = dataSource.getRepository(NginxSiteEntity);
-  const sites = await siteRepo.find({ order: { createdAt: "DESC" } });
+  const sites = await prisma.nginxSite.findMany({ orderBy: { createdAt: "desc" } });
 
-  const logRepo = dataSource.getRepository(NginxProvisionLogEntity);
-  const logsBySite = new Map<string, NginxProvisionLogEntity | null>();
-  for (const site of sites) {
-    const log = await logRepo.findOne({
-      where: { siteId: site.id },
-      order: { createdAt: "DESC" }
-    });
-    logsBySite.set(site.id, log);
-  }
+  const logsBySite = new Map<string, PrismaProvisionLog | null>();
+  await Promise.all(
+    sites.map(async (site) => {
+      const log = await prisma.nginxProvisionLog.findFirst({
+        where: { siteId: site.id },
+        orderBy: { createdAt: "desc" }
+      });
+      logsBySite.set(site.id, log);
+    })
+  );
 
   return sites.map((site) => mapSiteEntity(site, logsBySite.get(site.id) ?? undefined));
 };
 
 export const fetchNginxSite = async (siteId: string): Promise<NginxSite | null> => {
-  const dataSource = await getDataSource();
-  const siteRepo = dataSource.getRepository(NginxSiteEntity);
-  const site = await siteRepo.findOne({ where: { id: siteId } });
+  const site = await prisma.nginxSite.findUnique({ where: { id: siteId } });
   if (!site) {
     return null;
   }
-  const logRepo = dataSource.getRepository(NginxProvisionLogEntity);
-  const lastLog = await logRepo.findOne({
+  const lastLog = await prisma.nginxProvisionLog.findFirst({
     where: { siteId },
-    order: { createdAt: "DESC" }
+    orderBy: { createdAt: "desc" }
   });
   return mapSiteEntity(site, lastLog ?? undefined);
 };
 
 export const createNginxSite = async (input: NginxSiteInput): Promise<NginxSite> => {
-  const data = siteInputSchema.parse(input);
-  const siteRepo = (await getDataSource()).getRepository(NginxSiteEntity);
-
-  const site = siteRepo.create({
-    id: crypto.randomUUID(),
-    primaryDomain: data.primaryDomain,
-    serverNames: sanitizeServerNames(data.primaryDomain, data.serverNames),
-    upstreamType: data.upstreamType,
-    upstreamTarget:
-      data.upstreamType === "container"
-        ? data.containerId ?? data.upstreamTarget ?? data.primaryDomain
-        : data.upstreamTarget ?? data.primaryDomain,
-    containerId: data.upstreamType === "container" ? data.containerId : null,
-    containerPort: data.upstreamType === "container" ? data.containerPort : null,
-    enableHttp: data.enableHttp,
-    enableHttps: data.enableHttps,
-    forceHttps: data.forceHttps,
-    sslMode: data.sslMode,
-    letsEncryptEmail: data.letsEncryptEmail ?? null,
-    sslCertificateId: data.sslMode === "custom" ? data.sslCertificateId ?? null : null,
-    enabled: data.enabled,
-    status: data.enabled ? ("pending" as NginxSiteStatus) : ("draft" as NginxSiteStatus),
-    notes: data.notes ?? null,
-    extraDirectives: data.extraDirectives ?? null
+  const data = await siteInputSchema.validate(input, { abortEarly: false, stripUnknown: true });
+  const site = await prisma.nginxSite.create({
+    data: {
+      primaryDomain: data.primaryDomain,
+      serverNames: sanitizeServerNames(data.primaryDomain, data.serverNames),
+      upstreamType: data.upstreamType,
+      upstreamTarget:
+        data.upstreamType === "container"
+          ? data.containerId ?? data.upstreamTarget ?? data.primaryDomain
+          : data.upstreamTarget ?? data.primaryDomain,
+      containerId: data.upstreamType === "container" ? data.containerId ?? null : null,
+      containerPort: data.upstreamType === "container" ? data.containerPort ?? null : null,
+      enableHttp: data.enableHttp,
+      enableHttps: data.enableHttps,
+      forceHttps: data.forceHttps,
+      sslMode: data.sslMode,
+      letsEncryptEmail: data.letsEncryptEmail ?? null,
+      sslCertificateId: data.sslMode === "custom" ? data.sslCertificateId ?? null : null,
+      enabled: data.enabled,
+      status: data.enabled ? ("pending" as NginxSiteStatus) : ("draft" as NginxSiteStatus),
+      notes: data.notes ?? null,
+      extraDirectives: data.extraDirectives ?? null
+    }
   });
-
-  await siteRepo.save(site);
   await recordProvisionLog(site.id, "info", "Site created");
   return mapSiteEntity(site);
 };
 
 export const updateNginxSite = async (siteId: string, input: NginxSiteInput): Promise<NginxSite> => {
-  const dataSource = await getDataSource();
-  const siteRepo = dataSource.getRepository(NginxSiteEntity);
-  const site = await siteRepo.findOne({ where: { id: siteId } });
+  const site = await prisma.nginxSite.findUnique({ where: { id: siteId } });
   if (!site) {
     throw new Error("Nginx site not found");
   }
 
-  const data = siteInputSchema.parse(input);
+  const data = await siteInputSchema.validate(input, { abortEarly: false, stripUnknown: true });
 
-  site.primaryDomain = data.primaryDomain;
-  site.serverNames = sanitizeServerNames(data.primaryDomain, data.serverNames);
-  site.upstreamType = data.upstreamType;
-  site.upstreamTarget =
-    data.upstreamType === "container"
-      ? data.containerId ?? site.upstreamTarget
-      : data.upstreamTarget ?? site.upstreamTarget;
-  site.containerId = data.upstreamType === "container" ? data.containerId ?? null : null;
-  site.containerPort = data.upstreamType === "container" ? data.containerPort ?? null : null;
-  site.enableHttp = data.enableHttp;
-  site.enableHttps = data.enableHttps;
-  site.forceHttps = data.forceHttps;
-  site.sslMode = data.sslMode;
-  site.letsEncryptEmail = data.letsEncryptEmail ?? null;
-  site.sslCertificateId = data.sslMode === "custom" ? data.sslCertificateId ?? null : null;
-  site.enabled = data.enabled;
-  site.notes = data.notes ?? null;
-  site.extraDirectives = data.extraDirectives ?? null;
-  site.status = site.enabled ? ("pending" as NginxSiteStatus) : ("draft" as NginxSiteStatus);
+  const updated = await prisma.nginxSite.update({
+    where: { id: siteId },
+    data: {
+      primaryDomain: data.primaryDomain,
+      serverNames: sanitizeServerNames(data.primaryDomain, data.serverNames),
+      upstreamType: data.upstreamType,
+      upstreamTarget:
+        data.upstreamType === "container"
+          ? data.containerId ?? site.upstreamTarget
+          : data.upstreamTarget ?? site.upstreamTarget,
+      containerId: data.upstreamType === "container" ? data.containerId ?? null : null,
+      containerPort: data.upstreamType === "container" ? data.containerPort ?? null : null,
+      enableHttp: data.enableHttp,
+      enableHttps: data.enableHttps,
+      forceHttps: data.forceHttps,
+      sslMode: data.sslMode,
+      letsEncryptEmail: data.letsEncryptEmail ?? null,
+      sslCertificateId: data.sslMode === "custom" ? data.sslCertificateId ?? null : null,
+      enabled: data.enabled,
+      notes: data.notes ?? null,
+      extraDirectives: data.extraDirectives ?? null,
+      status: data.enabled ? ("pending" as NginxSiteStatus) : ("draft" as NginxSiteStatus)
+    }
+  });
 
-  await siteRepo.save(site);
-  await recordProvisionLog(site.id, "info", "Site updated");
-  return mapSiteEntity(site);
+  await recordProvisionLog(updated.id, "info", "Site updated");
+  return mapSiteEntity(updated);
 };
 
 export const deleteNginxSite = async (siteId: string): Promise<void> => {
-  const dataSource = await getDataSource();
-  const siteRepo = dataSource.getRepository(NginxSiteEntity);
-  const site = await siteRepo.findOne({ where: { id: siteId } });
+  const site = await prisma.nginxSite.findUnique({ where: { id: siteId } });
   if (!site) {
     return;
   }
   await removeConfigFiles(siteId);
-  await siteRepo.remove(site);
+  await prisma.nginxSite.delete({ where: { id: siteId } });
 };
 
 export const applyNginxSite = async (siteId: string): Promise<NginxSite> => {
-  const dataSource = await getDataSource();
-  const siteRepo = dataSource.getRepository(NginxSiteEntity);
-  const site = await siteRepo.findOne({ where: { id: siteId } });
+  let site = await prisma.nginxSite.findUnique({ where: { id: siteId } });
   if (!site) {
     throw new Error("Nginx site not found");
   }
 
-  site.status = "pending";
-  site.lastError = null;
-  site.enabled = true;
-  await siteRepo.save(site);
+  site = await prisma.nginxSite.update({
+    where: { id: siteId },
+    data: {
+      status: "pending",
+      lastError: null,
+      enabled: true
+    }
+  });
 
   await recordProvisionLog(site.id, "info", "Starting provisioning run");
 
   try {
     await applySiteInternal(site);
-    site.status = "active";
-    site.lastAppliedAt = new Date();
-    site.lastValidatedAt = new Date();
-    await siteRepo.save(site);
+    site = await prisma.nginxSite.update({
+      where: { id: siteId },
+      data: {
+        status: "active",
+        lastAppliedAt: new Date(),
+        lastValidatedAt: new Date(),
+        lastError: null
+      }
+    });
     await recordProvisionLog(site.id, "success", "Provisioning completed");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Provisioning failed";
-    site.status = "error";
-    site.lastError = message;
-    await siteRepo.save(site);
+    site = await prisma.nginxSite.update({
+      where: { id: siteId },
+      data: {
+        status: "error",
+        lastError: message
+      }
+    });
     await recordProvisionLog(site.id, "error", message);
     throw error;
   }
 
-  const logRepo = dataSource.getRepository(NginxProvisionLogEntity);
-  const lastLog = await logRepo.findOne({
+  const lastLog = await prisma.nginxProvisionLog.findFirst({
     where: { siteId },
-    order: { createdAt: "DESC" }
+    orderBy: { createdAt: "desc" }
   });
   return mapSiteEntity(site, lastLog ?? undefined);
 };
@@ -701,11 +748,9 @@ export const fetchNginxProvisionLogs = async (
   siteId: string,
   limit = 50
 ): Promise<NginxProvisionLog[]> => {
-  const dataSource = await getDataSource();
-  const logRepo = dataSource.getRepository(NginxProvisionLogEntity);
-  const logs = await logRepo.find({
+  const logs = await prisma.nginxProvisionLog.findMany({
     where: { siteId },
-    order: { createdAt: "DESC" },
+    orderBy: { createdAt: "desc" },
     take: limit
   });
   return logs.map((log) => mapLogEntity(log)!);

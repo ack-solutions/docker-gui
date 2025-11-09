@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -28,7 +28,7 @@ import {
 import LanguageIcon from "@mui/icons-material/Language";
 import InfoIcon from "@mui/icons-material/Info";
 import type { DockerContainer } from "@/types/docker";
-import type { DomainUpsertInput } from "@/types/server";
+import type { Domain, DomainUpsertInput } from "@/types/server";
 import DnsModeSelector, { type DnsMode } from "./dns-mode-selector";
 import DnsRecordsManager from "./dns-records-manager";
 import ThirdPartyDnsSetup from "./third-party-dns-setup";
@@ -40,6 +40,7 @@ interface EnhancedDomainWizardProps {
   onClose: () => void;
   onSubmit: (domain: DomainUpsertInput) => Promise<void>;
   containers?: DockerContainer[];
+  existingDomains?: Domain[];
 }
 
 interface DnsRecord {
@@ -50,11 +51,27 @@ interface DnsRecord {
   priority?: number | null;
 }
 
+const sanitizeProviderConfig = (config: any) => {
+  if (!config) {
+    return undefined;
+  }
+  const cloned = { ...config };
+  delete cloned.provider;
+  Object.keys(cloned).forEach((key) => {
+    const value = cloned[key];
+    if (value === "" || value === undefined || value === null) {
+      delete cloned[key];
+    }
+  });
+  return Object.keys(cloned).length ? cloned : undefined;
+};
+
 export default function EnhancedDomainWizard({
   open,
   onClose,
   onSubmit,
   containers = [],
+  existingDomains = []
 }: EnhancedDomainWizardProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -74,6 +91,12 @@ export default function EnhancedDomainWizard({
   const [customCertId, setCustomCertId] = useState("");
   const [dnsRecords, setDnsRecords] = useState<DnsRecord[]>([]);
   const [thirdPartyConfig, setThirdPartyConfig] = useState<any>({ provider: "none" });
+  const [parentDomainId, setParentDomainId] = useState<string | null>(null);
+  const [customNginxConfig, setCustomNginxConfig] = useState("");
+  const parentOptions = useMemo(
+    () => existingDomains.filter((domain) => !domain.parentDomainId),
+    [existingDomains]
+  );
 
   const steps =
     dnsMode === "managed"
@@ -94,6 +117,8 @@ export default function EnhancedDomainWizard({
     setEmail("");
     setDnsRecords([]);
     setThirdPartyConfig({ provider: "none" });
+    setParentDomainId(null);
+    setCustomNginxConfig("");
     setError(null);
   };
 
@@ -142,7 +167,10 @@ export default function EnhancedDomainWizard({
             setError("Please select a DNS provider");
             return false;
           }
-          // Add specific validation per provider
+          if (dnsRecords.length === 0) {
+            setError("Please add at least one DNS record");
+            return false;
+          }
           return true;
         }
         return true;
@@ -188,17 +216,18 @@ export default function EnhancedDomainWizard({
         dnsMode === "managed"
           ? "managed"
           : dnsMode === "third-party"
-          ? "pointer-only"
-          : "pointer-only";
+            ? "provider"
+            : "manual";
 
       const payload: DomainUpsertInput = {
         name: domainName.toLowerCase().trim(),
         mode: domainMode,
         status: "pending",
+        parentDomainId
       };
 
       // Add DNS records if in managed mode
-      if (dnsMode === "managed" && dnsRecords.length > 0) {
+      if (dnsMode !== "proxy-only" && dnsRecords.length > 0) {
         payload.records = dnsRecords.map((record) => ({
           type: record.type,
           host: record.host,
@@ -206,12 +235,17 @@ export default function EnhancedDomainWizard({
           ttl: record.ttl,
           priority: record.priority,
         }));
+      } else {
+        payload.records = [];
       }
 
       // Add third-party provider info if applicable
       if (dnsMode === "third-party" && thirdPartyConfig.provider !== "none") {
+        payload.dnsProvider = {
+          type: thirdPartyConfig.provider,
+          config: sanitizeProviderConfig(thirdPartyConfig),
+        };
         payload.provider = thirdPartyConfig.provider;
-        // Store encrypted credentials (handled by backend)
       }
 
       // Add target configuration
@@ -220,9 +254,10 @@ export default function EnhancedDomainWizard({
           type: "none",
           enableHttp: !enableHttps,
           enableHttps: enableHttps,
-          forceHttps: enableHttps,
+          forceHttps,
           sslMode: enableHttps ? "lets-encrypt" : "none",
           letsEncryptEmail: enableHttps ? email.trim() : undefined,
+          customNginxConfig: customNginxConfig || null,
         };
       } else if (targetType === "container") {
         payload.target = {
@@ -231,9 +266,10 @@ export default function EnhancedDomainWizard({
           containerPort: parseInt(containerPort),
           enableHttp: true,
           enableHttps: enableHttps,
-          forceHttps: enableHttps,
+          forceHttps,
           sslMode: enableHttps ? "lets-encrypt" : "none",
           letsEncryptEmail: enableHttps ? email.trim() : undefined,
+          customNginxConfig: customNginxConfig || null,
         };
       } else if (targetType === "external") {
         payload.target = {
@@ -241,9 +277,10 @@ export default function EnhancedDomainWizard({
           externalUrl: externalUrl.trim(),
           enableHttp: true,
           enableHttps: enableHttps,
-          forceHttps: enableHttps,
+          forceHttps,
           sslMode: enableHttps ? "lets-encrypt" : "none",
           letsEncryptEmail: enableHttps ? email.trim() : undefined,
+          customNginxConfig: customNginxConfig || null,
         };
       }
 
@@ -317,6 +354,32 @@ export default function EnhancedDomainWizard({
                 />
               </Box>
 
+              <Box>
+                <Typography variant="subtitle2" gutterBottom fontWeight={600}>
+                  Parent Domain (optional)
+                </Typography>
+                <FormControl fullWidth>
+                  <InputLabel>Parent Domain</InputLabel>
+                  <Select
+                    label="Parent Domain"
+                    value={parentDomainId ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setParentDomainId(value ? String(value) : null);
+                    }}
+                  >
+                    <MenuItem value="">
+                      <em>No parent (root entry)</em>
+                    </MenuItem>
+                    {parentOptions.map((domain) => (
+                      <MenuItem key={domain.id} value={domain.id}>
+                        {domain.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+
               <DnsModeSelector selected={dnsMode} onChange={setDnsMode} />
 
               {/* Show DNS instructions for managed and proxy-only modes */}
@@ -349,6 +412,11 @@ export default function EnhancedDomainWizard({
                 Connect your external DNS provider to automatically sync records.
               </Alert>
               <ThirdPartyDnsSetup config={thirdPartyConfig} onChange={setThirdPartyConfig} />
+              <DnsRecordsManager
+                records={dnsRecords}
+                onChange={setDnsRecords}
+                domainName={domainName}
+              />
             </Stack>
           )}
 
@@ -536,6 +604,20 @@ export default function EnhancedDomainWizard({
                 onForceHttpsChange={setForceHttps}
               />
 
+              <Box>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                  Advanced nginx directives
+                </Typography>
+                <TextField
+                  label="Optional nginx configuration"
+                  multiline
+                  minRows={4}
+                  value={customNginxConfig}
+                  onChange={(event) => setCustomNginxConfig(event.target.value)}
+                  helperText="Injected into the generated server block after proxy configuration."
+                />
+              </Box>
+
               <Alert severity="success" variant="outlined">
                 <Typography variant="body2" fontWeight={600} gutterBottom>
                   ✓ Ready to create!
@@ -602,4 +684,3 @@ export default function EnhancedDomainWizard({
     </Dialog>
   );
 }
-

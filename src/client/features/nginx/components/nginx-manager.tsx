@@ -93,7 +93,7 @@ const NginxManager = () => {
 
   // Handle both old and new API response format
   const sites = useMemo(
-    () => (Array.isArray(sitesResponse) ? sitesResponse : sitesResponse?.sites || []),
+    () => (Array.isArray(sitesResponse) ? sitesResponse : (sitesResponse as any)?.sites || []),
     [sitesResponse]
   );
   const isDisabled = Boolean((sitesResponse as any)?.disabled);
@@ -311,7 +311,7 @@ const NginxManager = () => {
           Unable to Load Nginx Configuration
         </Typography>
         <Typography variant="body2">
-          {error instanceof Error ? error.message : sitesResponse?.error || "Check your Nginx setup and try again."}
+          {error instanceof Error ? error.message : (sitesResponse as any)?.error || "Check your Nginx setup and try again."}
         </Typography>
       </Alert>
     );

@@ -45,6 +45,7 @@ import DomainsTableView from "./domains-table-view";
 import EnhancedDomainWizard from "./enhanced-domain-wizard";
 import DomainEditDialog from "./domain-edit-dialog";
 import type { Domain, DomainUpsertInput } from "@/types/server";
+import { usePersistentState } from "@/client/hooks/use-persistent-state";
 
 export default function SimpleDomainManager() {
   const queryClient = useQueryClient();
@@ -57,22 +58,7 @@ export default function SimpleDomainManager() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
   const [expandedDomain, setExpandedDomain] = useState<string | null>(null);
-  
-  // Load view preference from localStorage
-  const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('domains-view-mode') as "grid" | "table") || "grid";
-    }
-    return "grid";
-  });
-
-  // Save view preference when changed
-  const handleViewModeChange = (newMode: "grid" | "table") => {
-    setViewMode(newMode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('domains-view-mode', newMode);
-    }
-  };
+  const [viewMode, setViewMode] = usePersistentState<"grid" | "table">("domains:view-mode", "grid");
 
   const createMutation = useMutation({
     mutationFn: createDomain,
@@ -209,7 +195,7 @@ export default function SimpleDomainManager() {
         <ToggleButtonGroup
           value={viewMode}
           exclusive
-          onChange={(_, value) => value && handleViewModeChange(value)}
+          onChange={(_, value) => value && setViewMode(value)}
           size="small"
         >
           <ToggleButton value="grid" aria-label="Grid view">
@@ -312,6 +298,7 @@ export default function SimpleDomainManager() {
           await createMutation.mutateAsync(data);
         }}
         containers={containers}
+        existingDomains={domains ?? []}
       />
 
       {/* Edit Dialog with Tabs */}
@@ -319,6 +306,7 @@ export default function SimpleDomainManager() {
         <DomainEditDialog
           open={editDialogOpen}
           domain={editingDomain}
+          allDomains={domains ?? []}
           onClose={() => {
             setEditDialogOpen(false);
             setEditingDomain(null);
@@ -329,4 +317,3 @@ export default function SimpleDomainManager() {
     </Stack>
   );
 }
-

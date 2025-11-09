@@ -21,24 +21,12 @@ export function getDefaultConfig(): Config {
       baseUrl: undefined,
     },
 
-    admin: {
-      email: 'admin@example.com',
-      password: '', // Empty = auto-generate
-      name: 'Super Administrator',
-    },
-
     docker: {
       host: process.platform === 'win32' 
         ? 'npipe:////./pipe/docker_engine'
         : 'unix:///var/run/docker.sock',
       tlsVerify: false,
       certPath: undefined,
-    },
-
-    database: {
-      type: 'sqlite',
-      path: '/app/data/docker-gui.db',
-      ssl: false,
     },
 
     nginx: {
@@ -71,14 +59,6 @@ export function getDefaultConfig(): Config {
       apiKey: undefined,
       cloudflare: undefined,
       route53: undefined,
-    },
-
-    ssl: {
-      enabled: false,
-      provider: 'letsencrypt',
-      email: undefined,
-      staging: isDevelopment,
-      renewDays: 30,
     },
 
     proxies: {
@@ -129,6 +109,9 @@ export function getDefaultConfig(): Config {
       rateLimitMax: 100,
       rateLimitWindow: 15 * 60 * 1000, // 15 minutes
     },
+
+    setup: {
+      initialSecret: '',
+    },
   };
 }
-

@@ -107,7 +107,7 @@ export default function NginxSitesCards({
         const hasSSL = site.enableHttps;
 
         return (
-          <Grid item xs={12} sm={6} md={4} key={site.id}>
+          <Grid size={{xs: 12, sm:6, md:4}} key={site.id}>
             <Card
               sx={{
                 height: "100%",

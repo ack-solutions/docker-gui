@@ -131,6 +131,10 @@ export interface SecurityConfig {
   rateLimitWindow?: number;
 }
 
+export interface SetupConfig {
+  initialSecret: string;
+}
+
 /**
  * Main Configuration Interface
  * 
@@ -139,18 +143,16 @@ export interface SecurityConfig {
  */
 export interface Config {
   app: AppConfig;
-  admin: AdminConfig;
   docker: DockerConfig;
-  database: DatabaseConfig;
   nginx: NginxConfig;
   email: EmailConfig;
   dns: DnsConfig;
-  ssl: SslConfig;
   proxies: ProxiesConfig;
   features: FeaturesConfig;
   performance: PerformanceConfig;
   backup: BackupConfig;
   security: SecurityConfig;
+  setup: SetupConfig;
 }
 
 /**
@@ -165,4 +167,3 @@ export type PartialConfig = Partial<Config>;
 export interface EnvMapping {
   [key: string]: string | undefined;
 }
-

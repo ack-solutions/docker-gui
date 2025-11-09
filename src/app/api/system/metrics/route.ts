@@ -2,17 +2,15 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/server/auth/authorization";
 import {
   collectSystemMetrics,
-  generateMockSystemMetrics
 } from "@/server/system/metrics-service";
 import { MetricsLoggingService } from "@/server/system/metrics-logging-service";
 
 export const runtime = "nodejs";
 
-const shouldUseMockData = (process.env.SYSTEM_METRICS_PROVIDER ?? "").toLowerCase() === "mock";
 
 export const GET = withAuth(async () => {
   try {
-    const metrics = shouldUseMockData ? generateMockSystemMetrics() : await collectSystemMetrics();
+    const metrics = await collectSystemMetrics();
     
     // Queue metrics for logging (non-blocking)
     MetricsLoggingService.getInstance().queueMetrics(metrics).catch((error) => {

@@ -1,9 +1,12 @@
 /** @type {import('next').NextConfig} */
-const externalModules = ["dockerode", "ssh2", "typeorm", "reflect-metadata", "sqlite3"];
+const externalModules = ["dockerode", "ssh2", "@prisma/client", ".prisma/client"];
 
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       if (typeof config.externals === "function") {

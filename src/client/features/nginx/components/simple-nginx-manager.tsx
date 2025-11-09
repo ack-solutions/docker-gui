@@ -43,6 +43,7 @@ import NginxSiteWizard from "./nginx-site-wizard";
 import NginxSiteFormDialog, { type NginxSiteFormData } from "./nginx-site-form-dialog";
 import NginxErrorDisplay from "./nginx-error-display";
 import type { NginxSite } from "@/types/server";
+import { usePersistentState } from "@/client/hooks/use-persistent-state";
 
 export default function SimpleNginxManager() {
   const queryClient = useQueryClient();
@@ -56,22 +57,7 @@ export default function SimpleNginxManager() {
   const [editingSite, setEditingSite] = useState<NginxSite | null>(null);
   const [deployingId, setDeployingId] = useState<string | null>(null);
   const [deployError, setDeployError] = useState<{ site: string; error: string } | null>(null);
-  
-  // Load view preference from localStorage (separate from domains)
-  const [viewMode, setViewMode] = useState<"table" | "cards">(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('nginx-view-mode') as "table" | "cards") || "table";
-    }
-    return "table";
-  });
-
-  // Save view preference when changed
-  const handleViewModeChange = (newMode: "table" | "cards") => {
-    setViewMode(newMode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nginx-view-mode', newMode);
-    }
-  };
+  const [viewMode, setViewMode] = usePersistentState<"table" | "cards">("nginx:view-mode", "table");
 
   // Handle both old and new API response format
   const sites = sitesData ? (Array.isArray(sitesData) ? sitesData : (sitesData as any)?.sites || []) : [];
@@ -229,7 +215,7 @@ export default function SimpleNginxManager() {
         <ToggleButtonGroup
           value={viewMode}
           exclusive
-          onChange={(_, value) => value && handleViewModeChange(value)}
+          onChange={(_, value) => value && setViewMode(value)}
           size="small"
         >
           <ToggleButton value="table" aria-label="Table view">

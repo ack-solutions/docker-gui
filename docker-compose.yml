@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # Main Docker GUI Application
   docker-gui:
@@ -7,44 +5,25 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     container_name: docker-gui-full
+    env_file:
+      - .env
     command: sh -c "yarn db:migrate && yarn db:seed && yarn dev"
     ports:
       - "3000:3000"
     volumes:
       - .:/app
       - docker-gui-node-modules:/app/node_modules
-      - docker-gui-data:/app/data
+      - ./.data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
       - nginx-sites-enabled:/etc/nginx/sites-enabled
       - nginx-sites-available:/etc/nginx/sites-available
       - letsencrypt-webroot:/var/www/letsencrypt
       - letsencrypt-certs:/etc/letsencrypt
     environment:
-      NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
-      PORT: 3000
-      HOSTNAME: 0.0.0.0
       DOCKER_HOST: unix:///var/run/docker.sock
       DATABASE_URL: file:/app/data/docker-gui.db
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL:-admin@example.com}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-}
-      DEFAULT_ADMIN_NAME: ${DEFAULT_ADMIN_NAME:-Super Administrator}
-      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
-      SYSTEM_METRICS_PROVIDER: docker
-      # Nginx integration
-      NGINX_CONTAINER_NAME: nginx-proxy
-      NGINX_CONFIG_PATH: /etc/nginx/sites-enabled
-      NGINX_RELOAD_COMMAND: docker exec nginx-proxy nginx -s reload
-      # Email integration
-      SMTP_HOST: ${SMTP_HOST:-mailhog}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      # DNS integration
-      DNS_SERVER: ${DNS_SERVER:-powerdns}
-      DNS_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
+      JWT_SECRET: ${JWT_SECRET:-06dcd2eb6036810bb3623c91ff10c572ab6500e94098c01bcc3f1e393d6e2474}
+      DNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
     restart: unless-stopped
     networks:
       - docker-gui-network
@@ -110,15 +89,15 @@ services:
       # Using port 15353 for development (less likely to conflict):
       - "15353:53/tcp"    # Alternate DNS port
       - "15353:53/udp"    # Alternate DNS port
-      - "8081:8081"       # PowerDNS API
     environment:
-      PDNS_AUTH_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
+      PDNS_AUTH_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
       PDNS_WEBSERVER: "yes"
       PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
       PDNS_WEBSERVER_PORT: "8081"
-      PDNS_WEBSERVER_ALLOW_FROM: "0.0.0.0/0"
+      # Restrict API access to the internal docker-gui network (no public UI)
+      PDNS_WEBSERVER_ALLOW_FROM: "172.20.0.0/16"
       PDNS_API: "yes"
-      PDNS_API_KEY: ${DNS_API_KEY:-pdns-secret-key}
+      PDNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
       PDNS_LAUNCH: gsqlite3
       PDNS_GSQLITE3_DATABASE: /var/lib/powerdns/pdns.sqlite3
     volumes:
@@ -135,7 +114,6 @@ services:
 
 volumes:
   docker-gui-node-modules:
-  docker-gui-data:
     driver: local
   nginx-sites-enabled:
     driver: local
@@ -156,4 +134,3 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
-

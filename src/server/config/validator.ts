@@ -13,30 +13,10 @@ export interface ValidationResult {
 }
 
 /**
- * Validate email address format
- */
-function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
-
-/**
  * Validate port number
  */
 function isValidPort(port: number): boolean {
   return Number.isInteger(port) && port > 0 && port <= 65535;
-}
-
-/**
- * Validate URL format
- */
-function isValidUrl(url: string): boolean {
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -60,20 +40,6 @@ export function validateConfig(config: Config): ValidationResult {
     }
   }
 
-  // Admin validation
-  if (!config.admin) {
-    errors.push('admin configuration is required');
-  } else {
-    if (!config.admin.email) {
-      errors.push('admin.email is required');
-    } else if (!isValidEmail(config.admin.email)) {
-      errors.push(`admin.email must be a valid email address, got: ${config.admin.email}`);
-    }
-    if (!config.admin.name) {
-      errors.push('admin.name is required');
-    }
-  }
-
   // Docker validation
   if (!config.docker) {
     errors.push('docker configuration is required');
@@ -83,38 +49,6 @@ export function validateConfig(config: Config): ValidationResult {
     }
   }
 
-  // Database validation
-  if (!config.database) {
-    errors.push('database configuration is required');
-  } else {
-    if (!['sqlite', 'postgres', 'mysql'].includes(config.database.type)) {
-      errors.push(`database.type must be 'sqlite', 'postgres', or 'mysql'`);
-    }
-    if (config.database.type === 'sqlite' && !config.database.path) {
-      errors.push('database.path is required for SQLite');
-    }
-    if (['postgres', 'mysql'].includes(config.database.type)) {
-      if (!config.database.host) {
-        errors.push(`database.host is required for ${config.database.type}`);
-      }
-      if (!config.database.database) {
-        errors.push(`database.database is required for ${config.database.type}`);
-      }
-    }
-  }
-
-  // Email validation (if enabled)
-  if (config.email?.enabled) {
-    if (!config.email.smtp.host) {
-      errors.push('email.smtp.host is required when email is enabled');
-    }
-    if (!isValidPort(config.email.smtp.port)) {
-      errors.push(`email.smtp.port must be a valid port number, got: ${config.email.smtp.port}`);
-    }
-    if (config.email.from?.address && !isValidEmail(config.email.from.address)) {
-      errors.push(`email.from.address must be a valid email, got: ${config.email.from.address}`);
-    }
-  }
 
   // DNS validation (if enabled)
   if (config.dns?.enabled) {
@@ -132,16 +66,6 @@ export function validateConfig(config: Config): ValidationResult {
     }
   }
 
-  // SSL validation (if enabled)
-  if (config.ssl?.enabled) {
-    if (!['letsencrypt', 'manual'].includes(config.ssl.provider)) {
-      errors.push(`ssl.provider must be 'letsencrypt' or 'manual'`);
-    }
-    if (config.ssl.provider === 'letsencrypt' && !config.ssl.email) {
-      errors.push('ssl.email is required for Let\'s Encrypt');
-    }
-  }
-
   // Security validation
   if (!config.security) {
     errors.push('security configuration is required');
@@ -153,6 +77,12 @@ export function validateConfig(config: Config): ValidationResult {
     if (config.security.bcryptRounds < 4 || config.security.bcryptRounds > 31) {
       errors.push('security.bcryptRounds must be between 4 and 31');
     }
+  }
+
+  if (!config.setup || !config.setup.initialSecret) {
+    errors.push('setup.initialSecret is required');
+  } else if (config.setup.initialSecret.length < 12) {
+    errors.push('setup.initialSecret must be at least 12 characters long');
   }
 
   // Performance validation
@@ -170,16 +100,3 @@ export function validateConfig(config: Config): ValidationResult {
     errors,
   };
 }
-
-/**
- * Validate and throw on error
- */
-export function validateConfigOrThrow(config: Config): void {
-  const result = validateConfig(config);
-  if (!result.valid) {
-    const errorMessage = 'Configuration validation failed:\n' + 
-      result.errors.map(e => `  - ${e}`).join('\n');
-    throw new Error(errorMessage);
-  }
-}
-

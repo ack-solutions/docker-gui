@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String?
+  role          String
+  permissions   Json
+  isSuperAdmin  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Setting {
+  key         String   @id
+  value       String
+  valueType   String   @default("string")
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model CpuMetricsLog {
+  id             String   @id @default(uuid())
+  timestamp      DateTime
+  usagePercent   Float
+  loadAverage1m  Float
+  loadAverage5m  Float
+  loadAverage15m Float
+  coresUsage     Json
+  createdAt      DateTime @default(now())
+
+  @@index([timestamp], map: "idx_cpu_timestamp")
+  @@map("cpu_metrics_logs")
+}
+
+model MemoryMetricsLog {
+  id           String   @id @default(uuid())
+  timestamp    DateTime
+  usagePercent Float
+  usedBytes    Int
+  totalBytes   Int
+  freeBytes    Int
+  createdAt    DateTime @default(now())
+
+  @@index([timestamp], map: "idx_memory_timestamp")
+  @@map("memory_metrics_logs")
+}
+
+model DiskMetricsLog {
+  id             String   @id @default(uuid())
+  timestamp      DateTime
+  usagePercent   Float
+  usedBytes      Int
+  totalBytes     Int
+  availableBytes Int
+  partitions     Json
+  createdAt      DateTime @default(now())
+
+  @@index([timestamp], map: "idx_disk_timestamp")
+  @@map("disk_metrics_logs")
+}
+
+model NginxSite {
+  id               String               @id @default(uuid())
+  primaryDomain    String               @unique
+  serverNames      Json
+  upstreamType     String
+  upstreamTarget   String
+  containerId      String?
+  containerPort    Int?
+  enableHttp       Boolean              @default(true)
+  enableHttps      Boolean              @default(true)
+  forceHttps       Boolean              @default(false)
+  sslMode          String               @default("lets-encrypt")
+  letsEncryptEmail String?
+  sslCertificateId String?
+  enabled          Boolean              @default(true)
+  status           String               @default("draft")
+  lastError        String?
+  lastAppliedAt    DateTime?
+  lastValidatedAt  DateTime?
+  configPath       String?
+  notes            String?
+  extraDirectives  String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  provisionLogs NginxProvisionLog[]
+  domains       Domain[]
+
+  @@map("nginx_sites")
+}
+
+model NginxProvisionLog {
+  id        String   @id @default(uuid())
+  siteId    String
+  level     String
+  message   String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  site NginxSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId], map: "idx_nginx_provision_site")
+  @@map("nginx_provision_logs")
+}
+
+model Domain {
+  id                  String    @id @default(uuid())
+  name                String    @unique
+  aliases             Json
+  provider            String?
+  status              String    @default("pending")
+  mode                String    @default("managed")
+  dnsProviderType     String?
+  dnsProviderConfig   Json?
+  parentDomainId      String?
+  notes               String?
+  targetType          String    @default("none")
+  targetContainerId   String?
+  targetContainerPort Int?
+  targetServiceHost   String?
+  targetExternalUrl   String?
+  targetStaticRoot    String?
+  enableHttp          Boolean   @default(true)
+  enableHttps         Boolean   @default(true)
+  forceHttps          Boolean   @default(false)
+  sslMode             String    @default("lets-encrypt")
+  letsEncryptEmail    String?
+  sslCertificateId    String?
+  nginxSiteId         String?
+  lastError           String?
+  customNginxConfig   String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  records   DomainRecord[]
+  parentDomain Domain?   @relation("DomainHierarchy", fields: [parentDomainId], references: [id], onDelete: SetNull)
+  childDomains Domain[]  @relation("DomainHierarchy")
+  nginxSite NginxSite?  @relation(fields: [nginxSiteId], references: [id], onDelete: SetNull)
+
+  @@map("domains")
+  @@index([parentDomainId], map: "idx_domain_parent")
+}
+
+model DomainRecord {
+  id        String   @id @default(uuid())
+  domainId  String
+  type      String
+  host      String
+  value     String
+  ttl       Int      @default(300)
+  priority  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId], map: "idx_domain_record_domain")
+  @@map("domain_records")
+}

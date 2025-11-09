@@ -42,6 +42,7 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { fetchMetricsLogs, type MetricsLogsResponse } from "@/lib/api/server";
+import { usePersistentState } from "@/client/hooks/use-persistent-state";
 
 interface ChartDataPoint {
   timestamp: string;
@@ -70,7 +71,7 @@ const SystemLogsChart = memo(function SystemLogsChart({ autoRefreshMs = 30000 }:
   const [logs, setLogs] = useState<MetricsLogsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("chart");
+  const [viewMode, setViewMode] = usePersistentState<ViewMode>("system:logs:view-mode", "chart");
   const [timeRange, setTimeRange] = useState<TimeRange>("1h");
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(50);
@@ -287,6 +288,7 @@ const SystemLogsChart = memo(function SystemLogsChart({ autoRefreshMs = 30000 }:
   // Memoize handlers to prevent re-renders
   const handleViewModeChange = useCallback((_: any, val: ViewMode | null) => {
     if (val) setViewMode(val);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleTimeRangeChange = useCallback((e: any) => {

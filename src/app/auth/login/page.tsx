@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
+// Setup UI removed in favor of CLI-based setup
 
 const LoginForm = () => {
   const router = useRouter();
@@ -114,17 +115,20 @@ const LoginForm = () => {
 
 const LoginPage = () => {
   return (
-    <Suspense fallback={
-      <Card variant="outlined" sx={{ width: "100%", maxWidth: 420, borderRadius: 3 }}>
-        <CardContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
-          <CircularProgress />
-        </CardContent>
-      </Card>
-    }>
-      <LoginForm />
-    </Suspense>
+    <Stack spacing={3} alignItems="center" sx={{ width: "100%" }}>
+      <Suspense
+        fallback={
+          <Card variant="outlined" sx={{ width: "100%", maxWidth: 420, borderRadius: 3 }}>
+            <CardContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+              <CircularProgress />
+            </CardContent>
+          </Card>
+        }
+      >
+        <LoginForm />
+      </Suspense>
+    </Stack>
   );
 };
 
 export default LoginPage;
-

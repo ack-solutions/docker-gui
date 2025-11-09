@@ -6,11 +6,6 @@ export interface AuthResponse {
   token: string;
 }
 
-export const registerUser = async (input: { email: string; password: string; name?: string }) => {
-  const { data } = await apiClient.post<AuthResponse>("/auth/register", input);
-  return data;
-};
-
 export const loginUser = async (input: { email: string; password: string }) => {
   const { data } = await apiClient.post<AuthResponse>("/auth/login", input);
   return data;

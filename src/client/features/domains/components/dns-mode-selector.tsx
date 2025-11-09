@@ -28,21 +28,21 @@ const DNS_MODES: DnsModeOption[] = [
   {
     mode: "managed",
     icon: <DnsIcon />,
-    title: "Manage DNS Here",
-    description: "Platform hosts all DNS records",
+    title: "Nameserver Managed",
+    description: "Point your nameservers at this platform",
     recommended: true,
   },
   {
     mode: "third-party",
     icon: <CloudIcon />,
-    title: "External Provider",
-    description: "AWS, Cloudflare, Azure, etc.",
+    title: "Provider API",
+    description: "Sync with AWS, Cloudflare, Azure, etc.",
   },
   {
     mode: "proxy-only",
     icon: <LinkIcon />,
-    title: "Proxy Only",
-    description: "DNS managed elsewhere",
+    title: "Manual DNS / Proxy Only",
+    description: "Keep DNS external, manage only proxy/SSL",
   },
 ];
 
@@ -103,4 +103,3 @@ export default function DnsModeSelector({ selected, onChange }: DnsModeSelectorP
     </FormControl>
   );
 }
-

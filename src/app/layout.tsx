@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
 import QueryProvider from "@/components/providers/query-provider";
 import { AuthProvider } from "@/components/providers/auth-provider";
@@ -12,22 +12,23 @@ export const metadata: Metadata = {
   title: "Docker Control Center",
   description: "A modern dashboard for managing Docker containers, images, volumes, and networks.",
   manifest: "/manifest.json",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#111827" }
-  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Docker GUI"
-  },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-    viewportFit: "cover"
   }
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#111827" }
+  ],
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover"
 };
 
 const RootLayout = ({ children }: { children: React.ReactNode }) => {

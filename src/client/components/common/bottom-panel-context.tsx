@@ -43,7 +43,7 @@ interface BottomPanelProviderProps {
 const STORAGE_KEY = "docker-gui-bottom-panel-height";
 export const DEFAULT_PANEL_HEIGHT = 450;
 export const MIN_PANEL_HEIGHT = 250;
-export const MAX_PANEL_HEIGHT = window.innerHeight * 0.8; // 80% of viewport height
+export const MAX_PANEL_HEIGHT = typeof window !== "undefined" ? window.innerHeight * 0.8 : DEFAULT_PANEL_HEIGHT; // 80% of viewport height
 
 const clampHeight = (height: number) => Math.max(MIN_PANEL_HEIGHT, Math.min(MAX_PANEL_HEIGHT, height));
 

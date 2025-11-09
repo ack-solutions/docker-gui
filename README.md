@@ -61,33 +61,26 @@ sudo ./scripts/install.sh
 |--------|---------|------|----------|
 | Interactive | `./scripts/setup-interactive.sh` | 3 min | First-time users |
 | Docker Simple | `docker-compose up -d` | 2 min | Quick testing |
-| Docker Full | `docker-compose -f docker-compose.full.yml up -d` | 3 min | All features |
 | Native | `sudo ./scripts/install.sh` | 5 min | No Docker needed |
-
-### Documentation
-
-- [Quick Start Guide](./docs/QUICK_START.md) - Get running in 5 minutes
-- [Installation Guide](./docs/INSTALLATION.md) - Detailed installation for all platforms
-- [Configuration Reference](./docs/CONFIGURATION.md) - Complete config.yml documentation
-- [Config Usage Guide](./docs/CONFIG_USAGE.md) - How to use config in code ⭐ NEW
-- [Docker Setup Guide](./docs/DOCKER_SETUP.md) - Docker services explained
-- [Command Reference](./docs/COMMANDS.md) - All commands in one place
 
 ## Configuration
 
-**Docker GUI uses a centralized `config.yml` file for all settings.**
+**Docker GUI uses `.env` for secrets/database plus `config.yml` for feature toggles.**
+
+> Tip: You can reference host environment variables anywhere inside `config.yml` using `${VAR}` or `${VAR:-fallback}`.  
+> Example: `port: ${APP_PORT:-3000}` or `jwtSecret: "${JWT_SECRET:-change-me}"`.
 
 ### Quick Setup
 
 ```bash
-# 1. Create config from template
-cp config.example.yml config.yml
+# 1. Copy environment template
+cp .env.example .env
 
-# 2. Edit your settings
+# 2. Edit .env values (port, secrets, database, SMTP, ...)
+nano .env
+
+# 3. Adjust config overrides if needed
 nano config.yml
-
-# 3. Generate .env (if using Docker)
-./scripts/config-to-env.sh
 
 # 4. Start the app
 docker-compose up -d
@@ -114,30 +107,18 @@ performance:
   logsRefreshInterval: 2000
 ```
 
-**See:**
-- [Configuration Guide](./docs/CONFIGURATION.md) - All configuration options
-- [Config Usage Guide](./docs/CONFIG_USAGE.md) - How to use config in code
-- [Config System Summary](./docs/CONFIG_SYSTEM_SUMMARY.md) - Complete technical guide
-
 ## Authentication
 
 - Login required for all features
-- Default admin user created on first run
-- Configure admin credentials in `config.yml`:
-  ```yaml
-  admin:
-    email: "admin@example.com"
-    password: "YourPassword"  # Leave empty to auto-generate
-    name: "Administrator"
-  ```
+- Bootstrap and maintenance are done via CLI scripts
 - Login at: http://localhost:3000/auth/login
 - Manage users in: User Management section
 - JWT-based sessions with configurable timeout
 
 ## Database
 
-- TypeORM with SQLite (default) or PostgreSQL/MySQL
-- Automatic migrations on startup
+- Prisma ORM with SQLite (default)
+- Automatic migrations on startup via `yarn db:migrate`
 - Configurable in `config.yml`:
   ```yaml
   database:
@@ -148,9 +129,89 @@ performance:
 **Commands:**
 ```bash
 yarn db:migrate         # Run migrations
-yarn db:seed            # Create admin user
-yarn db:migrate:revert  # Rollback
+yarn db:seed            # Ensure base settings
+yarn db:migrate:reset   # Reset database (DANGEROUS)
 ```
+
+## Local Setup
+
+If you prefer an interactive bootstrap, run:
+
+```bash
+./setup.sh
+```
+
+The helper installs dependencies, runs migrations/seeds, and creates the first administrator after prompting for credentials.
+
+1. **Copy env template:** `cp .env.example .env` and fill in secrets (setup + JWT), database URL, SMTP, etc.
+2. **Optionally adjust `config.yml` for hostnames/feature flags.**
+3. **Install dependencies:** `yarn install`
+4. **Prepare the database:**  
+   ```bash
+   yarn prisma:generate   # optional, runs automatically on postinstall
+   yarn db:migrate
+   yarn db:seed
+   ```
+5. **Start the dev server:** `yarn dev`
+6. **Bootstrap the first administrator (CLI):**
+   ```bash
+   # Using direct tsx
+   npx tsx scripts/create-admin.ts admin@example.com "Super Administrator" "ChangeMe123!"
+
+   # Or via package scripts
+   yarn user:create-admin admin@example.com "Super Administrator" "ChangeMe123!"
+   ```
+   Then sign in at `/auth/login`.
+
+   Need to reset a password later?
+   ```bash
+   # Using direct tsx
+   npx tsx scripts/reset-password.ts admin@example.com "NewStrongPass123!"
+
+   # Or via package scripts
+   yarn user:reset-password admin@example.com "NewStrongPass123!"
+   ```
+
+## Domain Management
+
+- Three DNS workflows per domain:
+  1. **Nameserver managed** – update your registrar to point NS records at Docker GUI and manage all records here.
+  2. **Provider API** – connect Cloudflare (zone ID + API token) or other providers and the platform synchronizes desired records automatically.
+  3. **Manual / proxy-only** – keep DNS elsewhere while still routing traffic through nginx/SSL managed here.
+- Cloudflare is supported out of the box (zone-scoped API token + zone ID with DNS:Edit permissions). Additional providers share the same pluggable adapter.
+- Subdomains can inherit or override their parent configuration. Link entries via the *Parent Domain* selector and point each child at different upstream ports or services.
+- Advanced nginx directives per domain/subdomain (custom blocks injected in the generated server config).
+- SSL options: Let’s Encrypt automation, reuse uploaded certificates across domains, or manually assign certificates per subdomain.
+
+## Production Deployment
+
+1. **Provision infrastructure** – a Linux host with Docker Engine or Kubernetes works; ensure ports 80/443 are reachable if you want Let’s Encrypt.
+2. **Deploy a production `config.yml`** with the secrets you intend to use:
+   ```yaml
+   setup:
+     initialSecret: "super-long-random-secret"
+   security:
+     jwtSecret: "another-long-secret"
+   database:
+     type: "sqlite"
+     path: "/app/data/docker-gui.db"   # or configure postgres/mysql here
+   ```
+   Extend the file with SMTP/DNS/NGINX settings as required by your environment.
+3. **Build and launch the stack** (Docker example):
+   ```bash
+   docker compose -f docker-compose.production.yml up -d --build
+   ```
+4. **Run migrations once** (if you disable the entrypoint hook): `docker compose exec docker-gui yarn db:migrate && yarn db:seed`
+5. **Bootstrap the administrator** using the public hostname:
+   ```bash
+   curl -X POST https://your-domain.com/api/setup/bootstrap \
+     -H "Content-Type: application/json" \
+     -H "x-setup-secret: <setup.initialSecret>" \
+     -d '{"email":"admin@your-domain.com","password":"ChangeMe123!","name":"Operations"}'
+   ```
+6. **Point DNS** – either change your NS records to the addresses shown on the installation page (managed mode) or connect Cloudflare/Route53 via the new Domain editor (provider mode).
+
+Once the first admin is created you can finish the installation checklist inside the UI (domain provisioning, nginx proxying, SSL upload/issuance, etc.).
 
 ## Docker Compose
 
@@ -186,7 +247,6 @@ See [Docker Setup Guide](./docs/DOCKER_SETUP.md) for complete service documentat
 
 ```bash
 ./scripts/setup-interactive.sh    # Interactive setup wizard
-./scripts/config-to-env.sh        # Convert config.yml to .env  
 ./scripts/validate-config.sh      # Validate configuration
 ./scripts/nginx-reload.sh         # Reload Nginx
 ./scripts/backup.sh               # Backup data
@@ -201,7 +261,6 @@ See [scripts/README.md](./scripts/README.md) for detailed documentation.
 ```bash
 # Setup
 yarn setup              # Interactive configuration wizard
-yarn config:generate    # Generate .env from config.yml
 yarn config:validate    # Validate configuration
 
 # Development
@@ -213,7 +272,7 @@ yarn lint               # Lint code
 # Database
 yarn db:migrate         # Run migrations
 yarn db:seed            # Seed database
-yarn db:migrate:revert  # Rollback migration
+yarn db:migrate:reset   # Drop & reapply migrations (DANGEROUS)
 
 # Utilities
 yarn nginx:reload       # Reload Nginx configuration
@@ -239,8 +298,8 @@ docker-gui/
 │   └── types/          # Shared TypeScript types
 ├── docs/               # Documentation
 ├── scripts/            # Installation and utility scripts
-├── config.example.yml  # Configuration template
-└── config.yml          # Active configuration (user creates this)
+├── .env.example        # Environment template
+└── config.yml          # Active configuration overrides
 ```
 
 ## Development
@@ -254,6 +313,7 @@ yarn install
 # Configure
 cp .env.example .env
 nano .env
+nano config.yml
 
 # Setup database
 yarn db:migrate
@@ -265,18 +325,6 @@ yarn dev
 
 Access: http://localhost:3000/auth/login
 
-## Support & Documentation
-
-All documentation is in the [docs/](./docs/) directory:
-
-- [Quick Start](./docs/QUICK_START.md) - Get started in 5 minutes
-- [Installation](./docs/INSTALLATION.md) - Detailed installation guide
-- [Configuration](./docs/CONFIGURATION.md) - Configuration reference
-- [Docker Setup](./docs/DOCKER_SETUP.md) - Docker services guide
-- [Commands](./docs/COMMANDS.md) - Command reference
-- [Scripts](./scripts/README.md) - Utility scripts documentation
-- [Config Usage](./docs/CONFIG_USAGE.md) - How to use config in code
-- [Config System](./docs/CONFIG_SYSTEM_SUMMARY.md) - Complete config system guide
 
 ## Contributing
 

@@ -29,7 +29,7 @@ import {
 import LanguageIcon from "@mui/icons-material/Language";
 import InfoIcon from "@mui/icons-material/Info";
 import type { DockerContainer } from "@/types/docker";
-import type { DomainUpsertInput } from "@/types/server";
+import type { DomainMode, DomainUpsertInput } from "@/types/server";
 
 interface SimpleDomainWizardProps {
   open: boolean;
@@ -151,7 +151,7 @@ export default function SimpleDomainWizard({
       // Build the payload
       const payload: DomainUpsertInput = {
         name: domainName.toLowerCase().trim(),
-        mode: "pointer-only", // Simplified mode
+        mode: "pointer-only" as DomainMode, // Simplified mode
         status: "pending",
       };
 

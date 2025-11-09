@@ -27,6 +27,7 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import InfoIcon from "@mui/icons-material/Info";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WarningIcon from "@mui/icons-material/Warning";
+import type { SSLCertificate } from "@/types/server";
 
 interface SslConfigurationProps {
   domainName: string;
@@ -40,6 +41,7 @@ interface SslConfigurationProps {
   onLetsEncryptEmailChange: (email: string) => void;
   onCertificateIdChange: (id: string) => void;
   onForceHttpsChange?: (force: boolean) => void;
+  availableCertificates?: SSLCertificate[];
 }
 
 export default function SslConfiguration({
@@ -54,6 +56,7 @@ export default function SslConfiguration({
   onLetsEncryptEmailChange,
   onCertificateIdChange,
   onForceHttpsChange,
+  availableCertificates = []
 }: SslConfigurationProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -187,16 +190,24 @@ export default function SslConfiguration({
                     <MenuItem value="">
                       <em>Select a certificate...</em>
                     </MenuItem>
-                    {/* TODO: Load from API */}
-                    <MenuItem value="cert-1">
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="body2">*.{domainName}</Typography>
-                        <Chip label="Wildcard" size="small" color="primary" />
-                      </Stack>
-                    </MenuItem>
-                    <MenuItem value="cert-2">
-                      <Typography variant="body2">{domainName}</Typography>
-                    </MenuItem>
+                    {availableCertificates.length === 0 ? (
+                      <MenuItem value="" disabled>
+                        <Typography variant="caption" color="text.secondary">
+                          No uploaded certificates
+                        </Typography>
+                      </MenuItem>
+                    ) : (
+                      availableCertificates.map((cert) => (
+                        <MenuItem key={cert.id} value={cert.id}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="body2">{cert.commonName}</Typography>
+                            {cert.altNames?.length ? (
+                              <Chip label={`${cert.altNames.length} SAN`} size="small" color="primary" />
+                            ) : null}
+                          </Stack>
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
 
@@ -303,4 +314,3 @@ export default function SslConfiguration({
     </Paper>
   );
 }
-

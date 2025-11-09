@@ -33,6 +33,7 @@ import { useMemo, useState } from "react";
 import { useFiles } from "@/features/docker/files/hooks/use-files";
 import { ContainerFileNode } from "@/lib/api/docker";
 import { formatBytes } from "@/lib/utils/format";
+import { usePersistentState } from "@/client/hooks/use-persistent-state";
 
 const BreadcrumbLink = styled(Link)({
   cursor: "pointer"
@@ -73,7 +74,7 @@ const splitPath = (path: string) => {
 const FileBrowser = ({ containerId }: FileBrowserProps) => {
   const [path, setPath] = useState("/");
   const [refreshToken, setRefreshToken] = useState(0);
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [viewMode, setViewMode] = usePersistentState<"list" | "grid">("docker:file-browser:view-mode", "list");
   const { nodes, isLoading, error } = useFiles({ containerId, path, refreshToken });
 
   const breadcrumbs = useMemo(() => splitPath(path), [path]);
