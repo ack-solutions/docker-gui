@@ -6,6 +6,7 @@ import {
 import { MetricsLoggingService } from "@/server/system/metrics-logging-service";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 
 export const GET = withAuth(async () => {

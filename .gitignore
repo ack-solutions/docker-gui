@@ -18,4 +18,4 @@ npm-debug.log*
 # Editor directories and files
 .idea
 *.swp
-db/docker-gui.db
+*.db

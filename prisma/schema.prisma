@@ -49,9 +49,9 @@ model MemoryMetricsLog {
   id           String   @id @default(uuid())
   timestamp    DateTime
   usagePercent Float
-  usedBytes    Int
-  totalBytes   Int
-  freeBytes    Int
+  usedBytes    BigInt
+  totalBytes   BigInt
+  freeBytes    BigInt
   createdAt    DateTime @default(now())
 
   @@index([timestamp], map: "idx_memory_timestamp")
@@ -62,9 +62,9 @@ model DiskMetricsLog {
   id             String   @id @default(uuid())
   timestamp      DateTime
   usagePercent   Float
-  usedBytes      Int
-  totalBytes     Int
-  availableBytes Int
+  usedBytes      BigInt
+  totalBytes     BigInt
+  availableBytes BigInt
   partitions     Json
   createdAt      DateTime @default(now())
 

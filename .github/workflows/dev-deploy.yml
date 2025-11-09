@@ -47,6 +47,7 @@ jobs:
             npm i -g pm2 yarn
             yarn install
             yarn build
+            yarn db:push
             pm2 delete pm2.json
             pm2 start pm2.json
             pm2 save
