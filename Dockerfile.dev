@@ -19,14 +19,11 @@ WORKDIR /app
 
 # Copy dependency manifests and install once during build for caching
 COPY package.json yarn.lock ./
+COPY prisma ./prisma
 RUN yarn install --frozen-lockfile
-
-# Copy helper scripts
-COPY scripts/docker-dev-entrypoint.sh /usr/local/bin/docker-dev-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-dev-entrypoint.sh
 
 ENV NODE_ENV=development
 ENV PATH="/app/node_modules/.bin:${PATH}"
 
-ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/docker-dev-entrypoint.sh"]
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["yarn", "dev"]

@@ -1,6 +1,22 @@
 import { prisma } from "../database/client";
 import { SettingsService } from "./settings-service";
 import type { SystemMetrics } from "@/types/system";
+import type {
+  DiskMetricsLog as PrismaDiskMetricsLog,
+  MemoryMetricsLog as PrismaMemoryMetricsLog
+} from "@prisma/client";
+
+type SerializedMemoryLog = Omit<PrismaMemoryMetricsLog, "usedBytes" | "totalBytes" | "freeBytes"> & {
+  usedBytes: number;
+  totalBytes: number;
+  freeBytes: number;
+};
+
+type SerializedDiskLog = Omit<PrismaDiskMetricsLog, "usedBytes" | "totalBytes" | "availableBytes"> & {
+  usedBytes: number;
+  totalBytes: number;
+  availableBytes: number;
+};
 
 type MetricType = "cpu" | "memory" | "disk";
 
@@ -214,9 +230,9 @@ export class MetricsLoggingService {
               data: batchToSave.map((batch: MemoryBatch) => ({
                 timestamp: batch.timestamp,
                 usagePercent: batch.usagePercent,
-                usedBytes: batch.usedBytes,
-                totalBytes: batch.totalBytes,
-                freeBytes: batch.freeBytes
+                usedBytes: BigInt(Math.round(batch.usedBytes)),
+                totalBytes: BigInt(Math.round(batch.totalBytes)),
+                freeBytes: BigInt(Math.round(batch.freeBytes))
               }))
             });
             break;
@@ -226,9 +242,9 @@ export class MetricsLoggingService {
               data: batchToSave.map((batch: DiskBatch) => ({
                 timestamp: batch.timestamp,
                 usagePercent: batch.usagePercent,
-                usedBytes: batch.usedBytes,
-                totalBytes: batch.totalBytes,
-                availableBytes: batch.availableBytes,
+                usedBytes: BigInt(Math.round(batch.usedBytes)),
+                totalBytes: BigInt(Math.round(batch.totalBytes)),
+                availableBytes: BigInt(Math.round(batch.availableBytes)),
                 partitions: batch.partitions
               }))
             });
@@ -459,18 +475,22 @@ export class MetricsLoggingService {
           take: limit,
           skip: offset
         });
-      case "memory":
-        return prisma.memoryMetricsLog.findMany({
+      case "memory": {
+        const logs = await prisma.memoryMetricsLog.findMany({
           orderBy: { timestamp: "desc" },
           take: limit,
           skip: offset
         });
-      case "disk":
-        return prisma.diskMetricsLog.findMany({
+        return logs.map((log) => this.serializeMemoryLog(log));
+      }
+      case "disk": {
+        const logs = await prisma.diskMetricsLog.findMany({
           orderBy: { timestamp: "desc" },
           take: limit,
           skip: offset
         });
+        return logs.map((log) => this.serializeDiskLog(log));
+      }
     }
   }
 
@@ -490,18 +510,22 @@ export class MetricsLoggingService {
           orderBy: { timestamp: "desc" },
           take: limit
         });
-      case "memory":
-        return prisma.memoryMetricsLog.findMany({
+      case "memory": {
+        const logs = await prisma.memoryMetricsLog.findMany({
           where: { timestamp: { gte: startDate, lte: endDate } },
           orderBy: { timestamp: "desc" },
           take: limit
         });
-      case "disk":
-        return prisma.diskMetricsLog.findMany({
+        return logs.map((log) => this.serializeMemoryLog(log));
+      }
+      case "disk": {
+        const logs = await prisma.diskMetricsLog.findMany({
           where: { timestamp: { gte: startDate, lte: endDate } },
           orderBy: { timestamp: "desc" },
           take: limit
         });
+        return logs.map((log) => this.serializeDiskLog(log));
+      }
     }
   }
 
@@ -525,5 +549,27 @@ export class MetricsLoggingService {
       this.flushBatch("memory"),
       this.flushBatch("disk")
     ]);
+  }
+
+  private serializeMemoryLog(log: PrismaMemoryMetricsLog): SerializedMemoryLog {
+    const { usedBytes, totalBytes, freeBytes, ...rest } = log;
+
+    return {
+      ...rest,
+      usedBytes: Number(usedBytes),
+      totalBytes: Number(totalBytes),
+      freeBytes: Number(freeBytes)
+    };
+  }
+
+  private serializeDiskLog(log: PrismaDiskMetricsLog): SerializedDiskLog {
+    const { usedBytes, totalBytes, availableBytes, ...rest } = log;
+
+    return {
+      ...rest,
+      usedBytes: Number(usedBytes),
+      totalBytes: Number(totalBytes),
+      availableBytes: Number(availableBytes)
+    };
   }
 }

@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/server/auth/authorization";
 import { MetricsLoggingService } from "@/server/system/metrics-logging-service";
 
+const normalizeForJson = (value: unknown): unknown => {
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeForJson(item));
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [key, normalizeForJson(val)])
+    );
+  }
+
+  return value;
+};
+
 export const runtime = "nodejs";
 
 export const GET = withAuth(async (request: NextRequest) => {
@@ -29,11 +51,11 @@ export const GET = withAuth(async (request: NextRequest) => {
           : loggingService.getRecentLogs("disk", limit, offset)
       ]);
 
-      return NextResponse.json({
+      return NextResponse.json(normalizeForJson({
         cpu: { logs: cpuLogs, count: cpuLogs.length },
         memory: { logs: memoryLogs, count: memoryLogs.length },
         disk: { logs: diskLogs, count: diskLogs.length }
-      });
+      }));
     }
 
     // Get logs for specific type
@@ -46,11 +68,11 @@ export const GET = withAuth(async (request: NextRequest) => {
       logs = await loggingService.getRecentLogs(type, limit, offset);
     }
 
-    return NextResponse.json({
+    return NextResponse.json(normalizeForJson({
       logs,
       count: logs.length,
       type
-    });
+    }));
   } catch (error) {
     console.error("[system] Failed to fetch metrics logs", error);
     return NextResponse.json(
