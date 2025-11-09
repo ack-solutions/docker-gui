@@ -211,7 +211,7 @@ The helper installs dependencies, runs migrations/seeds, and creates the first a
    ```
 6. **Point DNS** – either change your NS records to the addresses shown on the installation page (managed mode) or connect Cloudflare/Route53 via the new Domain editor (provider mode).
 
-Once the first admin is created you can finish the installation checklist inside the UI (domain provisioning, nginx proxying, SSL upload/issuance, etc.).
+Once the first admin is created you can finish the installation checklist inside the UI (domain provisioning, nginx configuration, SSL upload/issuance, etc.).
 
 ## Docker Compose
 
@@ -278,6 +278,9 @@ yarn db:migrate:reset   # Drop & reapply migrations (DANGEROUS)
 yarn nginx:reload       # Reload Nginx configuration
 yarn backup             # Backup all data
 yarn ssl:request        # Request SSL certificate
+
+# Tests
+yarn test:domains       # Validate domain + SSL/Nginx API flows (creates temporary records)
 ```
 
 ## Requirements

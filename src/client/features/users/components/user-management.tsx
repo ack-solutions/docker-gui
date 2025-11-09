@@ -159,6 +159,10 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
   const [values, setValues] = useState<UserFormValues>(() => createDefaultValues(user ?? undefined));
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    setValues(createDefaultValues(user ?? undefined));
+  }, [user, mode]);
+
   const title = mode === "create" ? "Invite user" : `Edit ${user?.name ?? user?.email ?? "user"}`;
   const isSuperAdmin = Boolean(user?.isSuperAdmin);
 
@@ -192,7 +196,7 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
     event.preventDefault();
     setSubmitting(true);
     try {
-      await onSubmit(values);
+      await onSubmit({ ...values, password: values.password.trim() });
       onClose();
     } catch {
       // Errors are surfaced via toast in the parent handler
@@ -202,6 +206,30 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
   };
 
   const disableSubmit = submitting || (mode === "create" && !values.password.trim());
+  const hasUserChanges = useMemo(() => {
+    if (mode === "create") {
+      return true;
+    }
+    if (!user) {
+      return true;
+    }
+
+    const trimmedEmail = values.email.trim();
+    const currentName = values.name ?? "";
+    const existingName = user.name ?? "";
+    const permissionsChanged =
+      values.permissions.length !== user.permissions.length ||
+      values.permissions.some((permission) => !user.permissions.includes(permission));
+
+    const emailChanged = trimmedEmail.toLowerCase() !== user.email.toLowerCase();
+    const nameChanged = currentName !== existingName;
+    const roleChanged = values.role !== user.role;
+    const passwordChanged = Boolean(values.password.trim());
+
+    return emailChanged || nameChanged || roleChanged || permissionsChanged || passwordChanged;
+  }, [mode, user, values]);
+
+  const effectiveDisableSubmit = mode === "edit" ? disableSubmit || !hasUserChanges : disableSubmit;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -300,7 +328,7 @@ const UserFormDialog = ({ open, mode, onClose, onSubmit, user }: UserFormDialogP
           type="submit"
           form="user-management-form"
           variant="contained"
-          disabled={disableSubmit}
+          disabled={effectiveDisableSubmit}
         >
           {submitting ? "Saving..." : mode === "create" ? "Invite user" : "Save changes"}
         </Button>

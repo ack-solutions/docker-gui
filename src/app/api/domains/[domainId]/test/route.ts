@@ -6,6 +6,11 @@ import http from "http";
 
 const execAsync = promisify(exec);
 
+const NGINX_CONTAINER_NAME = process.env.NGINX_CONTAINER_NAME ?? "nginx-proxy";
+const NGINX_CONFIG_PATH = process.env.NGINX_CONFIG_PATH ?? "/etc/nginx/sites-enabled";
+const NGINX_TEST_COMMAND =
+  process.env.NGINX_TEST_COMMAND ?? `docker exec ${NGINX_CONTAINER_NAME} nginx -t 2>&1`;
+
 interface TestResult {
   dns: {
     status: "pass" | "fail" | "pending";
@@ -142,15 +147,13 @@ async function testHttpsConnectivity(domain: string): Promise<TestResult["https"
 async function testNginxConfig(domainId: string): Promise<TestResult["nginx"]> {
   try {
     // Check if nginx config exists for this domain
-    const { stdout, stderr } = await execAsync(
-      `docker exec nginx-proxy test -f /etc/nginx/sites-enabled/${domainId}.conf && echo "exists" || echo "missing"`
+    const { stdout } = await execAsync(
+      `docker exec ${NGINX_CONTAINER_NAME} test -f ${NGINX_CONFIG_PATH}/${domainId}.conf && echo "exists" || echo "missing"`
     );
 
     if (stdout.trim() === "exists") {
       // Test nginx configuration
-      const { stderr: testStderr } = await execAsync(
-        `docker exec nginx-proxy nginx -t 2>&1`
-      );
+      const { stderr: testStderr } = await execAsync(NGINX_TEST_COMMAND);
 
       if (testStderr.includes("successful")) {
         return {
@@ -213,4 +216,3 @@ export async function GET(
     );
   }
 }
-

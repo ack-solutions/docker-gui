@@ -180,7 +180,12 @@ export const DELETE = withAuth(async (_request, { params }, currentUser) => {
   }
 
   if (existing.isSuperAdmin) {
-    return NextResponse.json({ message: "Default super administrator cannot be deleted." }, { status: 400 });
+    const otherSuperAdmins = (await userService.list()).filter(
+      (user) => user.id !== existing.id && user.isSuperAdmin
+    );
+    if (!otherSuperAdmins.length) {
+      return NextResponse.json({ message: "Default super administrator cannot be deleted." }, { status: 400 });
+    }
   }
 
   if (existing.role === "admin") {
