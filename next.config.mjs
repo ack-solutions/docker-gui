@@ -7,7 +7,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     if (isServer) {
       if (typeof config.externals === "function") {
         const originalExternals = config.externals;
@@ -20,6 +20,16 @@ const nextConfig = {
       } else {
         config.externals = [...(config.externals ?? []), ...externalModules];
       }
+
+      // Provide polyfill for 'self' global used by @xterm/xterm during SSR
+      // This injects the polyfill at the top of all server-side chunks
+      config.plugins.push(
+        new webpack.BannerPlugin({
+          banner: "if (typeof global !== 'undefined' && typeof self === 'undefined') { global.self = global; }",
+          raw: true,
+          entryOnly: false,
+        })
+      );
     }
 
     return config;
