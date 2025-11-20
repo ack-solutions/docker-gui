@@ -20,7 +20,7 @@ type TerminalInputState = {
   historyIndex: number;
 };
 
-const COMPLETION_ROOT_FALLBACK = "/app";
+const COMPLETION_ROOT_FALLBACK = "/";
 const HISTORY_LIMIT = 1_000;
 const BRACKET_PASTE_START = "\u001b[200~";
 const BRACKET_PASTE_END = "\u001b[201~";
@@ -144,6 +144,18 @@ const parsePromptLabel = (label: string | undefined, fallback: string): PromptCo
   };
 };
 
+const hexToRgb = (value: string) => {
+  const match = value.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!match) {
+    return { r: 255, g: 255, b: 255 };
+  }
+  return {
+    r: parseInt(match[1] ?? "ff", 16),
+    g: parseInt(match[2] ?? "ff", 16),
+    b: parseInt(match[3] ?? "ff", 16)
+  };
+};
+
 const formatColumns = (items: string[], maxWidth = 80, columnWidth = 20): string[] => {
   if (!items.length) {
     return [];
@@ -236,6 +248,63 @@ const CommandTerminal = ({
     state.historyIndex = -1;
   }, []);
 
+  const accentColor = useMemo(
+    () => (theme.palette.mode === "dark" ? "#7ee787" : "#1f6feb"),
+    [theme.palette.mode]
+  );
+
+  const terminalTheme = useMemo(() => {
+    if (theme.palette.mode === "dark") {
+      return {
+        background: "#0d1117",
+        foreground: "#e6edf3",
+        cursor: accentColor,
+        selectionBackground: "rgba(126, 231, 135, 0.3)",
+        selectionForeground: "#0d1117",
+        black: "#484f58",
+        red: "#ff7b72",
+        green: "#7ee787",
+        yellow: "#f2cc60",
+        blue: "#79c0ff",
+        magenta: "#d2a8ff",
+        cyan: "#92d5ff",
+        white: "#e6edf3",
+        brightBlack: "#6e7681",
+        brightRed: "#ffa198",
+        brightGreen: "#aff5b4",
+        brightYellow: "#f8e3a1",
+        brightBlue: "#a5d6ff",
+        brightMagenta: "#f2c5ff",
+        brightCyan: "#b5e8ff",
+        brightWhite: "#ffffff"
+      };
+    }
+
+    return {
+      background: "#fdfdfd",
+      foreground: "#0f172a",
+      cursor: accentColor,
+      selectionBackground: "rgba(31, 111, 235, 0.25)",
+      selectionForeground: "#fdfdfd",
+      black: "#2e3440",
+      red: "#d63a3a",
+      green: "#1a7f37",
+      yellow: "#b88700",
+      blue: "#0f6feb",
+      magenta: "#8d4ecb",
+      cyan: "#0aa4b4",
+      white: "#1e293b",
+      brightBlack: "#4c566a",
+      brightRed: "#ff4f4f",
+      brightGreen: "#2bb159",
+      brightYellow: "#e0a500",
+      brightBlue: "#388bfd",
+      brightMagenta: "#a371f7",
+      brightCyan: "#10b9c6",
+      brightWhite: "#334155"
+    };
+  }, [accentColor, theme.palette.mode]);
+
   const notifyOutput = useCallback(
     (output: string | null) => {
       lastOutputRef.current = output;
@@ -251,8 +320,10 @@ const CommandTerminal = ({
     const base = promptPrefixRef.current?.trim().length ? promptPrefixRef.current : resolvedSession;
     const directory = workingDirectoryRef.current || COMPLETION_ROOT_FALLBACK;
     const label = promptHasPathRef.current ? `${base}:${directory}` : base;
-    return `${label}#`;
-  }, [resolvedSession]);
+    const plain = `${label}#`;
+    const { r, g, b } = hexToRgb(accentColor);
+    return `\u001b[38;2;${r};${g};${b}m${plain}\u001b[0m`;
+  }, [accentColor, resolvedSession]);
 
   const writePrompt = useCallback(
     (newLine = true) => {
@@ -811,13 +882,7 @@ const CommandTerminal = ({
       cursorBlink: true,
       allowProposedApi: true,
       scrollback: 10_000,
-      theme: {
-        background: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc",
-        foreground: theme.palette.text.primary,
-        cursor: theme.palette.primary.main,
-        selectionBackground: theme.palette.primary.main,
-        selectionForeground: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc"
-      }
+      theme: terminalTheme
     });
 
     const fitAddon = new FitAddon();
@@ -858,7 +923,7 @@ const CommandTerminal = ({
       fitAddonRef.current = null;
       initializedRef.current = false;
     };
-  }, [handleCopyEvent, handlePasteEvent, handleTermData, resolvedWelcome, theme.palette.mode, theme.palette.primary.main, theme.palette.text.primary, writePrompt]);
+  }, [handleCopyEvent, handlePasteEvent, handleTermData, resolvedWelcome, terminalTheme, writePrompt]);
 
   return (
     <Stack sx={{ height: "100%", position: "relative" }}>
@@ -896,7 +961,7 @@ const CommandTerminal = ({
           height: fitParent ? "100%" : { xs: minHeight, md: minHeight + 60 },
           borderRadius: 0,
           overflow: "hidden",
-          backgroundColor: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc",
+          backgroundColor: terminalTheme.background,
           px: 1,
           pt: 1
         }}
