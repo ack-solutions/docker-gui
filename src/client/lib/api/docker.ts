@@ -88,18 +88,61 @@ export const createContainer = async (payload: CreateContainerRequest) => {
   return data;
 };
 
-export const pruneStoppedContainers = async () => {
-  const { data } = await apiClient.post<DockerPruneSummary>("/docker/containers/prune");
+export const getStoppedContainers = async () => {
+  const { data } = await apiClient.get<DockerContainer[]>("/docker/containers/stopped");
   return data;
 };
 
-export const pruneUnusedImages = async () => {
-  const { data } = await apiClient.post<DockerPruneSummary>("/docker/images/prune");
+export const pruneStoppedContainers = async (containerIds?: string[]) => {
+  const { data } = await apiClient.post<DockerPruneSummary>("/docker/containers/prune", {
+    containerIds: containerIds || []
+  });
   return data;
 };
 
-export const pruneVolumes = async () => {
-  const { data } = await apiClient.post<DockerPruneSummary>("/docker/volumes/prune");
+export const getUnusedImages = async () => {
+  const { data } = await apiClient.get<DockerImage[]>("/docker/images/unused");
+  return data;
+};
+
+export const pruneUnusedImages = async (imageIds?: string[]) => {
+  const { data } = await apiClient.post<DockerPruneSummary>("/docker/images/prune", {
+    imageIds: imageIds || []
+  });
+  return data;
+};
+
+export const getUnusedVolumes = async () => {
+  const { data } = await apiClient.get<DockerVolume[]>("/docker/volumes/unused");
+  return data;
+};
+
+export const pruneVolumes = async (volumeNames?: string[]) => {
+  const { data } = await apiClient.post<DockerPruneSummary>("/docker/volumes/prune", {
+    volumeNames: volumeNames || []
+  });
+  return data;
+};
+
+export const deleteVolume = async (volumeName: string) => {
+  const { data } = await apiClient.delete<{ message: string }>(`/docker/volumes/${encodeURIComponent(volumeName)}`);
+  return data;
+};
+
+export const getUnusedNetworks = async () => {
+  const { data } = await apiClient.get<DockerNetwork[]>("/docker/networks/unused");
+  return data;
+};
+
+export const pruneNetworks = async (networkIds?: string[]) => {
+  const { data } = await apiClient.post<DockerPruneSummary>("/docker/networks/prune", {
+    networkIds: networkIds || []
+  });
+  return data;
+};
+
+export const deleteNetwork = async (networkId: string) => {
+  const { data } = await apiClient.delete<{ message: string }>(`/docker/networks/${encodeURIComponent(networkId)}`);
   return data;
 };
 
@@ -160,7 +203,7 @@ export const attachToContainerLogs = (
       console.error(`Failed to stream logs for ${containerId}`, error);
     } finally {
       if (!disposed) {
-        timer = setTimeout(poll, options.intervalMs ?? 4000);
+        timer = setTimeout(poll, options.intervalMs ?? 1000);
       }
     }
   };

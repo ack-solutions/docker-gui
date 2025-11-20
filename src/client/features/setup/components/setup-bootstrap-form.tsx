@@ -36,8 +36,8 @@ const SetupBootstrapForm = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    if (password.length < 10) {
+      setError("Password must be at least 10 characters long.");
       return;
     }
 

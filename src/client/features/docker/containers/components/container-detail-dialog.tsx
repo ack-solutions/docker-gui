@@ -32,7 +32,7 @@ import ContainerConfigPanel from "@/features/docker/containers/components/detail
 import CommandTerminal from "@/components/common/command-terminal";
 import LogsPanel from "@/components/common/logs-panel";
 import FileBrowser from "@/features/docker/files/components/file-browser";
-import { executeContainerCommand } from "@/lib/api/docker";
+import { executeContainerCommand, fetchContainerFiles } from "@/lib/api/docker";
 import { toast } from "sonner";
 import moment from "moment";
 
@@ -61,6 +61,19 @@ const ContainerDetailDialog = ({ open, onClose, containerId }: ContainerDetailDi
     },
     [containerId]
   );
+
+  const getFilesForCompletion = useCallback(async (path: string) => {
+    if (!containerId) return [];
+    try {
+      const files = await fetchContainerFiles(containerId, path);
+      return files.map(file => ({
+        name: file.name,
+        type: file.type === "directory" ? "directory" as const : "file" as const
+      }));
+    } catch {
+      return [];
+    }
+  }, [containerId]);
 
   const handleOpenInNewTab = () => {
     if (containerId) {
@@ -295,6 +308,7 @@ const ContainerDetailDialog = ({ open, onClose, containerId }: ContainerDetailDi
                     promptLabel={`root@${name}:/app`}
                     welcomeMessage={`Welcome to the container shell. Connected to ${name}.`}
                     executeCommand={handleExecuteCommand}
+                    getFilesForCompletion={getFilesForCompletion}
                     fitParent={true}
                   />
                 </Box>

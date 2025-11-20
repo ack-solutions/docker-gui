@@ -11,13 +11,15 @@ import {
   CardContent,
   CardHeader,
   CircularProgress,
+  Divider,
   Stack,
   TextField,
   Typography
 } from "@mui/material";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
-// Setup UI removed in favor of CLI-based setup
+import SetupWizard from "@/client/features/setup/components/setup-wizard";
+import { useSetupStatus } from "@/client/features/setup/hooks/use-setup-status";
 
 const LoginForm = () => {
   const router = useRouter();
@@ -114,19 +116,42 @@ const LoginForm = () => {
 };
 
 const LoginPage = () => {
+  const { data: setupStatus, isLoading: setupLoading } = useSetupStatus();
+  const needsSetup = setupStatus?.state === "needs-admin" || setupStatus?.state === "initializing";
+
   return (
-    <Stack spacing={3} alignItems="center" sx={{ width: "100%" }}>
-      <Suspense
-        fallback={
-          <Card variant="outlined" sx={{ width: "100%", maxWidth: 420, borderRadius: 3 }}>
-            <CardContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
-              <CircularProgress />
-            </CardContent>
-          </Card>
-        }
-      >
-        <LoginForm />
-      </Suspense>
+    <Stack
+      spacing={3}
+      alignItems="center"
+      justifyContent="center"
+      sx={{
+        width: "100%",
+        minHeight: "100vh",
+        py: 4,
+        px: 2
+      }}
+    >
+      {setupLoading ? (
+        <Card variant="outlined" sx={{ width: "100%", maxWidth: 900, borderRadius: 3 }}>
+          <CardContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+            <CircularProgress />
+          </CardContent>
+        </Card>
+      ) : needsSetup ? (
+        <SetupWizard />
+      ) : (
+        <Suspense
+          fallback={
+            <Card variant="outlined" sx={{ width: "100%", maxWidth: 420, borderRadius: 3 }}>
+              <CardContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+                <CircularProgress />
+              </CardContent>
+            </Card>
+          }
+        >
+          <LoginForm />
+        </Suspense>
+      )}
     </Stack>
   );
 };

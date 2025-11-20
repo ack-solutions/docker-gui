@@ -4,9 +4,12 @@ import { withAuth } from "@/server/auth/authorization";
 
 export const runtime = "nodejs";
 
-export const POST = withAuth(async (_request, _context, _user) => {
+export const POST = withAuth(async (request, _context, _user) => {
   try {
-    const summary = await dockerService.pruneStoppedContainers();
+    const body = await request.json().catch(() => ({}));
+    const containerIds = Array.isArray(body.containerIds) ? body.containerIds : undefined;
+    
+    const summary = await dockerService.pruneStoppedContainers(containerIds);
     return NextResponse.json(summary);
   } catch (error) {
     console.error("Failed to prune containers", error);

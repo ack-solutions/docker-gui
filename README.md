@@ -35,7 +35,7 @@ A modern web interface for managing Docker infrastructure with integrated Nginx,
 ./scripts/setup-interactive.sh
 
 # 2. Start with Docker
-docker-compose -f docker-compose.full.yml up -d
+docker-compose -f docker-compose.yml up -d
 
 # 3. Open http://localhost:3000 (or your chosen port)
 # 4. Login with credentials from config.yml

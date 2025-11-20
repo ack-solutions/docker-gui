@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import SearchIcon from "@mui/icons-material/Search";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
+import { Button } from "@mui/material";
 import { 
   Chip,
   CircularProgress,
@@ -21,13 +23,16 @@ import EmptyState from "@/components/common/empty-state";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import { useNetworks } from "@/features/docker/networks/hooks/use-networks";
 import NetworkTableRow from "@/features/docker/networks/components/network-table-row";
+import NetworkPruneDialog from "@/features/docker/networks/components/network-prune-dialog";
+import { deleteNetwork } from "@/lib/api/docker";
 import type { DockerNetwork } from "@/lib/api/docker";
 
 const NetworkList = () => {
-  const { data, isLoading, isError, error, isFetching } = useNetworks();
+  const { data, isLoading, isError, error, isFetching, refetch } = useNetworks();
   const { confirm } = useConfirmationDialog();
   const networks = data as DockerNetwork[] | undefined;
   const [searchQuery, setSearchQuery] = useState("");
+  const [pruneDialogOpen, setPruneDialogOpen] = useState(false);
 
   // Filter networks based on search query
   const filteredNetworks = useMemo(() => {
@@ -62,13 +67,25 @@ const NetworkList = () => {
       return;
     }
 
-    toast.info(`Network deletion for ${name} not yet implemented`);
-    // TODO: Implement network delete API call
-  }, [confirm]);
+    try {
+      await toast.promise(deleteNetwork(id), {
+        loading: `Deleting network ${name}...`,
+        success: `Network ${name} deleted successfully`,
+        error: (err) => (err instanceof Error ? err.message : `Failed to delete network ${name}`)
+      });
+      void refetch();
+    } catch (error) {
+      console.error("Failed to delete network:", error);
+    }
+  }, [confirm, refetch]);
 
   const handleViewNetwork = useCallback((id: string) => {
     toast.info(`Network details not yet implemented`);
     // TODO: Implement network details view
+  }, []);
+
+  const handlePruneNetworks = useCallback(() => {
+    setPruneDialogOpen(true);
   }, []);
 
   if (isError && (!networks || networks.length === 0)) {
@@ -123,6 +140,15 @@ const NetworkList = () => {
             color={searchQuery ? "primary" : "default"}
           />
           {isFetching && <CircularProgress size={16} />}
+          <Button 
+            startIcon={<DeleteSweepIcon />} 
+            color="warning" 
+            variant="outlined"
+            size="small"
+            onClick={handlePruneNetworks}
+          >
+            Prune
+          </Button>
         </Stack>
       </Stack>
 
@@ -161,6 +187,14 @@ const NetworkList = () => {
           </Table>
         </Paper>
       )}
+      
+      <NetworkPruneDialog
+        open={pruneDialogOpen}
+        onClose={() => setPruneDialogOpen(false)}
+        onPruned={() => {
+          void refetch();
+        }}
+      />
     </Stack>
   );
 };

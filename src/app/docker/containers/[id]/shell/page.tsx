@@ -9,7 +9,7 @@ import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import CommandTerminal from "@/components/common/command-terminal";
 import { useContainers } from "@/features/docker/containers/hooks/use-containers";
-import { executeContainerCommand } from "@/lib/api/docker";
+import { executeContainerCommand, fetchContainerFiles } from "@/lib/api/docker";
 
 const ShellPage = () => {
   const params = useParams<{ id: string }>();
@@ -34,6 +34,18 @@ const ShellPage = () => {
       toast.error("Failed to copy output");
     }
   }, [lastOutput]);
+
+  const getFilesForCompletion = useCallback(async (path: string) => {
+    try {
+      const files = await fetchContainerFiles(containerId, path);
+      return files.map(file => ({
+        name: file.name,
+        type: file.type === "directory" ? "directory" as const : "file" as const
+      }));
+    } catch {
+      return [];
+    }
+  }, [containerId]);
 
   useEffect(() => {
     if (copyLabel === "Copy output") {
@@ -126,6 +138,7 @@ const ShellPage = () => {
             promptLabel={`root@${container.name}:/app`}
             welcomeMessage={`Connected to ${container.name}. Type commands and press Enter. Use 'clear' to clear the terminal.`}
             executeCommand={(tokens) => executeContainerCommand(containerId, tokens)}
+            getFilesForCompletion={getFilesForCompletion}
             onLastOutputChange={setLastOutput}
             minHeight={400}
           />

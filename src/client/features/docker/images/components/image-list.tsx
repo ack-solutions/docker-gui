@@ -30,6 +30,7 @@ import { useConfirmationDialog } from "@/components/common/confirmation-dialog-p
 import ImageTableRow from "@/features/docker/images/components/image-table-row";
 import ImageListItemMobile from "@/features/docker/images/components/image-list-item-mobile";
 import ImageDetailDialog from "@/features/docker/images/components/image-detail-dialog";
+import ImagePruneDialog from "@/features/docker/images/components/image-prune-dialog";
 import { useImages } from "@/features/docker/images/hooks/use-images";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ const ImageList = () => {
   const [imageUrl, setImageUrl] = useState("");
   const [isPulling, setIsPulling] = useState(false);
   const [detailImageId, setDetailImageId] = useState<string | null>(null);
+  const [pruneDialogOpen, setPruneDialogOpen] = useState(false);
 
   // Filter images based on search query
   const filteredImages = useMemo(() => {
@@ -67,22 +69,9 @@ const ImageList = () => {
   const totalCount = images?.length ?? 0;
   const filteredCount = filteredImages?.length ?? 0;
 
-  const handlePruneImages = useCallback(async () => {
-    const confirmed = await confirm({
-      title: "Prune unused images",
-      message: "Remove all unused and dangling images? This will permanently delete images not used by any containers and free up disk space.",
-      confirmLabel: "Prune",
-      cancelLabel: "Cancel",
-      tone: "danger"
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    toast.info("Image pruning not yet implemented");
-    // TODO: Implement image prune API call
-  }, [confirm]);
+  const handlePruneImages = useCallback(() => {
+    setPruneDialogOpen(true);
+  }, []);
 
   const handleRemoveImage = useCallback(async (imageId: string, imageName: string) => {
     const confirmed = await confirm({
@@ -378,6 +367,14 @@ const ImageList = () => {
         open={Boolean(detailImageId)}
         onClose={() => setDetailImageId(null)}
         imageId={detailImageId}
+      />
+      
+      <ImagePruneDialog
+        open={pruneDialogOpen}
+        onClose={() => setPruneDialogOpen(false)}
+        onPruned={() => {
+          void refetch();
+        }}
       />
     </Stack>
   );

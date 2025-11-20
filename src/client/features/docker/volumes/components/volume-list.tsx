@@ -24,13 +24,16 @@ import EmptyState from "@/components/common/empty-state";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import { useVolumes } from "@/features/docker/volumes/hooks/use-volumes";
 import VolumeTableRow from "@/features/docker/volumes/components/volume-table-row";
+import VolumePruneDialog from "@/features/docker/volumes/components/volume-prune-dialog";
+import { deleteVolume } from "@/lib/api/docker";
 import type { DockerVolume } from "@/lib/api/docker";
 
 const VolumeList = () => {
-  const { data, isLoading, isError, error, isFetching } = useVolumes();
+  const { data, isLoading, isError, error, isFetching, refetch } = useVolumes();
   const { confirm } = useConfirmationDialog();
   const volumes = data as DockerVolume[] | undefined;
   const [searchQuery, setSearchQuery] = useState("");
+  const [pruneDialogOpen, setPruneDialogOpen] = useState(false);
 
   // Filter volumes based on search query
   const filteredVolumes = useMemo(() => {
@@ -51,22 +54,9 @@ const VolumeList = () => {
   const totalCount = volumes?.length ?? 0;
   const filteredCount = filteredVolumes?.length ?? 0;
 
-  const handlePruneVolumes = useCallback(async () => {
-    const confirmed = await confirm({
-      title: "Prune unused volumes",
-      message: "Remove all volumes not currently in use by containers? This action cannot be undone and may result in data loss.",
-      confirmLabel: "Prune",
-      cancelLabel: "Cancel",
-      tone: "danger"
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    toast.info("Volume pruning not yet implemented");
-    // TODO: Implement volume prune API call
-  }, [confirm]);
+  const handlePruneVolumes = useCallback(() => {
+    setPruneDialogOpen(true);
+  }, []);
 
   const handleDeleteVolume = useCallback(async (name: string, volumeName: string) => {
     const confirmed = await confirm({
@@ -81,9 +71,17 @@ const VolumeList = () => {
       return;
     }
 
-    toast.info(`Volume deletion for ${volumeName} not yet implemented`);
-    // TODO: Implement volume delete API call
-  }, [confirm]);
+    try {
+      await toast.promise(deleteVolume(volumeName), {
+        loading: `Deleting volume ${volumeName}...`,
+        success: `Volume ${volumeName} deleted successfully`,
+        error: (err) => (err instanceof Error ? err.message : `Failed to delete volume ${volumeName}`)
+      });
+      void refetch();
+    } catch (error) {
+      console.error("Failed to delete volume:", error);
+    }
+  }, [confirm, refetch]);
 
   const handleViewVolume = useCallback((name: string) => {
     toast.info(`Volume details for ${name} not yet implemented`);
@@ -195,6 +193,14 @@ const VolumeList = () => {
           </Table>
         </Paper>
       )}
+      
+      <VolumePruneDialog
+        open={pruneDialogOpen}
+        onClose={() => setPruneDialogOpen(false)}
+        onPruned={() => {
+          void refetch();
+        }}
+      />
     </Stack>
   );
 };

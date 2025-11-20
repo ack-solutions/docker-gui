@@ -110,7 +110,7 @@ services:
       PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
       PDNS_WEBSERVER_PORT: "8081"
       # Restrict API access to the internal docker-gui network (no public UI)
-      PDNS_WEBSERVER_ALLOW_FROM: "172.20.0.0/16"
+      PDNS_WEBSERVER_ALLOW_FROM: "172.21.0.0/16"
       PDNS_API: "yes"
       PDNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
       PDNS_LAUNCH: gsqlite3
@@ -156,4 +156,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.21.0.0/16

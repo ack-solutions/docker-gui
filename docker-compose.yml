@@ -7,7 +7,10 @@ services:
     container_name: docker-gui-full
     env_file:
       - .env
-    command: sh -c "yarn db:migrate && yarn db:seed && yarn dev"
+    environment:
+      # Override DOCKER_HOST to use the mounted socket inside the container
+      DOCKER_HOST: unix:///var/run/docker.sock
+    command: sh -c "prisma db push --accept-data-loss && yarn db:seed && yarn dev"
     ports:
       - "3000:3000"
     volumes:
@@ -19,11 +22,6 @@ services:
       - nginx-sites-available:/etc/nginx/sites-available
       - letsencrypt-webroot:/var/www/letsencrypt
       - letsencrypt-certs:/etc/letsencrypt
-    environment:
-      DOCKER_HOST: unix:///var/run/docker.sock
-      DATABASE_URL: file:/app/data/docker-gui.db
-      JWT_SECRET: ${JWT_SECRET:-06dcd2eb6036810bb3623c91ff10c572ab6500e94098c01bcc3f1e393d6e2474}
-      DNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
     restart: unless-stopped
     networks:
       - docker-gui-network
@@ -43,8 +41,8 @@ services:
     image: nginx:alpine
     container_name: nginx-proxy
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - nginx-sites-enabled:/etc/nginx/sites-enabled
@@ -95,7 +93,7 @@ services:
       PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
       PDNS_WEBSERVER_PORT: "8081"
       # Restrict API access to the internal docker-gui network (no public UI)
-      PDNS_WEBSERVER_ALLOW_FROM: "172.20.0.0/16"
+      PDNS_WEBSERVER_ALLOW_FROM: "172.21.0.0/16"
       PDNS_API: "yes"
       PDNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
       PDNS_LAUNCH: gsqlite3
@@ -133,4 +131,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.21.0.0/16

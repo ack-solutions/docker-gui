@@ -34,6 +34,8 @@ import ContainerMaintenancePanel from "@/features/docker/containers/components/c
 import ContainerTableRow from "@/features/docker/containers/components/container-table-row";
 import CreateContainerDialog from "@/features/docker/containers/components/create-container-dialog";
 import ContainerDetailDialog from "@/features/docker/containers/components/container-detail-dialog";
+import ContainerPruneDialog from "@/features/docker/containers/components/container-prune-dialog";
+import ImagePruneDialog from "@/features/docker/images/components/image-prune-dialog";
 import {
   useContainerActions,
   useContainerState,
@@ -47,7 +49,7 @@ import { usePersistentState } from "@/client/hooks/use-persistent-state";
 const ContainerList = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const { data, isLoading, isError, error, isFetching } = useContainers({ refetchIntervalMs: 10_000 });
+  const { data, isLoading, isError, error, isFetching, refetch } = useContainers({ refetchIntervalMs: 10_000 });
   const actions = useContainerActions();
   const containerState = useContainerState();
   const { openLogs, openTerminal } = useBottomPanel();
@@ -58,6 +60,8 @@ const ContainerList = () => {
   const [menuAnchor, setMenuAnchor] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [detailContainerId, setDetailContainerId] = useState<string | null>(null);
+  const [pruneImagesDialogOpen, setPruneImagesDialogOpen] = useState(false);
+  const [pruneContainersDialogOpen, setPruneContainersDialogOpen] = useState(false);
 
   const groupedContainers = useGroupedContainers(data);
   const showSkeleton = isLoading && (!data || data.length === 0);
@@ -286,51 +290,13 @@ const ContainerList = () => {
     [openLogs]
   );
 
-  const handlePruneContainers = useCallback(async () => {
-    const confirmed = await confirm({
-      title: "Prune stopped containers",
-      message: "Remove all stopped containers? This will permanently delete containers that are not running.",
-      confirmLabel: "Prune",
-      cancelLabel: "Cancel",
-      tone: "danger"
-    });
+  const handlePruneContainers = useCallback(() => {
+    setPruneContainersDialogOpen(true);
+  }, []);
 
-    if (!confirmed) {
-      return;
-    }
-
-    await toast.promise(actions.pruneContainers(), {
-      loading: "Removing stopped containers...",
-      success: (summary) =>
-        summary.removedCount
-          ? `Removed ${summary.removedCount} container${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
-          : "No stopped containers to remove.",
-      error: (err) => (err instanceof Error ? err.message : "Unable to prune containers")
-    });
-  }, [actions, confirm]);
-
-  const handlePruneImages = useCallback(async () => {
-    const confirmed = await confirm({
-      title: "Prune unused images",
-      message: "Remove all unused and dangling images? This will free up disk space but cannot be undone.",
-      confirmLabel: "Prune",
-      cancelLabel: "Cancel",
-      tone: "danger"
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    await toast.promise(actions.pruneImages(), {
-      loading: "Removing unused images...",
-      success: (summary) =>
-        summary.removedCount
-          ? `Removed ${summary.removedCount} image${summary.removedCount > 1 ? "s" : ""} and reclaimed ${formatBytes(summary.reclaimedSpace)}.`
-          : "No unused images to clean up.",
-      error: (err) => (err instanceof Error ? err.message : "Unable to prune images")
-    });
-  }, [actions, confirm]);
+  const handlePruneImages = useCallback(() => {
+    setPruneImagesDialogOpen(true);
+  }, []);
 
   const totalCount = data?.length ?? 0;
   const filteredCount = filteredData?.length ?? 0;
@@ -596,6 +562,22 @@ const ContainerList = () => {
         open={Boolean(detailContainerId)}
         onClose={() => setDetailContainerId(null)}
         containerId={detailContainerId}
+      />
+      
+      <ContainerPruneDialog
+        open={pruneContainersDialogOpen}
+        onClose={() => setPruneContainersDialogOpen(false)}
+        onPruned={() => {
+          void refetch();
+        }}
+      />
+      
+      <ImagePruneDialog
+        open={pruneImagesDialogOpen}
+        onClose={() => setPruneImagesDialogOpen(false)}
+        onPruned={() => {
+          void refetch();
+        }}
       />
     </>
   );

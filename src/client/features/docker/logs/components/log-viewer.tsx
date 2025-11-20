@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
@@ -17,6 +17,7 @@ import moment from "moment";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useLogs } from "@/features/docker/logs/hooks/use-logs";
+import type { DockerLogEntry } from "@/types/docker";
 
 const CompactSearchField = styled(TextField)(({ theme }) => ({
   minWidth: 160,
@@ -36,36 +37,52 @@ const LogViewport = styled(Box, {
   shouldForwardProp: (prop) => prop !== "$isExpanded"
 })<{ $isExpanded: boolean }>(({ theme, $isExpanded }) => ({
   flex: 1,
+  minHeight: 0, // Important for flex scrolling
   overflow: "auto",
-  backgroundColor: theme.palette.mode === "dark" ? "rgba(15, 23, 42, 0.6)" : theme.palette.grey[50],
+  backgroundColor: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc",
   borderRadius: theme.shape.borderRadius,
   padding: theme.spacing(1.5),
-  maxHeight: $isExpanded ? "calc(100vh - 240px)" : 500,
-  minHeight: $isExpanded ? 650 : 350,
   border: `1px solid ${theme.palette.divider}`,
-  transition: theme.transitions.create(["max-height", "min-height"], {
-    duration: theme.transitions.duration.standard
-  }),
   fontFamily: 'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-  fontSize: "0.8125rem"
+  fontSize: "0.8125rem",
+  lineHeight: 1.6,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  userSelect: "text",
+  "&::-webkit-scrollbar": {
+    width: "8px",
+    height: "8px"
+  },
+  "&::-webkit-scrollbar-track": {
+    backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"
+  },
+  "&::-webkit-scrollbar-thumb": {
+    backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)",
+    borderRadius: "4px",
+    "&:hover": {
+      backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+    }
+  }
 }));
 
-const LogLine = styled(Box, {
+const LogLine = styled(Typography, {
   shouldForwardProp: (prop) => prop !== "$level"
 })<{ $level: "info" | "warn" | "error" }>(({ theme, $level }) => {
-  const palette = {
+  const colors = {
     error: theme.palette.error.main,
     warn: theme.palette.warning.main,
-    info: theme.palette.primary.main
+    info: theme.palette.text.primary
   } as const;
 
   return {
-    borderLeft: `3px solid ${palette[$level]}`,
-    paddingLeft: theme.spacing(1.5),
-    marginBottom: theme.spacing(1),
-    "&:hover": {
-      backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)"
-    }
+    color: colors[$level],
+    margin: 0,
+    padding: 0,
+    fontFamily: 'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    fontSize: "0.8125rem",
+    lineHeight: 1.6,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word"
   };
 });
 
@@ -92,6 +109,11 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const isUserScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const { control, register, watch } = useForm<LogFilterForm>({
     defaultValues: {
       query: "",
@@ -102,13 +124,93 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
   const level = watch("level");
   const query = watch("query");
 
+  // Auto-start streaming on mount
+  useEffect(() => {
+    if (!isStreaming) {
+      toggleStreaming();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerId]); // Only auto-start when container changes
+
+  // Filter and sort logs chronologically (oldest to newest for terminal-like display)
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
+    const filtered = logs.filter((log) => {
       const matchesLevel = level === "all" || log.level === level;
       const matchesQuery = !query || log.message.toLowerCase().includes(query.toLowerCase());
       return matchesLevel && matchesQuery;
     });
+    
+    // Sort chronologically (oldest first) for terminal-like continuous output
+    return filtered.sort((a, b) => 
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
   }, [logs, level, query]);
+
+  // Check if user is near bottom of scroll
+  const isNearBottom = useCallback((element: HTMLElement, threshold = 100) => {
+    const { scrollTop, scrollHeight, clientHeight } = element;
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  }, []);
+
+  // Scroll to bottom
+  const scrollToBottom = useCallback((smooth = false) => {
+    if (viewportRef.current) {
+      viewportRef.current.scrollTo({
+        top: viewportRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto"
+      });
+    }
+  }, []);
+
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    if (!viewportRef.current) return;
+
+    const nearBottom = isNearBottom(viewportRef.current);
+    
+    if (nearBottom) {
+      // User is at bottom, enable auto-scroll
+      setAutoScroll(true);
+      isUserScrollingRef.current = false;
+    } else {
+      // User scrolled up, disable auto-scroll
+      if (autoScroll) {
+        setAutoScroll(false);
+        isUserScrollingRef.current = true;
+      }
+    }
+
+    // Clear existing timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Set a timeout to detect when user stops scrolling
+    scrollTimeoutRef.current = setTimeout(() => {
+      isUserScrollingRef.current = false;
+    }, 150);
+  }, [autoScroll, isNearBottom]);
+
+  // Auto-scroll when new logs arrive (if auto-scroll is enabled)
+  useEffect(() => {
+    if (autoScroll && !isUserScrollingRef.current && viewportRef.current) {
+      // Check if we're already near bottom before scrolling
+      if (isNearBottom(viewportRef.current, 200)) {
+        // Use requestAnimationFrame for smooth scrolling
+        requestAnimationFrame(() => {
+          scrollToBottom(false);
+        });
+      }
+    }
+  }, [filteredLogs.length, autoScroll, scrollToBottom, isNearBottom]);
+
+  // Reset auto-scroll when container changes
+  useEffect(() => {
+    setAutoScroll(true);
+    setTimeout(() => {
+      scrollToBottom(false);
+    }, 100);
+  }, [containerId, scrollToBottom]);
 
   const handleDownloadLogs = () => {
     setIsLoading(true);
@@ -149,12 +251,19 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
     }
   };
 
+
   return (
     <Card>
-      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
-        <Stack spacing={1}>
-          {/* Compact Toolbar */}
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+      <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 }, height: "100%", display: "flex", flexDirection: "column" }}>
+        <Stack spacing={1} sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Compact Toolbar - Fixed */}
+          <Stack 
+            direction="row" 
+            spacing={1} 
+            alignItems="center" 
+            flexWrap="wrap"
+            sx={{ flexShrink: 0 }} // Prevent toolbar from shrinking
+          >
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
               Live Logs
             </Typography>
@@ -199,6 +308,19 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
                 {isStreaming ? <PauseCircleOutlineIcon fontSize="small" /> : <PlayCircleOutlineIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
+            <Tooltip title={autoScroll ? "Auto-scroll enabled (scroll up to pause)" : "Auto-scroll paused (scroll to bottom to resume)"}>
+              <Chip 
+                label={autoScroll ? "Following" : "Paused"} 
+                size="small" 
+                color={autoScroll ? "success" : "default"}
+                variant="outlined"
+                sx={{ cursor: "pointer" }}
+                onClick={() => {
+                  setAutoScroll(true);
+                  scrollToBottom(true);
+                }}
+              />
+            </Tooltip>
             <Tooltip title="Copy visible logs">
               <IconButton size="small" onClick={handleCopyLogs}>
                 <ContentCopyIcon fontSize="small" />
@@ -211,14 +333,15 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
             </Tooltip>
           </Stack>
 
-          {/* Collapsible Filters */}
+          {/* Collapsible Filters - Fixed */}
           <Collapse in={filtersExpanded}>
             <Stack 
               direction="row" 
               spacing={1} 
               sx={{ 
                 pt: 1,
-                pb: 0.5
+                pb: 0.5,
+                flexShrink: 0 // Prevent filters from shrinking
               }}
             >
               <CompactSearchField
@@ -263,27 +386,15 @@ const LogViewer = ({ containerId }: LogViewerProps) => {
           <Divider />
 
           {/* Log Content */}
-          <LogViewport $isExpanded={isExpanded}>
+          <LogViewport 
+            ref={viewportRef}
+            $isExpanded={isExpanded}
+            onScroll={handleScroll}
+          >
             {filteredLogs.length > 0 ? (
               filteredLogs.map((log) => (
-                <LogLine key={log.id} $level={log.level}>
-                  <Typography 
-                    variant="caption" 
-                    color="text.secondary" 
-                    sx={{ fontSize: "0.75rem", display: "block", mb: 0.25 }}
-                  >
-                    {moment(log.timestamp).format("HH:mm:ss")} · {log.level.toUpperCase()}
-                  </Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      wordBreak: "break-word", 
-                      fontSize: "0.8125rem",
-                      whiteSpace: "pre-wrap"
-                    }}
-                  >
-                    {log.message}
-                  </Typography>
+                <LogLine key={log.id} $level={log.level} as="div">
+                  {log.message}
                 </LogLine>
               ))
             ) : (
