@@ -76,6 +76,10 @@ const pageMetadata: Record<string, { title: string; subtitle: string }> = {
   "/containers/": {
     title: "Container Detail",
     subtitle: "Review container health, logs, and configuration."
+  },
+  "/storage": {
+    title: "Object Storage",
+    subtitle: "Manage S3-compatible storage buckets and access credentials."
   }
 };
 

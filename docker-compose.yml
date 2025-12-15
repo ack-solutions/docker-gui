@@ -56,33 +56,158 @@ services:
       retries: 3
 
 
-  mailserver:
-    image: mailserver/docker-mailserver:latest
-    container_name: mailserver
-    hostname: mail
-    domainname: localhost
+  postfix:
+    build:
+      context: ./mail/postfix
+      dockerfile: Dockerfile
+    container_name: mail-postfix
+    hostname: ${MAIL_HOSTNAME:-mail.localhost}
+    env_file:
+      - .env
+    environment:
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-localhost}
+      - RSPAMD_HOST=rspamd
+      - RSPAMD_PORT=11332
+      - DOVECOT_LMTP_HOST=dovecot
+      - DOVECOT_LMTP_PORT=2525
+      - DKIM_HOST=opendkim
+      - DKIM_PORT=8891
     ports:
       - "25:25"
-      - "143:143"
       - "587:587"
-      - "993:993"
     volumes:
-      - ./data/mail-data:/var/mail
-      - ./data/mail-state:/var/mail-state
-      - ./data/mail-logs:/var/log/mail
-      - ./data/mail-config:/tmp/docker-mailserver
-    environment:
-      - ENABLE_SPAMASSASSIN=0
-      - ENABLE_CLAMAV=0
-      - ENABLE_FAIL2BAN=0
-      - ENABLE_POSTGREY=0
-      - PERMIT_DOCKER=network
-      - DMS_DEBUG=0
-    cap_add:
-      - NET_ADMIN
-    restart: always
+      - ./config/mail/postfix:/etc/postfix/custom:ro
+      - ./config/mail/shared:/etc/mail-shared:ro
+      - ./data/mail/spool:/var/spool/postfix
+      - ./data/mail/logs:/var/log/mail
+      - ./data/mail/maildir:/var/mail
+      - ./data/mail/letsencrypt:/etc/letsencrypt:ro
+    restart: unless-stopped
+    depends_on:
+      - dovecot
+      - rspamd
+      - opendkim
+      - redis
     networks:
       - docker-gui-network
+
+  dovecot:
+    build:
+      context: ./mail/dovecot
+      dockerfile: Dockerfile
+    container_name: mail-dovecot
+    hostname: ${MAIL_HOSTNAME:-mail.localhost}
+    ports:
+      - "993:993"
+    environment:
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-localhost}
+    volumes:
+      - ./config/mail/dovecot:/etc/dovecot/conf.d:ro
+      - ./config/mail/shared:/etc/mail-shared:ro
+      - ./data/mail/maildir:/var/mail
+      - ./data/mail/logs:/var/log/mail
+      - ./data/mail/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  rspamd:
+    build:
+      context: ./mail/rspamd
+      dockerfile: Dockerfile
+    container_name: mail-rspamd
+    environment:
+      - REDIS_HOST=redis
+    ports:
+      - "11334:11334"
+    volumes:
+      - ./config/mail/rspamd:/etc/rspamd/local.d:ro
+      - ./data/mail/rspamd:/var/lib/rspamd
+      - ./data/mail/logs:/var/log/rspamd
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  opendkim:
+    build:
+      context: ./mail/opendkim
+      dockerfile: Dockerfile
+    container_name: mail-opendkim
+    ports:
+      - "8891:8891"
+    volumes:
+      - ./config/mail/opendkim:/etc/opendkim
+      - ./data/mail/opendkim:/var/lib/opendkim
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: mail-redis
+    command: redis-server --save 60 1000 --appendonly yes
+    volumes:
+      - ./data/mail/redis:/data
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  fail2ban:
+    build:
+      context: ./mail/fail2ban
+      dockerfile: Dockerfile
+    container_name: mail-fail2ban
+    depends_on:
+      - postfix
+      - dovecot
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./config/mail/shared:/etc/mail-shared:ro
+      - ./data/mail/logs:/var/log/mail
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: mail-certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    volumes:
+      - ./data/mail/letsencrypt:/etc/letsencrypt
+      - letsencrypt-webroot:/var/www/letsencrypt
+    restart: unless-stopped
+    depends_on:
+      - nginx-proxy
+    networks:
+      - docker-gui-network
+
+  # MinIO Object Storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"  # S3 API endpoint
+      - "9001:9001"  # MinIO Console
+    volumes:
+      - ./data/minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   docker-gui-node-modules:

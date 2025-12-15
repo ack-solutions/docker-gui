@@ -87,6 +87,18 @@ export interface ProxiesConfig {
   autoDiscovery?: boolean;
 }
 
+export interface MinioConfig {
+  enabled: boolean;
+  endpoint: string;
+  port: number;
+  useSSL: boolean;
+  accessKey: string;
+  secretKey: string;
+  console?: {
+    port: number;
+  };
+}
+
 export interface FeaturesConfig {
   containerManagement: boolean;
   imageManagement: boolean;
@@ -99,6 +111,7 @@ export interface FeaturesConfig {
   proxyManagement: boolean;
   userManagement: boolean;
   systemMetrics: boolean;
+  storageManagement: boolean;
 }
 
 export interface PerformanceConfig {
@@ -148,6 +161,7 @@ export interface Config {
   email: EmailConfig;
   dns: DnsConfig;
   proxies: ProxiesConfig;
+  minio: MinioConfig;
   features: FeaturesConfig;
   performance: PerformanceConfig;
   backup: BackupConfig;

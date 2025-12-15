@@ -22,6 +22,8 @@ export const userPermissions = [
   "proxies:manage",
   "email:view",
   "email:manage",
+  "storage:view",
+  "storage:manage",
   "users:manage",
   "settings:view",
   "settings:edit"
@@ -52,6 +54,7 @@ export const rolePermissions: Record<UserRole, UserPermission[]> = {
     "nginx:view",
     "proxies:view",
     "email:view",
+    "storage:view",
     "settings:view",
     "settings:edit"
   ],
@@ -68,6 +71,7 @@ export const rolePermissions: Record<UserRole, UserPermission[]> = {
     "nginx:view",
     "proxies:view",
     "email:view",
+    "storage:view",
     "settings:view"
   ]
 };

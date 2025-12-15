@@ -57,6 +57,18 @@ features:
   proxyManagement: true
   userManagement: true
   systemMetrics: true
+  storageManagement: true
+
+minio:
+  enabled: true
+  endpoint: "${MINIO_ENDPOINT:-localhost}"
+  port: ${MINIO_PORT:-9000}
+  useSSL: ${MINIO_USE_SSL:-false}
+  accessKey: "${MINIO_ROOT_USER:-minioadmin}"
+  secretKey: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+  console:
+    port: ${MINIO_CONSOLE_PORT:-9001}
+
 
 performance:
   metricsRefreshInterval: 5000

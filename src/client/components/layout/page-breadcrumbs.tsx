@@ -35,6 +35,7 @@ const routeNames: Record<string, string> = {
   "/ssl": "SSL Certificates",
   "/nginx": "Nginx Config",
   "/email": "Email",
+  "/storage": "Storage",
   "/users": "Users"
 };
 
@@ -58,7 +59,7 @@ const generateBreadcrumbs = (pathname: string): BreadcrumbItem[] => {
   let currentPath = "";
   segments.forEach((segment, index) => {
     currentPath += `/${segment}`;
-    
+
     // Check if it's a known route
     if (routeNames[currentPath]) {
       breadcrumbs.push({
@@ -75,7 +76,7 @@ const generateBreadcrumbs = (pathname: string): BreadcrumbItem[] => {
       // For detail pages (e.g., container ID)
       const parentPath = `/${segments.slice(0, index).join("/")}`;
       const parentRouteName = routeNames[parentPath];
-      
+
       if (parentRouteName) {
         // This is a detail page
         const shortId = segment.length > 12 ? `${segment.substring(0, 12)}...` : segment;

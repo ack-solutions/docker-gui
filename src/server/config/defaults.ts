@@ -22,7 +22,7 @@ export function getDefaultConfig(): Config {
     },
 
     docker: {
-      host: process.platform === 'win32' 
+      host: process.platform === 'win32'
         ? 'npipe:////./pipe/docker_engine'
         : 'unix:///var/run/docker.sock',
       tlsVerify: false,
@@ -78,6 +78,7 @@ export function getDefaultConfig(): Config {
       proxyManagement: false,
       userManagement: true,
       systemMetrics: true,
+      storageManagement: false,
     },
 
     performance: {
@@ -112,6 +113,18 @@ export function getDefaultConfig(): Config {
 
     setup: {
       initialSecret: '',
+    },
+
+    minio: {
+      enabled: false,
+      endpoint: 'localhost',
+      port: 9000,
+      useSSL: false,
+      accessKey: 'minioadmin',
+      secretKey: 'minioadmin',
+      console: {
+        port: 9001,
+      },
     },
   };
 }

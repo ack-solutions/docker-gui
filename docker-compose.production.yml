@@ -75,25 +75,123 @@ services:
       retries: 3
       start_period: 10s
 
-  # Postfix Email Server
   postfix:
-    image: boky/postfix:latest
+    build:
+      context: ./mail/postfix
+      dockerfile: Dockerfile
     container_name: postfix
+    hostname: ${MAIL_HOSTNAME:-mail.yourdomain.com}
+    env_file:
+      - .env
     environment:
-      ALLOWED_SENDER_DOMAINS: ${ALLOWED_SENDER_DOMAINS:-yourdomain.com}
-      HOSTNAME: ${MAIL_HOSTNAME:-mail.yourdomain.com}
-      RELAYHOST: ${RELAY_HOST:-}
-      RELAYHOST_USERNAME: ${RELAY_USERNAME:-}
-      RELAYHOST_PASSWORD: ${RELAY_PASSWORD:-}
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-yourdomain.com}
+      - RSPAMD_HOST=rspamd
+      - RSPAMD_PORT=11332
+      - DOVECOT_LMTP_HOST=dovecot
+      - DOVECOT_LMTP_PORT=2525
+      - DKIM_HOST=opendkim
+      - DKIM_PORT=8891
     ports:
-      - "587:587"  # Submission
+      - "25:25"
+      - "587:587"
     volumes:
-      - postfix-spool:/var/spool/postfix
+      - mail-spool:/var/spool/postfix
+      - mail-maildir:/var/mail
+      - mail-logs:/var/log/mail
+      - ssl-certificates:/etc/letsencrypt:ro
+      - ./config/mail/postfix:/etc/postfix/custom:ro
+      - ./config/mail/shared:/etc/mail-shared:ro
+    restart: unless-stopped
+    depends_on:
+      - dovecot
+      - rspamd
+      - opendkim
+      - redis
+    networks:
+      - docker-gui-network
+
+  dovecot:
+    build:
+      context: ./mail/dovecot
+      dockerfile: Dockerfile
+    container_name: dovecot
+    hostname: ${MAIL_HOSTNAME:-mail.yourdomain.com}
+    ports:
+      - "993:993"
+    environment:
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-yourdomain.com}
+    volumes:
+      - mail-maildir:/var/mail
+      - mail-logs:/var/log/mail
+      - ssl-certificates:/etc/letsencrypt:ro
+      - ./config/mail/dovecot:/etc/dovecot/conf.d:ro
+      - ./config/mail/shared:/etc/mail-shared:ro
+    depends_on:
+      - redis
     restart: unless-stopped
     networks:
       - docker-gui-network
 
-  # Let's Encrypt Certificate Manager
+  rspamd:
+    build:
+      context: ./mail/rspamd
+      dockerfile: Dockerfile
+    container_name: rspamd
+    environment:
+      - REDIS_HOST=redis
+    ports:
+      - "11334:11334"
+    volumes:
+      - mail-rspamd:/var/lib/rspamd
+      - mail-logs:/var/log/rspamd
+      - ./config/mail/rspamd:/etc/rspamd/local.d:ro
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  opendkim:
+    build:
+      context: ./mail/opendkim
+      dockerfile: Dockerfile
+    container_name: opendkim
+    ports:
+      - "8891:8891"
+    volumes:
+      - mail-opendkim:/var/lib/opendkim
+      - ./config/mail/opendkim:/etc/opendkim
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: mail-redis
+    command: redis-server --save 60 1000 --appendonly yes
+    volumes:
+      - mail-redis:/data
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
+  fail2ban:
+    build:
+      context: ./mail/fail2ban
+      dockerfile: Dockerfile
+    container_name: mail-fail2ban
+    depends_on:
+      - postfix
+      - dovecot
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - mail-logs:/var/log/mail
+      - ./config/mail/shared:/etc/mail-shared:ro
+    restart: unless-stopped
+    networks:
+      - docker-gui-network
+
   certbot:
     image: certbot/certbot:latest
     container_name: certbot
@@ -116,9 +214,19 @@ volumes:
     driver: local
   nginx-logs:
     driver: local
-  postfix-spool:
-    driver: local
   certbot-www:
+    driver: local
+  mail-spool:
+    driver: local
+  mail-maildir:
+    driver: local
+  mail-logs:
+    driver: local
+  mail-opendkim:
+    driver: local
+  mail-rspamd:
+    driver: local
+  mail-redis:
     driver: local
 
 networks:

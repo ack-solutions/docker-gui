@@ -15,6 +15,7 @@ import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import EmailIcon from "@mui/icons-material/Email";
 import AppsIcon from "@mui/icons-material/Apps";
 import PeopleIcon from "@mui/icons-material/People";
+import CloudIcon from "@mui/icons-material/Cloud";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import {
@@ -74,6 +75,7 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
           { label: "Accounts", href: "/email/accounts", icon: <PeopleIcon />, permission: "email:view" }
         ]
       },
+      { label: "Storage", href: "/storage", icon: <CloudIcon />, permission: "storage:view" },
       { label: "User Management", href: "/users", icon: <PeopleIcon />, permission: "users:manage" }
     ]
   }

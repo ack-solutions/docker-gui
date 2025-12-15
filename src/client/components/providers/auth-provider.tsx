@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import apiClient from "@/lib/api/client";
 import type { User, UserPermission } from "@/types/user";
+import { rolePermissions } from "@/types/user";
 
 interface AuthContextValue {
   user: User | null;
@@ -64,14 +65,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (handlingUnauthorizedRef.current) {
       return;
     }
-    
+
     handlingUnauthorizedRef.current = true;
     void apiClient.post("/auth/logout").catch(() => undefined);
     setUser(null);
     setLoading(false);
     toast.error("Your session has expired. Please sign in again.");
     router.replace("/auth/login");
-    
+
     // Reset after a delay to allow for potential re-authentication
     setTimeout(() => {
       handlingUnauthorizedRef.current = false;
@@ -122,10 +123,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!permissions.length) {
         return true;
       }
+      // Combine stored permissions with role-based permissions
+      // This ensures users get new permissions added to their role
+      // even if their DB record wasn't updated
+      const effectivePermissions = new Set([
+        ...user.permissions,
+        ...(rolePermissions[user.role] ?? [])
+      ]);
       if (requireAll) {
-        return permissions.every((candidate) => user.permissions.includes(candidate));
+        return permissions.every((candidate) => effectivePermissions.has(candidate));
       }
-      return permissions.some((candidate) => user.permissions.includes(candidate));
+      return permissions.some((candidate) => effectivePermissions.has(candidate));
     },
     [user]
   );
