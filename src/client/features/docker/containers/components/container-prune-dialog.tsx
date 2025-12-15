@@ -45,6 +45,7 @@ const ContainerPruneDialog = ({ open, onClose, onPruned }: ContainerPruneDialogP
       setSelectedIds(new Set());
       setSearchQuery("");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const loadStoppedContainers = useCallback(async () => {
@@ -118,9 +119,9 @@ const ContainerPruneDialog = ({ open, onClose, onPruned }: ContainerPruneDialogP
       setPruning(false);
     }
   }, [selectedIds, onPruned, onClose]);
-
-  const allSelected = filteredContainers.length > 0 && selectedIds.size === filteredContainers.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredContainers.length;
+  const selectedFilteredCount = filteredContainers.filter(c => selectedIds.has(c.id)).length;
+  const allSelected = filteredContainers.length > 0 && selectedFilteredCount === filteredContainers.length;
+  const someSelected = selectedFilteredCount > 0 && selectedFilteredCount < filteredContainers.length;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>

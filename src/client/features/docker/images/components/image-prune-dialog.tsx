@@ -129,8 +129,8 @@ const ImagePruneDialog = ({ open, onClose, onPruned }: ImagePruneDialogProps) =>
       .reduce((sum, img) => sum + img.size, 0);
   }, [filteredImages, selectedIds]);
 
-  const allSelected = filteredImages.length > 0 && selectedIds.size === filteredImages.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredImages.length;
+  const allSelected = filteredImages.length > 0 && filteredImages.every((img) => selectedIds.has(img.id));
+  const someSelected = !allSelected && filteredImages.some((img) => selectedIds.has(img.id));
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>

@@ -11,12 +11,12 @@ import {
   Tooltip,
   Button,
 } from "@mui/material";
+import { useRouter } from "next/navigation";
 import LanguageIcon from "@mui/icons-material/Language";
 import LockIcon from "@mui/icons-material/Lock";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import PendingIcon from "@mui/icons-material/Pending";
-import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import DnsIcon from "@mui/icons-material/Dns";
@@ -26,12 +26,15 @@ import type { Domain } from "@/types/server";
 
 interface DomainCardProps {
   domain: Domain;
-  onEdit: () => void;
   onDelete: () => void;
-  onClick?: () => void;
 }
 
-export default function DomainCard({ domain, onEdit, onDelete, onClick }: DomainCardProps) {
+export default function DomainCard({ domain, onDelete }: DomainCardProps) {
+  const router = useRouter();
+
+  const handleClick = () => {
+    router.push(`/domains/${domain.id}`);
+  };
 
   const getStatusConfig = () => {
     switch (domain.status) {
@@ -91,13 +94,13 @@ export default function DomainCard({ domain, onEdit, onDelete, onClick }: Domain
         sx={{
           height: "100%",
           transition: "all 0.2s",
-          cursor: onClick ? "pointer" : "default",
+          cursor: "pointer",
           "&:hover": {
             boxShadow: 4,
-            transform: onClick ? "translateY(-2px)" : "none",
+            transform: "translateY(-2px)",
           },
         }}
-        onClick={onClick}
+        onClick={handleClick}
       >
         <CardContent>
           <Stack spacing={2.5}>
@@ -211,19 +214,6 @@ export default function DomainCard({ domain, onEdit, onDelete, onClick }: Domain
                 sx={{ minWidth: 80 }}
               >
                 Open
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                color="primary"
-                startIcon={<EditIcon fontSize="small" />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                sx={{ minWidth: 80 }}
-              >
-                Edit
               </Button>
               <Button
                 size="small"

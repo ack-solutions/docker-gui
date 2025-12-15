@@ -25,9 +25,6 @@ services:
     restart: unless-stopped
     networks:
       - docker-gui-network
-    depends_on:
-      - mailhog
-      - powerdns
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
@@ -58,57 +55,34 @@ services:
       timeout: 5s
       retries: 3
 
-  # Email Server (MailHog for development/testing)
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: mailhog
-    ports:
-      - "8025:8025"  # Web UI
-      - "1025:1025"  # SMTP
-    restart: unless-stopped
-    networks:
-      - docker-gui-network
-    environment:
-      MH_STORAGE: maildir
-      MH_MAILDIR_PATH: /maildir
-    volumes:
-      - mailhog-data:/maildir
 
-  # DNS Server (PowerDNS with SQLite backend)
-  # NOTE: Ports 53 and 5353 conflict with macOS services. Using 15353 for development.
-  powerdns:
-    image: powerdns/pdns-auth-master:latest
-    container_name: powerdns
+  mailserver:
+    image: mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail
+    domainname: localhost
     ports:
-      # Port 53 is used by macOS DNS, Port 5353 is used by mDNS
-      # Uncomment these for Linux or if you've disabled macOS DNS:
-      # - "53:53/tcp"
-      # - "53:53/udp"
-      # Using port 15353 for development (less likely to conflict):
-      - "15353:53/tcp"    # Alternate DNS port
-      - "15353:53/udp"    # Alternate DNS port
-    environment:
-      PDNS_AUTH_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
-      PDNS_WEBSERVER: "yes"
-      PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
-      PDNS_WEBSERVER_PORT: "8081"
-      # Restrict API access to the internal docker-gui network (no public UI)
-      PDNS_WEBSERVER_ALLOW_FROM: "172.21.0.0/16"
-      PDNS_API: "yes"
-      PDNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
-      PDNS_LAUNCH: gsqlite3
-      PDNS_GSQLITE3_DATABASE: /var/lib/powerdns/pdns.sqlite3
+      - "25:25"
+      - "143:143"
+      - "587:587"
+      - "993:993"
     volumes:
-      - powerdns-data:/var/lib/powerdns
-    restart: unless-stopped
+      - ./data/mail-data:/var/mail
+      - ./data/mail-state:/var/mail-state
+      - ./data/mail-logs:/var/log/mail
+      - ./data/mail-config:/tmp/docker-mailserver
+    environment:
+      - ENABLE_SPAMASSASSIN=0
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=0
+      - ENABLE_POSTGREY=0
+      - PERMIT_DOCKER=network
+      - DMS_DEBUG=0
+    cap_add:
+      - NET_ADMIN
+    restart: always
     networks:
       - docker-gui-network
-    healthcheck:
-      test: ["CMD", "pdns_control", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
 volumes:
   docker-gui-node-modules:
@@ -120,10 +94,6 @@ volumes:
   letsencrypt-webroot:
     driver: local
   letsencrypt-certs:
-    driver: local
-  mailhog-data:
-    driver: local
-  powerdns-data:
     driver: local
 
 networks:

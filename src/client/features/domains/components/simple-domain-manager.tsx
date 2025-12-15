@@ -38,13 +38,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { domainQueryKeys, useDomains } from "@/features/domains/hooks/use-domains";
 import { useContainers } from "@/features/docker/containers/hooks/use-containers";
-import { createDomain, updateDomain, deleteDomain } from "@/features/domains/api";
+import { createDomain, deleteDomain } from "@/features/domains/api";
 import { useConfirmationDialog } from "@/components/common/confirmation-dialog-provider";
 import DomainCard from "./domain-card";
 import DomainsTableView from "./domains-table-view";
-import EnhancedDomainWizard from "./enhanced-domain-wizard";
-import DomainEditDialog from "./domain-edit-dialog";
-import type { Domain, DomainUpsertInput } from "@/types/server";
+import SimpleDomainWizard from "./simple-domain-wizard";
+import type { Domain } from "@/types/server";
 import { usePersistentState } from "@/client/hooks/use-persistent-state";
 
 export default function SimpleDomainManager() {
@@ -55,8 +54,6 @@ export default function SimpleDomainManager() {
 
   const [search, setSearch] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
   const [expandedDomain, setExpandedDomain] = useState<string | null>(null);
   const [viewMode, setViewMode] = usePersistentState<"grid" | "table">("domains:view-mode", "grid");
 
@@ -72,19 +69,6 @@ export default function SimpleDomainManager() {
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: DomainUpsertInput }) =>
-      updateDomain(id, payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: domainQueryKeys.all });
-      toast.success("Domain updated successfully!");
-      setEditDialogOpen(false);
-      setEditingDomain(null);
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to update domain");
-    },
-  });
 
   const deleteMutation = useMutation({
     mutationFn: deleteDomain,
@@ -127,16 +111,6 @@ export default function SimpleDomainManager() {
     return groups;
   }, [filteredDomains]);
 
-  const handleEdit = (domain: Domain) => {
-    setEditingDomain(domain);
-    setEditDialogOpen(true);
-  };
-
-  const handleEditSubmit = async (data: DomainUpsertInput) => {
-    if (editingDomain) {
-      await updateMutation.mutateAsync({ id: editingDomain.id, payload: data });
-    }
-  };
 
   const handleDelete = async (domain: Domain) => {
     const confirmed = await confirm({
@@ -272,7 +246,10 @@ export default function SimpleDomainManager() {
       ) : viewMode === "table" ? (
         <DomainsTableView
           domains={filteredDomains}
-          onEdit={handleEdit}
+          onEdit={(domain) => {
+            // Navigate to detail page
+            window.location.href = `/domains/${domain.id}`;
+          }}
           onDelete={handleDelete}
         />
       ) : (
@@ -281,39 +258,21 @@ export default function SimpleDomainManager() {
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={domain.id}>
               <DomainCard
                 domain={domain}
-                onEdit={() => handleEdit(domain)}
                 onDelete={() => handleDelete(domain)}
-                onClick={() => handleEdit(domain)}
               />
             </Grid>
           ))}
         </Grid>
       )}
 
-      {/* Enhanced Wizard for creating new domains */}
-      <EnhancedDomainWizard
+      {/* Simple Wizard for creating new domains */}
+      <SimpleDomainWizard
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         onSubmit={async (data) => {
           await createMutation.mutateAsync(data);
         }}
-        containers={containers}
-        existingDomains={domains ?? []}
       />
-
-      {/* Edit Dialog with Tabs */}
-      {editingDomain && (
-        <DomainEditDialog
-          open={editDialogOpen}
-          domain={editingDomain}
-          allDomains={domains ?? []}
-          onClose={() => {
-            setEditDialogOpen(false);
-            setEditingDomain(null);
-          }}
-          onSubmit={handleEditSubmit}
-        />
-      )}
     </Stack>
   );
 }

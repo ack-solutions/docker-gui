@@ -200,9 +200,10 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
   // Reset auto-scroll when container changes
   useEffect(() => {
     setAutoScroll(true);
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       scrollToBottom(false);
     }, 100);
+    return () => clearTimeout(timeoutId);
   }, [containerId, scrollToBottom]);
 
   const handleDownloadLogs = () => {

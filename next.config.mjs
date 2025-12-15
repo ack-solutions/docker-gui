@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const externalModules = ["dockerode", "ssh2", "@prisma/client", ".prisma/client"];
+const externalModules = ["dockerode", "ssh2", "@prisma/client", ".prisma/client", "nodemailer"];
 
 const nextConfig = {
   reactStrictMode: true,

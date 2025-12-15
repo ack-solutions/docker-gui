@@ -117,7 +117,7 @@ export default function DomainStatusCard({
   const getDnsModeLabel = () => {
     switch (dnsMode) {
       case "managed":
-        return "Manage DNS Here (PowerDNS)";
+        return "Manage DNS Here";
       case "third-party":
         return "External Provider";
       case "proxy-only":

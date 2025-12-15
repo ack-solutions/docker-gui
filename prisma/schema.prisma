@@ -8,15 +8,17 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String
-  name          String?
-  role          String
-  permissions   Json
-  isSuperAdmin  Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         String
+  permissions  Json
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  emailAccounts EmailAccount[]
 
   @@map("users")
 }
@@ -73,29 +75,29 @@ model DiskMetricsLog {
 }
 
 model NginxSite {
-  id               String               @id @default(uuid())
-  primaryDomain    String               @unique
+  id               String    @id @default(uuid())
+  primaryDomain    String    @unique
   serverNames      Json
   upstreamType     String
   upstreamTarget   String
   containerId      String?
   containerPort    Int?
-  enableHttp       Boolean              @default(true)
-  enableHttps      Boolean              @default(true)
-  forceHttps       Boolean              @default(false)
-  sslMode          String               @default("lets-encrypt")
+  enableHttp       Boolean   @default(true)
+  enableHttps      Boolean   @default(true)
+  forceHttps       Boolean   @default(false)
+  sslMode          String    @default("lets-encrypt")
   letsEncryptEmail String?
   sslCertificateId String?
-  enabled          Boolean              @default(true)
-  status           String               @default("draft")
+  enabled          Boolean   @default(true)
+  status           String    @default("draft")
   lastError        String?
   lastAppliedAt    DateTime?
   lastValidatedAt  DateTime?
   configPath       String?
   notes            String?
   extraDirectives  String?
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   provisionLogs NginxProvisionLog[]
   domains       Domain[]
@@ -118,41 +120,41 @@ model NginxProvisionLog {
 }
 
 model Domain {
-  id                  String    @id @default(uuid())
-  name                String    @unique
+  id                  String   @id @default(uuid())
+  name                String   @unique
   aliases             Json
   provider            String?
-  status              String    @default("pending")
-  mode                String    @default("managed")
+  status              String   @default("pending")
+  mode                String   @default("managed")
   dnsProviderType     String?
   dnsProviderConfig   Json?
   parentDomainId      String?
   notes               String?
-  targetType          String    @default("none")
+  targetType          String   @default("none")
   targetContainerId   String?
   targetContainerPort Int?
   targetServiceHost   String?
   targetExternalUrl   String?
   targetStaticRoot    String?
-  enableHttp          Boolean   @default(true)
-  enableHttps         Boolean   @default(true)
-  forceHttps          Boolean   @default(false)
-  sslMode             String    @default("lets-encrypt")
+  enableHttp          Boolean  @default(true)
+  enableHttps         Boolean  @default(true)
+  forceHttps          Boolean  @default(false)
+  sslMode             String   @default("lets-encrypt")
   letsEncryptEmail    String?
   sslCertificateId    String?
   nginxSiteId         String?
   lastError           String?
   customNginxConfig   String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  records   DomainRecord[]
-  parentDomain Domain?   @relation("DomainHierarchy", fields: [parentDomainId], references: [id], onDelete: SetNull)
-  childDomains Domain[]  @relation("DomainHierarchy")
-  nginxSite NginxSite?  @relation(fields: [nginxSiteId], references: [id], onDelete: SetNull)
+  records      DomainRecord[]
+  parentDomain Domain?        @relation("DomainHierarchy", fields: [parentDomainId], references: [id], onDelete: SetNull)
+  childDomains Domain[]       @relation("DomainHierarchy")
+  nginxSite    NginxSite?     @relation(fields: [nginxSiteId], references: [id], onDelete: SetNull)
 
-  @@map("domains")
   @@index([parentDomainId], map: "idx_domain_parent")
+  @@map("domains")
 }
 
 model DomainRecord {
@@ -170,4 +172,84 @@ model DomainRecord {
 
   @@index([domainId], map: "idx_domain_record_domain")
   @@map("domain_records")
+}
+
+model EmailAccount {
+  id                 String   @id @default(uuid())
+  userId             String
+  email              String
+  host               String
+  port               Int
+  username           String
+  password           String // Encrypted
+  tls                Boolean  @default(true) // IMAP TLS (deprecated, use imapTls)
+  imapTls            Boolean  @default(true) // IMAP TLS/SSL
+  smtpHost           String?
+  smtpPort           Int?
+  smtpSecure         Boolean  @default(false) // SMTP SSL/TLS (true = SSL, false = STARTTLS)
+  smtpTls            Boolean  @default(true) // SMTP TLS enabled
+  rejectUnauthorized Boolean  @default(false) // Reject self-signed certificates
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  folders EmailFolder[]
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_accounts")
+}
+
+model EmailFolder {
+  id        String   @id @default(uuid())
+  accountId String
+  name      String
+  path      String
+  type      String   @default("custom") // inbox, sent, trash, drafts, junk, custom
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account EmailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  emails  Email[]
+
+  @@unique([accountId, path])
+  @@map("email_folders")
+}
+
+model Email {
+  id        String   @id @default(uuid())
+  folderId  String
+  uid       Int // IMAP UID
+  messageId String?
+  subject   String?
+  from      String
+  to        Json // Array of addresses
+  cc        Json?
+  bcc       Json?
+  date      DateTime
+  textBody  String?
+  htmlBody  String?
+  isRead    Boolean  @default(false)
+  isFlagged Boolean  @default(false)
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  folder      EmailFolder  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+
+  @@unique([folderId, uid])
+  @@map("emails")
+}
+
+model Attachment {
+  id          String   @id @default(uuid())
+  emailId     String
+  filename    String
+  contentType String
+  size        Int
+  content     Bytes? // Store small attachments in DB, larger ones could be files
+  createdAt   DateTime @default(now())
+
+  email Email @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
 }

@@ -354,7 +354,7 @@ const SetupWizard = () => {
               Setup Steps
             </Typography>
             <List dense disablePadding>
-              {data.steps.map((step) => (
+              {data.steps?.map((step) => (
                 <ListItem key={step.id} disableGutters sx={{ alignItems: "flex-start", py: 0.75 }}>
                   <ListItemIcon sx={{ minWidth: 28, mt: 0.1 }}>
                     {step.completed ? (

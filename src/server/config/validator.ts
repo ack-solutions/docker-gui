@@ -52,11 +52,8 @@ export function validateConfig(config: Config): ValidationResult {
 
   // DNS validation (if enabled)
   if (config.dns?.enabled) {
-    if (!['powerdns', 'cloudflare', 'route53', 'manual'].includes(config.dns.provider)) {
-      errors.push(`dns.provider must be 'powerdns', 'cloudflare', 'route53', or 'manual'`);
-    }
-    if (config.dns.provider === 'powerdns' && !config.dns.apiUrl) {
-      errors.push('dns.apiUrl is required for PowerDNS provider');
+    if (!['cloudflare', 'route53', 'manual'].includes(config.dns.provider)) {
+      errors.push(`dns.provider must be 'cloudflare', 'route53', or 'manual'`);
     }
     if (config.dns.provider === 'cloudflare' && !config.dns.cloudflare) {
       errors.push('dns.cloudflare configuration is required for Cloudflare provider');

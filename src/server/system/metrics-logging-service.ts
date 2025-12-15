@@ -70,10 +70,9 @@ export class MetricsLoggingService {
   private isProcessingDisk = false;
 
   private constructor() {
-    console.log("[metrics-logging] Initializing MetricsLoggingService");
+    // Initialize silently - no logging to reduce overhead
     this.startBatchProcessing();
     this.startCleanupSchedulers();
-    console.log("[metrics-logging] Service initialized with separate queues for CPU, Memory, and Disk");
   }
 
   static getInstance(): MetricsLoggingService {
@@ -86,8 +85,18 @@ export class MetricsLoggingService {
   /**
    * Queue metrics from a SystemMetrics snapshot
    * Each metric type is queued separately and will be saved based on its own frequency
+   * Returns early if logging is disabled
    */
   async queueMetrics(metrics: SystemMetrics): Promise<void> {
+    // Check if metrics logging is enabled
+    const enabled = await SettingsService.getInstance().getValue<boolean>(
+      "METRICS_LOGGING_ENABLED",
+      false // Disabled by default to reduce overhead
+    );
+    
+    if (!enabled) {
+      return; // Skip all processing if disabled
+    }
     const timestamp = new Date(metrics.timestamp);
 
     // Queue CPU metrics
@@ -133,10 +142,6 @@ export class MetricsLoggingService {
       this.diskQueue.push(diskBatch);
     }
 
-    console.log(
-      `[metrics-logging] Queued metrics - CPU: ${this.cpuQueue.length}, Memory: ${this.memoryQueue.length}, Disk: ${this.diskQueue.length}`
-    );
-
     // Check if any queue needs immediate flushing
     await Promise.all([
       this.checkAndFlush("cpu"),
@@ -176,9 +181,9 @@ export class MetricsLoggingService {
    */
   private getDefaultBatchSize(type: MetricType): number {
     switch (type) {
-      case "cpu": return 10;      // Save every 10 samples (150s at 15s intervals)
-      case "memory": return 10;   // Save every 10 samples (150s at 15s intervals)
-      case "disk": return 1;      // Save every sample (can be hourly)
+      case "cpu": return 60;      // Save every 60 samples (10 minutes at 10s intervals)
+      case "memory": return 60;   // Save every 60 samples (10 minutes at 10s intervals)
+      case "disk": return 6;      // Save every 6 samples (1 hour at 10 minute intervals)
     }
   }
 
@@ -187,9 +192,9 @@ export class MetricsLoggingService {
    */
   private getDefaultBatchInterval(type: MetricType): number {
     switch (type) {
-      case "cpu": return 30000;     // 30 seconds
-      case "memory": return 30000;  // 30 seconds
-      case "disk": return 3600000;  // 1 hour
+      case "cpu": return 600000;     // 10 minutes
+      case "memory": return 600000;  // 10 minutes
+      case "disk": return 3600000;   // 1 hour
     }
   }
 
@@ -210,7 +215,7 @@ export class MetricsLoggingService {
       const batchToSave = [...queue];
       this.clearQueue(type);
 
-      if (batchToSave.length > 0) {
+        if (batchToSave.length > 0) {
         switch (type) {
           case "cpu": {
             await prisma.cpuMetricsLog.createMany({
@@ -251,10 +256,9 @@ export class MetricsLoggingService {
             break;
           }
         }
-        console.log(`[metrics-logging] Saved ${batchToSave.length} ${type} metrics to database`);
       }
     } catch (error) {
-      console.error(`[metrics-logging] Failed to save ${type} metrics batch:`, error);
+      // Silently handle errors to reduce logging overhead
       // Don't lose the data - but limit queue size to prevent memory issues
       const queue = this.getQueue(type);
       if (queue.length < 100) {
@@ -307,22 +311,17 @@ export class MetricsLoggingService {
           this.getDefaultBatchInterval(type)
         )
         .then((intervalMs) => {
-          console.log(`[metrics-logging] Scheduling ${type} batch flush in ${intervalMs}ms`);
           const timer = setTimeout(async () => {
-            console.log(`[metrics-logging] Timer fired for ${type}, flushing batch...`);
             await this.flushBatch(type);
             scheduleNext(); // Schedule next after flush completes
           }, intervalMs);
 
           this.setBatchTimer(type, timer);
         })
-        .catch((error) => {
-          console.error(`[metrics-logging] Failed to get batch interval for ${type}, using default`, error);
-          // Fallback to default interval
+        .catch(() => {
+          // Fallback to default interval silently
           const intervalMs = this.getDefaultBatchInterval(type);
-          console.log(`[metrics-logging] Using default interval for ${type}: ${intervalMs}ms`);
           const timer = setTimeout(async () => {
-            console.log(`[metrics-logging] Timer fired for ${type}, flushing batch...`);
             await this.flushBatch(type);
             scheduleNext();
           }, intervalMs);
@@ -389,13 +388,9 @@ export class MetricsLoggingService {
           }
         }
 
-        if (deletedCount > 0) {
-          console.log(
-            `[metrics-logging] Cleaned up ${deletedCount} old ${metricType} metrics logs (retention: ${retentionDays} days)`
-          );
-        }
+        // Cleanup completed silently
       } catch (error) {
-        console.error(`[metrics-logging] Failed to cleanup old ${metricType} logs:`, error);
+        // Silently handle cleanup errors
       }
     }
 
@@ -404,9 +399,9 @@ export class MetricsLoggingService {
 
   private getDefaultRetentionDays(type: MetricType): number {
     switch (type) {
-      case "cpu": return 7;      // 7 days
-      case "memory": return 7;   // 7 days
-      case "disk": return 30;    // 30 days (changes slowly)
+      case "cpu": return 3;      // 3 days (reduced from 7)
+      case "memory": return 3;   // 3 days (reduced from 7)
+      case "disk": return 7;    // 7 days (reduced from 30)
     }
   }
 
@@ -442,9 +437,8 @@ export class MetricsLoggingService {
 
           this.setCleanupTimer(type, timer);
         })
-        .catch((error) => {
-          console.error(`[metrics-logging] Failed to schedule cleanup for ${type}`, error);
-          // Retry after 1 hour on error
+        .catch(() => {
+          // Retry after 1 hour on error silently
           const timer = setTimeout(() => {
             scheduleNext();
           }, 60 * 60 * 1000);
@@ -533,8 +527,6 @@ export class MetricsLoggingService {
    * Gracefully shutdown the service
    */
   async shutdown(): Promise<void> {
-    console.log("[metrics-logging] Shutting down metrics logging service");
-
     // Clear all timers
     if (this.cpuBatchTimer) clearTimeout(this.cpuBatchTimer);
     if (this.memoryBatchTimer) clearTimeout(this.memoryBatchTimer);

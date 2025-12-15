@@ -31,6 +31,9 @@ import ThirdPartyDnsSetup from "./third-party-dns-setup";
 import DnsRecordsManager from "./dns-records-manager";
 import SslConfiguration from "./ssl-configuration";
 import { useSslCertificates } from "@/features/ssl/hooks/use-ssl-certificates";
+import { useContainers } from "@/features/docker/containers/hooks/use-containers";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
 
 interface DomainEditDialogProps {
   open: boolean;
@@ -97,6 +100,15 @@ export default function DomainEditDialog({
   const [dnsRecords, setDnsRecords] = useState<any[]>([]);
   const [parentDomainId, setParentDomainId] = useState<string | null>(null);
   const [customNginxConfig, setCustomNginxConfig] = useState("");
+  const [status, setStatus] = useState<"active" | "pending" | "error">("pending");
+  
+  // Routing/Target state
+  const [targetType, setTargetType] = useState<"none" | "container" | "external" | "service" | "static">("none");
+  const [selectedContainer, setSelectedContainer] = useState("");
+  const [containerPort, setContainerPort] = useState("");
+  const [externalUrl, setExternalUrl] = useState("");
+  const [serviceHost, setServiceHost] = useState("");
+  const [staticRoot, setStaticRoot] = useState("");
   
   // SSL state
   const [enableHttps, setEnableHttps] = useState(false);
@@ -106,6 +118,7 @@ export default function DomainEditDialog({
   const [forceHttps, setForceHttps] = useState(false);
 
   const { data: certificates = [] } = useSslCertificates();
+  const { data: containers = [] } = useContainers({ refetchOnWindowFocus: false });
   const originalDnsMode = useMemo(
     () => (domain ? mapDomainModeToDnsMode(domain.mode) : "proxy-only"),
     [domain]
@@ -137,6 +150,15 @@ export default function DomainEditDialog({
       setCustomCertId(domain.target?.sslCertificateId || "");
       setForceHttps(domain.target?.forceHttps ?? false);
       setCustomNginxConfig(domain.target?.customNginxConfig ?? "");
+      setStatus(domain.status || "pending");
+      
+      // Routing/Target settings
+      setTargetType(domain.target?.type || "none");
+      setSelectedContainer(domain.target?.containerId || "");
+      setContainerPort(domain.target?.containerPort?.toString() || "");
+      setExternalUrl(domain.target?.externalUrl || "");
+      setServiceHost(domain.target?.serviceHost || "");
+      setStaticRoot(domain.target?.staticRoot || "");
     }
   }, [domain]);
 
@@ -172,34 +194,105 @@ export default function DomainEditDialog({
         return;
       }
 
-      const baseTarget =
-        domain.target ??
-        ({
+      // Build target configuration based on selected type
+      let targetConfig: DomainTarget;
+      
+      if (targetType === "container") {
+        if (!selectedContainer || !containerPort) {
+          setError("Please select a container and specify a port");
+          setLoading(false);
+          return;
+        }
+        targetConfig = {
+          type: "container",
+          containerId: selectedContainer,
+          containerPort: parseInt(containerPort),
+          enableHttp: true,
+          enableHttps,
+          forceHttps,
+          sslMode: enableHttps ? sslMode : "none",
+          letsEncryptEmail: enableHttps && sslMode === "lets-encrypt" ? letsEncryptEmail : undefined,
+          sslCertificateId: enableHttps && sslMode === "custom" ? customCertId || null : null,
+          customNginxConfig: customNginxConfig || null
+        };
+      } else if (targetType === "external") {
+        if (!externalUrl.trim()) {
+          setError("Please enter an external URL");
+          setLoading(false);
+          return;
+        }
+        let normalizedUrl = externalUrl.trim();
+        if (!normalizedUrl.match(/^https?:\/\//i)) {
+          normalizedUrl = `http://${normalizedUrl}`;
+        }
+        targetConfig = {
+          type: "external",
+          externalUrl: normalizedUrl,
+          enableHttp: true,
+          enableHttps,
+          forceHttps,
+          sslMode: enableHttps ? sslMode : "none",
+          letsEncryptEmail: enableHttps && sslMode === "lets-encrypt" ? letsEncryptEmail : undefined,
+          sslCertificateId: enableHttps && sslMode === "custom" ? customCertId || null : null,
+          customNginxConfig: customNginxConfig || null
+        };
+      } else if (targetType === "service") {
+        if (!serviceHost.trim()) {
+          setError("Please enter a service host");
+          setLoading(false);
+          return;
+        }
+        targetConfig = {
+          type: "service",
+          serviceHost: serviceHost.trim(),
+          enableHttp: true,
+          enableHttps,
+          forceHttps,
+          sslMode: enableHttps ? sslMode : "none",
+          letsEncryptEmail: enableHttps && sslMode === "lets-encrypt" ? letsEncryptEmail : undefined,
+          sslCertificateId: enableHttps && sslMode === "custom" ? customCertId || null : null,
+          customNginxConfig: customNginxConfig || null
+        };
+      } else if (targetType === "static") {
+        if (!staticRoot.trim()) {
+          setError("Please enter a static root directory");
+          setLoading(false);
+          return;
+        }
+        targetConfig = {
+          type: "static",
+          staticRoot: staticRoot.trim(),
+          enableHttp: true,
+          enableHttps,
+          forceHttps,
+          sslMode: enableHttps ? sslMode : "none",
+          letsEncryptEmail: enableHttps && sslMode === "lets-encrypt" ? letsEncryptEmail : undefined,
+          sslCertificateId: enableHttps && sslMode === "custom" ? customCertId || null : null,
+          customNginxConfig: customNginxConfig || null
+        };
+      } else {
+        targetConfig = {
           type: "none",
           enableHttp: true,
-          enableHttps: false,
-          forceHttps: false,
-          sslMode: "none"
-        } as DomainTarget);
+          enableHttps,
+          forceHttps,
+          sslMode: enableHttps ? sslMode : "none",
+          letsEncryptEmail: enableHttps && sslMode === "lets-encrypt" ? letsEncryptEmail : undefined,
+          sslCertificateId: enableHttps && sslMode === "custom" ? customCertId || null : null,
+          customNginxConfig: customNginxConfig || null
+        };
+      }
 
       const updates: DomainUpsertInput = {
         name: domain.name,
         aliases: domain.aliases ?? [],
         provider: providerPayload?.type ?? domain.provider ?? null,
         mode: mapDnsModeToDomainMode(dnsMode),
-        status: domain.status,
+        status: status,
         notes: domain.notes,
         parentDomainId: parentDomainId ?? null,
         records: dnsMode === "proxy-only" ? [] : dnsRecords,
-        target: {
-          ...baseTarget,
-          enableHttps,
-          forceHttps,
-          sslMode: enableHttps ? sslMode : "none",
-          letsEncryptEmail: enableHttps && sslMode === "lets-encrypt" ? letsEncryptEmail : undefined,
-          sslCertificateId: enableHttps && sslMode === "custom" ? customCertId || baseTarget.sslCertificateId || null : null,
-          customNginxConfig: customNginxConfig || null
-        },
+        target: targetConfig,
         dnsProvider: providerPayload ?? null
       };
 
@@ -234,10 +327,32 @@ export default function DomainEditDialog({
       </DialogTitle>
 
       <DialogContent dividers>
-        <Stack spacing={4}>
+        <Stack spacing={3}>
           {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
-              {error}
+            <Alert 
+              severity="error" 
+              sx={{ whiteSpace: "pre-line" }} 
+              onClose={() => setError(null)}
+            >
+              <Typography variant="body2" component="div" sx={{ fontWeight: 500, mb: error.includes("\n") ? 1 : 0 }}>
+                {error.split("\n")[0]}
+              </Typography>
+              {error.includes("\n") && (
+                <Typography 
+                  variant="body2" 
+                  component="div" 
+                  sx={{ 
+                    mt: 1,
+                    pl: 2,
+                    borderLeft: "2px solid",
+                    borderColor: "error.main",
+                    fontFamily: "monospace",
+                    fontSize: "0.875rem"
+                  }}
+                >
+                  {error.split("\n").slice(1).join("\n")}
+                </Typography>
+              )}
             </Alert>
           )}
 
@@ -303,6 +418,198 @@ export default function DomainEditDialog({
 
           <Divider />
 
+          {/* Routing Configuration */}
+          <Box>
+            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              Routing Configuration
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Configure where traffic to this domain should be routed.
+            </Typography>
+            
+            <FormControl component="fieldset" sx={{ mb: 2 }}>
+              <RadioGroup
+                value={targetType}
+                onChange={(e) => setTargetType(e.target.value as any)}
+              >
+                <FormControlLabel
+                  value="none"
+                  control={<Radio />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        DNS Only
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        No routing configured
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="container"
+                  control={<Radio />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        Docker Container
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Route to a container running on this server
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="external"
+                  control={<Radio />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        External URL
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Forward traffic to an external website
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="service"
+                  control={<Radio />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        Internal Service
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Route to an internal service host
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="static"
+                  control={<Radio />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>
+                        Static Files
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Serve static files from a directory
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </RadioGroup>
+            </FormControl>
+
+            {targetType === "container" && (
+              <Stack spacing={2} sx={{ mt: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Container</InputLabel>
+                  <Select
+                    label="Container"
+                    value={selectedContainer}
+                    onChange={(e) => setSelectedContainer(e.target.value)}
+                  >
+                    {containers.map((container) => (
+                      <MenuItem key={container.id} value={container.id}>
+                        {container.name} - {container.image}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="Container Port"
+                  type="number"
+                  fullWidth
+                  value={containerPort}
+                  onChange={(e) => setContainerPort(e.target.value)}
+                  helperText="Port number the container is listening on"
+                />
+              </Stack>
+            )}
+
+            {targetType === "external" && (
+              <TextField
+                label="External URL"
+                fullWidth
+                value={externalUrl}
+                onChange={(e) => setExternalUrl(e.target.value)}
+                helperText="Full URL to forward traffic to (e.g., https://example.com)"
+                sx={{ mt: 2 }}
+              />
+            )}
+
+            {targetType === "service" && (
+              <TextField
+                label="Service Host"
+                fullWidth
+                value={serviceHost}
+                onChange={(e) => setServiceHost(e.target.value)}
+                helperText="Internal service hostname (e.g., service:8080)"
+                sx={{ mt: 2 }}
+              />
+            )}
+
+            {targetType === "static" && (
+              <TextField
+                label="Static Root Directory"
+                fullWidth
+                value={staticRoot}
+                onChange={(e) => setStaticRoot(e.target.value)}
+                helperText="Path to static files directory (e.g., /var/www/html)"
+                sx={{ mt: 2 }}
+              />
+            )}
+          </Box>
+
+          <Divider />
+
+          {/* Domain Status */}
+          <Box>
+            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              Domain Status
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Set the status of this domain. Active domains are fully configured and working.
+            </Typography>
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                label="Status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as "active" | "pending" | "error")}
+              >
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="error">Error</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Divider />
+
+          {/* SSL/TLS Configuration */}
+          <SslConfiguration
+            domainName={domain.name}
+            enableHttps={enableHttps}
+            sslMode={sslMode}
+            letsEncryptEmail={letsEncryptEmail}
+            certificateId={customCertId}
+            forceHttps={forceHttps}
+            onEnableHttpsChange={setEnableHttps}
+            onSslModeChange={setSslMode}
+            onLetsEncryptEmailChange={setLetsEncryptEmail}
+            onCertificateIdChange={setCustomCertId}
+            onForceHttpsChange={setForceHttps}
+            availableCertificates={certificates}
+          />
+
+          <Divider />
+
           <Box>
             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
               Domain Hierarchy
@@ -336,84 +643,22 @@ export default function DomainEditDialog({
 
           <Box>
             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-              Advanced Proxy Configuration
+              Advanced Configuration
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              Inject custom nginx directives into the generated server block to enable complex routing,
-              caching, rewrite, or header behaviors.
+              Custom nginx directives for advanced routing, caching, or header behaviors.
             </Typography>
             <TextField
-              label="Additional nginx configuration"
+              label="Custom Nginx Configuration"
               multiline
               minRows={4}
+              fullWidth
               value={customNginxConfig}
               onChange={(event) => setCustomNginxConfig(event.target.value)}
               placeholder="location /health { return 200 'ok'; }"
             />
           </Box>
 
-          {/* SSL/TLS Configuration */}
-          <SslConfiguration
-            domainName={domain.name}
-            enableHttps={enableHttps}
-            sslMode={sslMode}
-            letsEncryptEmail={letsEncryptEmail}
-            certificateId={customCertId}
-            forceHttps={forceHttps}
-            onEnableHttpsChange={setEnableHttps}
-            onSslModeChange={setSslMode}
-            onLetsEncryptEmailChange={setLetsEncryptEmail}
-            onCertificateIdChange={setCustomCertId}
-            onForceHttpsChange={setForceHttps}
-            availableCertificates={certificates}
-          />
-
-          {/* Current Configuration Summary */}
-          <Box sx={{ p: 2, bgcolor: "action.hover", borderRadius: 1 }}>
-            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-              Current Configuration
-            </Typography>
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={2}>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 120 }}>
-                  Domain:
-                </Typography>
-                <Typography variant="caption" fontFamily="monospace">
-                  {domain.name}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={2}>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 120 }}>
-                  DNS Mode:
-                </Typography>
-                <Typography variant="caption" fontFamily="monospace">
-                  {dnsMode}
-                  {dnsModeChanged && (
-                    <Typography component="span" variant="caption" color="warning.main">
-                      {" "}
-                      (changed)
-                    </Typography>
-                  )}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={2}>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 120 }}>
-                  HTTPS:
-                </Typography>
-                <Typography variant="caption" fontFamily="monospace">
-                  {enableHttps ? `Enabled (${sslMode})` : "Disabled"}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={2}>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 120 }}>
-                  Status:
-                </Typography>
-                <Typography variant="caption" fontFamily="monospace">
-                  {domain.status}
-                </Typography>
-              </Stack>
-            </Stack>
-          </Box>
         </Stack>
       </DialogContent>
 

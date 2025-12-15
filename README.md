@@ -14,7 +14,7 @@ A modern web interface for managing Docker infrastructure with integrated Nginx,
 
 **Infrastructure Tools**
 - Nginx reverse proxy configuration
-- Domain and DNS management (PowerDNS)
+- Domain and DNS management (Cloudflare, Route53, or Manual)
 - Email account management (SMTP)
 - SSL certificate automation (Let's Encrypt)
 - Proxy and load balancer setup
@@ -218,7 +218,7 @@ Once the first admin is created you can finish the installation checklist inside
 | File | Purpose | Services |
 |------|---------|----------|
 | `docker-compose.yml` | Simple dev | Docker GUI only |
-| `docker-compose.full.yml` | Full dev | GUI + Nginx + MailHog + DNS |
+| `docker-compose.yml` | Full dev | GUI + Nginx |
 | `docker-compose.production.yml` | Production | GUI + Nginx + Postfix + DNS + SSL |
 
 ```bash
@@ -239,8 +239,8 @@ See [Docker Setup Guide](./docs/DOCKER_SETUP.md) for complete service documentat
 ## Integrated Services
 
 - **Nginx**: Reverse proxy with GUI management
-- **Email**: MailHog (dev) or Postfix (prod)
-- **DNS**: PowerDNS with API integration
+- **Email**: Configure SMTP settings (Postfix in production)
+- **DNS**: Cloudflare, Route53, or Manual DNS management
 - **SSL**: Let's Encrypt automation
 
 ## Helper Scripts

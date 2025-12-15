@@ -22,33 +22,78 @@ interface ThemeContextProviderProps {
   children: ReactNode;
 }
 
-export const ThemeContextProvider = ({ children }: ThemeContextProviderProps) => {
-  const [mode, setMode] = useState<PaletteMode>("dark");
+// Helper function to get initial theme mode
+const getInitialMode = (): PaletteMode => {
+  if (typeof window === "undefined") {
+    return "light"; // SSR default
+  }
 
+  // First, check localStorage for saved preference
+  const savedMode = localStorage.getItem("theme-mode");
+  if (savedMode === "light" || savedMode === "dark") {
+    return savedMode;
+  }
+
+  // If no saved preference, use system preference
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return prefersDark ? "dark" : "light";
+};
+
+export const ThemeContextProvider = ({ children }: ThemeContextProviderProps) => {
+  // Initialize with the correct value immediately to avoid flash
+  const [mode, setMode] = useState<PaletteMode>(getInitialMode);
+
+  // Initialize on mount and listen for system theme changes
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
     const savedMode = localStorage.getItem("theme-mode");
+    
+    // If there's a saved preference, use it
     if (savedMode === "light" || savedMode === "dark") {
       setMode(savedMode);
       return;
     }
 
-    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setMode(prefersDark ? "dark" : "light");
+    // No saved preference - use system preference
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const systemMode = mediaQuery.matches ? "dark" : "light";
+    setMode(systemMode);
+
+    // Listen for system theme changes (only if no saved preference)
+    const handleChange = (e: MediaQueryListEvent) => {
+      setMode(e.matches ? "dark" : "light");
+    };
+
+    // Modern browsers
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    } else {
+      // Fallback for older browsers
+      mediaQuery.addListener(handleChange);
+      return () => mediaQuery.removeListener(handleChange);
+    }
   }, []);
 
+  // Update document attribute whenever mode changes
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.setItem("theme-mode", mode);
       document.documentElement.dataset.themeMode = mode;
     }
   }, [mode]);
 
   const toggleTheme = () => {
-    setMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
+    setMode((prevMode) => {
+      const newMode = prevMode === "light" ? "dark" : "light";
+      // Save to localStorage when user explicitly toggles
+      if (typeof window !== "undefined") {
+        localStorage.setItem("theme-mode", newMode);
+      }
+      return newMode;
+    });
   };
 
   const value = useMemo(() => ({ mode, toggleTheme }), [mode]);

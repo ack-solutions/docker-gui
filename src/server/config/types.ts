@@ -60,7 +60,7 @@ export interface EmailConfig {
 
 export interface DnsConfig {
   enabled: boolean;
-  provider: 'powerdns' | 'cloudflare' | 'route53' | 'manual';
+  provider: 'cloudflare' | 'route53' | 'manual';
   apiUrl?: string;
   apiKey?: string;
   cloudflare?: {

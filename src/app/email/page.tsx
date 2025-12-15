@@ -1,24 +1,58 @@
 "use client";
 
-import EmailIcon from "@mui/icons-material/Email";
-import { Paper, Stack, Typography } from "@mui/material";
+import { useState, useEffect } from "react";
+import { Box } from "@mui/material";
+import { useRouter, useSearchParams } from "next/navigation";
+import { EmailSidebar } from "@/client/features/email/components/email-sidebar";
+import { EmailList } from "@/client/features/email/components/email-list";
+import { EmailDetail } from "@/client/features/email/components/email-detail";
 
-const EmailPage = () => (
-  <Stack spacing={3}>
-    <Stack direction="row" spacing={1.5} alignItems="center">
-      <EmailIcon color="primary" />
-      <Typography variant="h5">Email Management</Typography>
-    </Stack>
-    <Paper sx={{ p: 4, borderRadius: 3 }}>
-      <Typography variant="body1" gutterBottom>
-        Manage transactional email services, SMTP relays, and inbox routing from a single pane.
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        Email management is on the roadmap. You&apos;ll be able to create mailboxes, aliases, and monitor deliverability soon.
-      </Typography>
-    </Paper>
-  </Stack>
-);
+const EmailPage = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [selectedFolder, setSelectedFolder] = useState("inbox");
+  const emailIdFromRoute = searchParams.get("emailId");
+
+  // Sync route with state
+  const handleSelectEmail = (emailId: string) => {
+    router.push(`/email?emailId=${emailId}&folder=${selectedFolder}`);
+  };
+
+  // Update folder from route or default
+  useEffect(() => {
+    const folderFromRoute = searchParams.get("folder");
+    if (folderFromRoute) {
+      setSelectedFolder(folderFromRoute);
+    }
+  }, [searchParams]);
+
+  return (
+    <Box sx={{ 
+      display: "flex", 
+      height: "100%",
+      width: "100%",
+      overflow: "hidden",
+      margin: 0,
+      padding: 0
+    }}>
+      <EmailSidebar
+        onFolderSelect={(folderId) => {
+          setSelectedFolder(folderId);
+          // Clear email selection when folder changes
+          if (emailIdFromRoute) {
+            router.push(`/email?folder=${folderId}`);
+          }
+        }}
+        selectedFolderId={selectedFolder}
+      />
+      <EmailList
+        folderId={selectedFolder}
+        onSelectEmail={handleSelectEmail}
+        selectedEmailId={emailIdFromRoute}
+      />
+      <EmailDetail emailId={emailIdFromRoute} />
+    </Box>
+  );
+};
 
 export default EmailPage;
-

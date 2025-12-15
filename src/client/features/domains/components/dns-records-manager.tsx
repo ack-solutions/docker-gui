@@ -204,12 +204,26 @@ export default function DnsRecordsManager({
                         size="small"
                         type="number"
                         fullWidth
-                        value={record.priority || ""}
-                        onChange={(e) =>
-                          handleUpdateRecord(index, {
-                            priority: e.target.value ? parseInt(e.target.value) : null,
-                          })
-                        }
+                        value={record.priority ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value.trim();
+                          // If empty, set to null. Otherwise parse as integer
+                          // Only set if it's a valid positive number
+                          if (value === "") {
+                            handleUpdateRecord(index, { priority: null });
+                          } else {
+                            const num = parseInt(value, 10);
+                            // Only set if it's a valid positive number (>= 1)
+                            // 0 or negative will be treated as empty
+                            if (!isNaN(num) && num >= 1) {
+                              handleUpdateRecord(index, { priority: num });
+                            } else {
+                              // Invalid number, set to null
+                              handleUpdateRecord(index, { priority: null });
+                            }
+                          }
+                        }}
+                        helperText="Priority (1 or higher, optional)"
                       />
                     )}
                   </TableCell>

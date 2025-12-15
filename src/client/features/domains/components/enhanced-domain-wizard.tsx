@@ -102,8 +102,8 @@ export default function EnhancedDomainWizard({
     dnsMode === "managed"
       ? ["Domain & DNS Mode", "DNS Records", "Routing", "Security"]
       : dnsMode === "third-party"
-      ? ["Domain & DNS Mode", "Provider Setup", "Routing", "Security"]
-      : ["Domain & DNS Mode", "Routing", "Security"];
+        ? ["Domain & DNS Mode", "Provider Setup", "Routing", "Security"]
+        : ["Domain & DNS Mode", "Routing", "Security"];
 
   const resetForm = () => {
     setActiveStep(0);
@@ -114,6 +114,7 @@ export default function EnhancedDomainWizard({
     setContainerPort("");
     setExternalUrl("");
     setEnableHttps(true);
+    setSslMode("lets-encrypt");
     setEmail("");
     setDnsRecords([]);
     setThirdPartyConfig({ provider: "none" });
@@ -148,35 +149,33 @@ export default function EnhancedDomainWizard({
         return true;
 
       case 1:
-        // For managed DNS: validate records
+        // For managed DNS: validate records only if they exist
         if (dnsMode === "managed") {
-          if (dnsRecords.length === 0) {
-            setError("Please add at least one DNS record");
-            return false;
-          }
-          const invalidRecords = dnsRecords.filter(r => !r.host || !r.value);
+          // DNS records are optional - only validate format if provided
+          const invalidRecords = dnsRecords.filter(r => (r.host || r.value) && (!r.host || !r.value));
           if (invalidRecords.length > 0) {
-            setError("All DNS records must have a host and value");
+            setError("All DNS records must have both host and value if provided");
             return false;
           }
           return true;
         }
-        // For third-party: validate provider config
+        // For third-party: validate provider config only if provider is selected
         if (dnsMode === "third-party") {
-          if (thirdPartyConfig.provider === "none") {
-            setError("Please select a DNS provider");
-            return false;
-          }
-          if (dnsRecords.length === 0) {
-            setError("Please add at least one DNS record");
-            return false;
+          // Provider and DNS records are optional - allow creation without them
+          if (thirdPartyConfig.provider !== "none") {
+            // If provider is selected, validate records format if provided
+            const invalidRecords = dnsRecords.filter(r => (r.host || r.value) && (!r.host || !r.value));
+            if (invalidRecords.length > 0) {
+              setError("All DNS records must have both host and value if provided");
+              return false;
+            }
           }
           return true;
         }
         return true;
 
       default:
-        // Routing step
+        // Routing step validation
         if (targetType === "container") {
           if (!selectedContainer) {
             setError("Please select a container");
@@ -187,16 +186,19 @@ export default function EnhancedDomainWizard({
             return false;
           }
         } else if (targetType === "external") {
-          if (!externalUrl) {
+          if (!externalUrl || !externalUrl.trim()) {
             setError("Please enter an external URL");
             return false;
           }
         }
-        
-        // Security step
-        if (enableHttps && !email.trim()) {
-          setError("Email is required for HTTPS certificate");
-          return false;
+
+        // Security step - only validate email if Let's Encrypt is selected
+        if (enableHttps && sslMode === "lets-encrypt") {
+          // Email is optional - only validate format if provided
+          if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            setError("Please enter a valid email address");
+            return false;
+          }
         }
         return true;
     }
@@ -226,37 +228,52 @@ export default function EnhancedDomainWizard({
         parentDomainId
       };
 
-      // Add DNS records if in managed mode
+      // Add DNS records - filter out incomplete records
       if (dnsMode !== "proxy-only" && dnsRecords.length > 0) {
-        payload.records = dnsRecords.map((record) => ({
-          type: record.type,
-          host: record.host,
-          value: record.value,
-          ttl: record.ttl,
-          priority: record.priority,
-        }));
+        payload.records = dnsRecords
+          .filter((record) => record.host && record.host.trim() && record.value && record.value.trim())
+          .map((record) => ({
+            type: record.type,
+            host: record.host.trim(),
+            value: record.value.trim(),
+            ttl: record.ttl || 300,
+            // Priority handling: MX and SRV records require priority (default to 0)
+            // Other records can have priority but it's optional (keep null if not set)
+            priority: (record.type === 'MX' || record.type === 'SRV')
+              ? (record.priority !== undefined && record.priority !== null ? record.priority : 0)
+              : (record.priority && record.priority >= 1 ? record.priority : null),
+          }));
       } else {
         payload.records = [];
       }
 
       // Add third-party provider info if applicable
-      if (dnsMode === "third-party" && thirdPartyConfig.provider !== "none") {
+      // Only include dnsProvider if it's actually configured
+      if (dnsMode === "third-party" && thirdPartyConfig.provider && thirdPartyConfig.provider !== "none") {
+        const sanitizedConfig = sanitizeProviderConfig(thirdPartyConfig);
         payload.dnsProvider = {
           type: thirdPartyConfig.provider,
-          config: sanitizeProviderConfig(thirdPartyConfig),
+          config: sanitizedConfig,
         };
         payload.provider = thirdPartyConfig.provider;
+      } else {
+        // Explicitly don't send dnsProvider if not needed
+        payload.dnsProvider = undefined;
       }
 
       // Add target configuration
+      // Use the actual sslMode from state, not auto-determined
+      const finalSslMode = enableHttps ? sslMode : "none";
+      const finalEmail = (enableHttps && sslMode === "lets-encrypt" && email.trim()) ? email.trim() : undefined;
+
       if (targetType === "none") {
         payload.target = {
           type: "none",
           enableHttp: !enableHttps,
           enableHttps: enableHttps,
           forceHttps,
-          sslMode: enableHttps ? "lets-encrypt" : "none",
-          letsEncryptEmail: enableHttps ? email.trim() : undefined,
+          sslMode: finalSslMode,
+          letsEncryptEmail: finalEmail,
           customNginxConfig: customNginxConfig || null,
         };
       } else if (targetType === "container") {
@@ -267,19 +284,24 @@ export default function EnhancedDomainWizard({
           enableHttp: true,
           enableHttps: enableHttps,
           forceHttps,
-          sslMode: enableHttps ? "lets-encrypt" : "none",
-          letsEncryptEmail: enableHttps ? email.trim() : undefined,
+          sslMode: finalSslMode,
+          letsEncryptEmail: finalEmail,
           customNginxConfig: customNginxConfig || null,
         };
       } else if (targetType === "external") {
+        // Normalize external URL - add http:// if missing
+        let normalizedUrl = externalUrl.trim();
+        if (normalizedUrl && !normalizedUrl.match(/^https?:\/\//i)) {
+          normalizedUrl = `http://${normalizedUrl}`;
+        }
         payload.target = {
           type: "external",
-          externalUrl: externalUrl.trim(),
+          externalUrl: normalizedUrl,
           enableHttp: true,
           enableHttps: enableHttps,
           forceHttps,
-          sslMode: enableHttps ? "lets-encrypt" : "none",
-          letsEncryptEmail: enableHttps ? email.trim() : undefined,
+          sslMode: finalSslMode,
+          letsEncryptEmail: finalEmail,
           customNginxConfig: customNginxConfig || null,
         };
       }
@@ -332,8 +354,30 @@ export default function EnhancedDomainWizard({
           </Stepper>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-              {error}
+            <Alert
+              severity="error"
+              sx={{ mb: 3, whiteSpace: "pre-line" }}
+              onClose={() => setError(null)}
+            >
+              <Typography variant="body2" component="div" sx={{ fontWeight: 500, mb: error.includes("\n") ? 1 : 0 }}>
+                {error.split("\n")[0]}
+              </Typography>
+              {error.includes("\n") && (
+                <Typography
+                  variant="body2"
+                  component="div"
+                  sx={{
+                    mt: 1,
+                    pl: 2,
+                    borderLeft: "2px solid",
+                    borderColor: "error.main",
+                    fontFamily: "monospace",
+                    fontSize: "0.875rem"
+                  }}
+                >
+                  {error.split("\n").slice(1).join("\n")}
+                </Typography>
+              )}
             </Alert>
           )}
 
@@ -423,242 +467,250 @@ export default function EnhancedDomainWizard({
           {/* Routing Step */}
           {((dnsMode === "proxy-only" && activeStep === 1) ||
             (dnsMode !== "proxy-only" && activeStep === 2)) && (
-            <Stack spacing={3}>
-              <Alert severity="info" icon={<InfoIcon />}>
-                Choose what visitors should see when they access your domain
-              </Alert>
+              <Stack spacing={3}>
+                <Alert severity="info" icon={<InfoIcon />}>
+                  Choose what visitors should see when they access your domain
+                </Alert>
 
-              <Box>
-                <Typography variant="subtitle2" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
-                  Routing Target
-                </Typography>
-                <FormControl component="fieldset" fullWidth>
-                  <RadioGroup
-                    value={targetType}
-                    onChange={(e) => setTargetType(e.target.value as any)}
-                  >
-                    <Stack spacing={1}>
-                      <FormControlLabel
-                        value="none"
-                        control={<Radio />}
-                        label={
-                          <Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              Nothing (DNS Only)
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Setup domain without routing
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{
-                          m: 0,
-                          p: 1.5,
-                          border: "1px solid",
-                          borderColor: targetType === "none" ? "primary.main" : "divider",
-                          borderRadius: 1,
-                          bgcolor: targetType === "none" ? "primary.50" : "transparent",
-                        }}
-                      />
-                      <FormControlLabel
-                        value="container"
-                        control={<Radio />}
-                        label={
-                          <Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              Docker Container
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Route to a containerized application
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{
-                          m: 0,
-                          p: 1.5,
-                          border: "1px solid",
-                          borderColor: targetType === "container" ? "primary.main" : "divider",
-                          borderRadius: 1,
-                          bgcolor: targetType === "container" ? "primary.50" : "transparent",
-                        }}
-                      />
-                      <FormControlLabel
-                        value="external"
-                        control={<Radio />}
-                        label={
-                          <Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              External URL
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Proxy to another website
-                            </Typography>
-                          </Box>
-                        }
-                        sx={{
-                          m: 0,
-                          p: 1.5,
-                          border: "1px solid",
-                          borderColor: targetType === "external" ? "primary.main" : "divider",
-                          borderRadius: 1,
-                          bgcolor: targetType === "external" ? "primary.50" : "transparent",
-                        }}
-                      />
-                    </Stack>
-                  </RadioGroup>
-                </FormControl>
-              </Box>
-
-              {targetType === "container" && (
-                <Stack spacing={2} sx={{ mt: 2 }}>
-                  <FormControl fullWidth>
-                    <InputLabel>Container</InputLabel>
-                    <Select
-                      value={selectedContainer}
-                      label="Container"
-                      onChange={(e) => {
-                        const containerId = e.target.value;
-                        setSelectedContainer(containerId);
-                        
-                        // Auto-select first exposed port
-                        const container = containers.find(c => c.id === containerId);
-                        if (container && container.ports.length > 0) {
-                          const firstPort = container.ports[0];
-                          const portMatch = firstPort.match(/(\d+)\/(tcp|udp)/);
-                          if (portMatch) {
-                            setContainerPort(portMatch[1]);
-                          }
-                        }
-                      }}
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
+                    Routing Target
+                  </Typography>
+                  <FormControl component="fieldset" fullWidth>
+                    <RadioGroup
+                      value={targetType}
+                      onChange={(e) => setTargetType(e.target.value as any)}
                     >
-                      {containers.map((container) => (
-                        <MenuItem key={container.id} value={container.id}>
-                          <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: container.state === 'running' ? 'success.main' : 'error.main',
-                              }}
-                            />
-                            <Box flex={1}>
-                              <Typography variant="body2">{container.name}</Typography>
+                      <Stack spacing={1}>
+                        <FormControlLabel
+                          value="none"
+                          control={<Radio />}
+                          label={
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                Nothing (DNS Only)
+                              </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {container.image} • {container.state}
+                                Setup domain without routing
                               </Typography>
                             </Box>
-                          </Stack>
-                        </MenuItem>
-                      ))}
-                    </Select>
+                          }
+                          sx={{
+                            m: 0,
+                            p: 1.5,
+                            border: "1px solid",
+                            borderColor: targetType === "none" ? "primary.main" : "divider",
+                            borderRadius: 1,
+                            bgcolor: targetType === "none" ? "primary.50" : "transparent",
+                          }}
+                        />
+                        <FormControlLabel
+                          value="container"
+                          control={<Radio />}
+                          label={
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                Docker Container
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Route to a containerized application
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{
+                            m: 0,
+                            p: 1.5,
+                            border: "1px solid",
+                            borderColor: targetType === "container" ? "primary.main" : "divider",
+                            borderRadius: 1,
+                            bgcolor: targetType === "container" ? "primary.50" : "transparent",
+                          }}
+                        />
+                        <FormControlLabel
+                          value="external"
+                          control={<Radio />}
+                          label={
+                            <Box>
+                              <Typography variant="body2" fontWeight={500}>
+                                External URL
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Proxy to another website
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{
+                            m: 0,
+                            p: 1.5,
+                            border: "1px solid",
+                            borderColor: targetType === "external" ? "primary.main" : "divider",
+                            borderRadius: 1,
+                            bgcolor: targetType === "external" ? "primary.50" : "transparent",
+                          }}
+                        />
+                      </Stack>
+                    </RadioGroup>
                   </FormControl>
+                </Box>
 
-                  <TextField
-                    label="Container Port"
-                    type="number"
-                    placeholder="3000"
-                    fullWidth
-                    value={containerPort}
-                    onChange={(e) => setContainerPort(e.target.value)}
-                    helperText={
-                      selectedContainer 
-                        ? `Auto-selected from container. Exposed ports: ${
-                            containers.find(c => c.id === selectedContainer)?.ports.join(', ') || 'none'
+                {targetType === "container" && (
+                  <Stack spacing={2} sx={{ mt: 2 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Container</InputLabel>
+                      <Select
+                        value={selectedContainer}
+                        label="Container"
+                        onChange={(e) => {
+                          const containerId = e.target.value;
+                          setSelectedContainer(containerId);
+
+                          // Auto-select first exposed port
+                          const container = containers.find(c => c.id === containerId);
+                          if (container && container.ports.length > 0) {
+                            const firstPort = container.ports[0];
+                            const portMatch = firstPort.match(/(\d+)\/(tcp|udp)/);
+                            if (portMatch) {
+                              setContainerPort(portMatch[1]);
+                            }
+                          }
+                        }}
+                      >
+                        {containers.map((container) => (
+                          <MenuItem key={container.id} value={container.id}>
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  bgcolor: container.state === 'running' ? 'success.main' : 'error.main',
+                                }}
+                              />
+                              <Box flex={1}>
+                                <Typography variant="body2">{container.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {container.image} • {container.state}
+                                </Typography>
+                              </Box>
+                            </Stack>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <TextField
+                      label="Container Port"
+                      type="number"
+                      placeholder="3000"
+                      fullWidth
+                      value={containerPort}
+                      onChange={(e) => setContainerPort(e.target.value)}
+                      helperText={
+                        selectedContainer
+                          ? `Auto-selected from container. Exposed ports: ${containers.find(c => c.id === selectedContainer)?.ports.join(', ') || 'none'
                           }`
-                        : "Port your app listens on (e.g., 3000, 8080)"
-                    }
-                  />
-                </Stack>
-              )}
+                          : "Port your app listens on (e.g., 3000, 8080)"
+                      }
+                    />
+                  </Stack>
+                )}
 
-              {targetType === "external" && (
-                <TextField
-                  label="External URL"
-                  placeholder="https://example.com"
-                  fullWidth
-                  value={externalUrl}
-                  onChange={(e) => setExternalUrl(e.target.value)}
-                  helperText="Full URL to proxy to"
-                  sx={{ mt: 2 }}
-                />
-              )}
-            </Stack>
-          )}
+                {targetType === "external" && (
+                  <TextField
+                    label="External URL"
+                    placeholder="https://example.com"
+                    fullWidth
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
+                    helperText="Full URL to proxy to"
+                    sx={{ mt: 2 }}
+                  />
+                )}
+              </Stack>
+            )}
 
           {/* Security Step */}
           {((dnsMode === "proxy-only" && activeStep === 2) ||
             (dnsMode !== "proxy-only" && activeStep === 3)) && (
-            <Stack spacing={4}>
-              <SslConfiguration
-                domainName={domainName}
-                enableHttps={enableHttps}
-                sslMode={sslMode}
-                letsEncryptEmail={email}
-                certificateId={customCertId}
-                forceHttps={forceHttps}
-                onEnableHttpsChange={setEnableHttps}
-                onSslModeChange={setSslMode}
-                onLetsEncryptEmailChange={setEmail}
-                onCertificateIdChange={setCustomCertId}
-                onForceHttpsChange={setForceHttps}
-              />
-
-              <Box>
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  Advanced nginx directives
-                </Typography>
-                <TextField
-                  label="Optional nginx configuration"
-                  multiline
-                  minRows={4}
-                  value={customNginxConfig}
-                  onChange={(event) => setCustomNginxConfig(event.target.value)}
-                  helperText="Injected into the generated server block after proxy configuration."
+              <Stack spacing={4}>
+                <SslConfiguration
+                  domainName={domainName}
+                  enableHttps={enableHttps}
+                  sslMode={sslMode}
+                  letsEncryptEmail={email}
+                  certificateId={customCertId}
+                  forceHttps={forceHttps}
+                  onEnableHttpsChange={(enabled) => {
+                    setEnableHttps(enabled);
+                    // Auto-set sslMode to "none" when HTTPS is disabled
+                    if (!enabled) {
+                      setSslMode("none");
+                    } else if (sslMode === "none") {
+                      // If enabling HTTPS and mode is "none", default to "lets-encrypt"
+                      setSslMode("lets-encrypt");
+                    }
+                  }}
+                  onSslModeChange={setSslMode}
+                  onLetsEncryptEmailChange={setEmail}
+                  onCertificateIdChange={setCustomCertId}
+                  onForceHttpsChange={setForceHttps}
                 />
-              </Box>
 
-              <Alert severity="success" variant="outlined">
-                <Typography variant="body2" fontWeight={600} gutterBottom>
-                  ✓ Ready to create!
-                </Typography>
-                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                  Your domain <strong>{domainName}</strong> will be configured with:
-                </Typography>
-                <Stack component="ul" spacing={0.5} sx={{ mt: 1, mb: 0, pl: 2 }}>
-                  {dnsMode === "managed" && (
-                    <Typography component="li" variant="caption">
-                      DNS hosted on this platform ({dnsRecords.length} record{dnsRecords.length !== 1 ? 's' : ''})
-                    </Typography>
-                  )}
-                  {dnsMode === "third-party" && (
-                    <Typography component="li" variant="caption">
-                      DNS synced with {thirdPartyConfig.provider || 'external provider'}
-                    </Typography>
-                  )}
-                  {dnsMode === "proxy-only" && (
-                    <Typography component="li" variant="caption">
-                      DNS managed externally
-                    </Typography>
-                  )}
-                  {targetType !== "none" && (
-                    <Typography component="li" variant="caption">
-                      {targetType === "container" 
-                        ? `Routes to Docker container on port ${containerPort}`
-                        : targetType === "external"
-                        ? `Proxies to ${externalUrl}`
-                        : "Routing configured"}
-                    </Typography>
-                  )}
-                  {enableHttps && (
-                    <Typography component="li" variant="caption">
-                      HTTPS with automatic SSL certificate
-                    </Typography>
-                  )}
-                </Stack>
-              </Alert>
-            </Stack>
-          )}
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                    Advanced nginx directives
+                  </Typography>
+                  <TextField
+                    label="Optional nginx configuration"
+                    multiline
+                    minRows={4}
+                    value={customNginxConfig}
+                    onChange={(event) => setCustomNginxConfig(event.target.value)}
+                    helperText="Injected into the generated server block after proxy configuration."
+                  />
+                </Box>
+
+                <Alert severity="success" variant="outlined">
+                  <Typography variant="body2" fontWeight={600} gutterBottom>
+                    ✓ Ready to create!
+                  </Typography>
+                  <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                    Your domain <strong>{domainName}</strong> will be configured with:
+                  </Typography>
+                  <Stack component="ul" spacing={0.5} sx={{ mt: 1, mb: 0, pl: 2 }}>
+                    {dnsMode === "managed" && (
+                      <Typography component="li" variant="caption">
+                        DNS hosted on this platform ({dnsRecords.length} record{dnsRecords.length !== 1 ? 's' : ''})
+                      </Typography>
+                    )}
+                    {dnsMode === "third-party" && (
+                      <Typography component="li" variant="caption">
+                        DNS synced with {thirdPartyConfig.provider || 'external provider'}
+                      </Typography>
+                    )}
+                    {dnsMode === "proxy-only" && (
+                      <Typography component="li" variant="caption">
+                        DNS managed externally
+                      </Typography>
+                    )}
+                    {targetType !== "none" && (
+                      <Typography component="li" variant="caption">
+                        {targetType === "container"
+                          ? `Routes to Docker container on port ${containerPort}`
+                          : targetType === "external"
+                            ? `Proxies to ${externalUrl}`
+                            : "Routing configured"}
+                      </Typography>
+                    )}
+                    {enableHttps && (
+                      <Typography component="li" variant="caption">
+                        HTTPS with automatic SSL certificate
+                      </Typography>
+                    )}
+                  </Stack>
+                </Alert>
+              </Stack>
+            )}
         </Box>
       </DialogContent>
 

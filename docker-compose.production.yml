@@ -31,9 +31,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM: ${SMTP_FROM:-noreply@yourdomain.com}
       # DNS
-      DNS_SERVER: powerdns
-      DNS_API_URL: http://powerdns:8081
-      DNS_API_KEY: ${DNS_API_KEY}
+      DNS_PROVIDER: manual
     restart: unless-stopped
     networks:
       - docker-gui-network
@@ -41,8 +39,6 @@ services:
       nginx-proxy:
         condition: service_healthy
       postfix:
-        condition: service_started
-      powerdns:
         condition: service_started
 
   # Nginx Reverse Proxy
@@ -97,30 +93,6 @@ services:
     networks:
       - docker-gui-network
 
-  # PowerDNS Authoritative Server
-  powerdns:
-    image: powerdns/pdns-auth-master:latest
-    container_name: powerdns
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-    environment:
-      PDNS_AUTH_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
-      PDNS_WEBSERVER: "yes"
-      PDNS_WEBSERVER_ADDRESS: "0.0.0.0"
-      PDNS_WEBSERVER_PORT: "8081"
-      # Restrict API access to the internal docker-gui network (no public UI)
-      PDNS_WEBSERVER_ALLOW_FROM: "172.21.0.0/16"
-      PDNS_API: "yes"
-      PDNS_API_KEY: ${DNS_API_KEY:-cd9d88eecd2f4969aeb69291acdca232}
-      PDNS_LAUNCH: gsqlite3
-      PDNS_GSQLITE3_DATABASE: /var/lib/powerdns/pdns.sqlite3
-    volumes:
-      - powerdns-data:/var/lib/powerdns
-    restart: unless-stopped
-    networks:
-      - docker-gui-network
-
   # Let's Encrypt Certificate Manager
   certbot:
     image: certbot/certbot:latest
@@ -145,8 +117,6 @@ volumes:
   nginx-logs:
     driver: local
   postfix-spool:
-    driver: local
-  powerdns-data:
     driver: local
   certbot-www:
     driver: local

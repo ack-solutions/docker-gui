@@ -38,7 +38,7 @@ const tokenizeInput = (value: string): string[] => {
         quote = null;
         continue;
       }
-      if (char === "\\" && i + 1 < value.length) {
+      if (quote === '"' && char === "\\" && i + 1 < value.length) {
         current += value[++i] ?? "";
         continue;
       }
@@ -144,17 +144,7 @@ const parsePromptLabel = (label: string | undefined, fallback: string): PromptCo
   };
 };
 
-const hexToRgb = (value: string) => {
-  const match = value.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  if (!match) {
-    return { r: 255, g: 255, b: 255 };
-  }
-  return {
-    r: parseInt(match[1] ?? "ff", 16),
-    g: parseInt(match[2] ?? "ff", 16),
-    b: parseInt(match[3] ?? "ff", 16)
-  };
-};
+
 
 const formatColumns = (items: string[], maxWidth = 80, columnWidth = 20): string[] => {
   if (!items.length) {
@@ -880,7 +870,6 @@ const CommandTerminal = ({
       fontFamily:
         'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       cursorBlink: true,
-      allowProposedApi: true,
       scrollback: 10_000,
       theme: terminalTheme
     });

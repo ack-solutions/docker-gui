@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Toaster } from "sonner";
+import { Box } from "@mui/material";
 import MainLayout from "@/components/layout/main-layout";
 import AuthLayout from "@/components/layout/auth-layout";
 import { BottomPanelProvider } from "@/components/common/bottom-panel-context";
@@ -48,6 +49,10 @@ const pageMetadata: Record<string, { title: string; subtitle: string }> = {
     title: "Domains",
     subtitle: "Organize DNS records, hostnames, and domain-level routing policies."
   },
+  "/domains/": {
+    title: "Domain Details",
+    subtitle: "Configure DNS, routing, SSL, and advanced settings for your domain."
+  },
   "/ssl": {
     title: "SSL Certificates",
     subtitle: "Issue, renew, and deploy TLS certificates with confidence."
@@ -57,8 +62,12 @@ const pageMetadata: Record<string, { title: string; subtitle: string }> = {
     subtitle: "Manage reverse proxy directives and site templates for your edge."
   },
   "/email": {
-    title: "Email Management",
-    subtitle: "Centralize SMTP relays, mailboxes, and deliverability monitoring."
+    title: "Email",
+    subtitle: "Manage your email inbox and messages."
+  },
+  "/email/accounts": {
+    title: "Email Accounts",
+    subtitle: "Manage email account configurations and settings."
   },
   "/users": {
     title: "User Management",

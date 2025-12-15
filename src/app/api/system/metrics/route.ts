@@ -13,9 +13,9 @@ export const GET = withAuth(async () => {
   try {
     const metrics = await collectSystemMetrics();
     
-    // Queue metrics for logging (non-blocking)
-    MetricsLoggingService.getInstance().queueMetrics(metrics).catch((error) => {
-      console.error("[system] Failed to queue metrics for logging", error);
+    // Queue metrics for logging (non-blocking, silent on error)
+    MetricsLoggingService.getInstance().queueMetrics(metrics).catch(() => {
+      // Silently handle errors to reduce overhead
     });
     
     return NextResponse.json(metrics);

@@ -18,6 +18,86 @@ import type {
   DomainStatus
 } from "@/types/server";
 
+/**
+ * Formats yup ValidationError into a user-friendly error message
+ */
+export const formatValidationError = (error: unknown): string => {
+  if (error instanceof yup.ValidationError) {
+    if (error.inner && error.inner.length > 0) {
+      // Format multiple validation errors
+      const errorMessages = error.inner.map((err) => {
+        const path = err.path || "field";
+        // Convert path like "target.containerId" to "Container ID" or keep original
+        const fieldName = formatFieldName(path);
+        return `• ${fieldName}: ${err.message}`;
+      });
+
+      const errorCount = error.inner.length;
+      const header = errorCount === 1
+        ? "Validation error:"
+        : `${errorCount} validation errors found:`;
+
+      return `${header}\n\n${errorMessages.join("\n")}`;
+    }
+    // Single error or no inner errors
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Validation failed. Please check your input.";
+};
+
+/**
+ * Converts field paths to user-friendly names
+ */
+const formatFieldName = (path: string): string => {
+  const fieldMap: Record<string, string> = {
+    "name": "Domain name",
+    "target.containerId": "Container",
+    "target.containerPort": "Container port",
+    "target.externalUrl": "External URL",
+    "target.serviceHost": "Service host",
+    "target.staticRoot": "Static directory",
+    "target.letsEncryptEmail": "Email address",
+    "target.sslMode": "SSL mode",
+    "parentDomainId": "Parent domain",
+    "records": "DNS records",
+    "dnsProvider.type": "DNS provider",
+    "managed": "Managed flag",
+  };
+
+  // Check exact match first
+  if (fieldMap[path]) {
+    return fieldMap[path];
+  }
+
+  // Check if it's a nested path like "records[0].host"
+  const arrayMatch = path.match(/^records\[(\d+)\]\.(.+)$/);
+  if (arrayMatch) {
+    const index = parseInt(arrayMatch[1]) + 1;
+    const field = arrayMatch[2];
+    const fieldName = fieldMap[`records.${field}`] || field;
+    return `DNS Record #${index} - ${fieldName}`;
+  }
+
+  // Check if it starts with a known prefix
+  for (const [key, value] of Object.entries(fieldMap)) {
+    if (path.startsWith(key + ".")) {
+      const rest = path.substring(key.length + 1);
+      return `${value} - ${rest}`;
+    }
+  }
+
+  // Default: capitalize and replace dots/underscores
+  return path
+    .split(/[._]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 const domainNamePattern = /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$/;
 const urlPattern = /^https?:\/\//i;
 
@@ -36,9 +116,22 @@ const dnsRecordSchema = yup
       .default(300),
     priority: yup
       .number()
-      .transform((value, originalValue) => (originalValue === "" || originalValue === undefined ? undefined : Number(originalValue)))
+      .transform((value, originalValue, context) => {
+        // Handle empty string, undefined, null as "not provided"
+        if (originalValue === "" || originalValue === undefined || originalValue === null) {
+          // For MX and SRV records, priority is required - default to 0
+          const record = context?.parent;
+          if (record && (record.type === 'MX' || record.type === 'SRV')) {
+            return 0;
+          }
+          return undefined;
+        }
+        const num = Number(originalValue);
+        // Allow 0 as a valid priority value
+        return isNaN(num) ? undefined : num;
+      })
       .integer()
-      .positive()
+      .min(0, "Priority must be 0 or greater")
       .nullable()
       .optional()
   })
@@ -46,7 +139,7 @@ const dnsRecordSchema = yup
 
 const dnsProviderSchema = yup
   .object({
-    type: yup.string().trim().min(2).required(),
+    type: yup.string().trim().min(2).nullable().optional(),
     config: yup.mixed<Record<string, unknown>>().optional()
   })
   .nullable()
@@ -84,6 +177,8 @@ const domainTargetSchema = yup
   }))
   .test("target-config", "Invalid target configuration", function (value) {
     if (!value) return true;
+
+    // Only validate container fields if container type is selected
     if (value.type === "container") {
       if (!value.containerId) {
         return this.createError({ path: `${this.path}.containerId`, message: "Container is required" });
@@ -92,22 +187,37 @@ const domainTargetSchema = yup
         return this.createError({ path: `${this.path}.containerPort`, message: "Port is required" });
       }
     }
+
+    // Only validate service fields if service type is selected
     if (value.type === "service" && !value.serviceHost) {
       return this.createError({ path: `${this.path}.serviceHost`, message: "Service host is required" });
     }
+
+    // Only validate external URL if external type is selected
     if (value.type === "external") {
-      if (!value.externalUrl) {
+      if (!value.externalUrl || value.externalUrl.trim().length === 0) {
         return this.createError({ path: `${this.path}.externalUrl`, message: "URL is required" });
       }
-      if (!urlPattern.test(value.externalUrl)) {
-        return this.createError({ path: `${this.path}.externalUrl`, message: "Must start with http:// or https://" });
-      }
+      // Auto-add http:// if no protocol is specified (make it more lenient)
+      // Validation will pass, but we'll normalize it in the buildDomainData function
     }
+
+    // Only validate static root if static type is selected
     if (value.type === "static" && (!value.staticRoot || value.staticRoot.trim().length === 0)) {
       return this.createError({ path: `${this.path}.staticRoot`, message: "Static directory is required" });
     }
-    if (value.type !== "none" && value.enableHttps && value.sslMode === "lets-encrypt" && !value.letsEncryptEmail) {
-      return this.createError({ path: `${this.path}.letsEncryptEmail`, message: "Email is required for Let’s Encrypt" });
+
+
+    // Email validation for Let's Encrypt - only validate format if provided
+    // Email is optional, but if provided and HTTPS/Let's Encrypt are enabled, it must be valid
+    if (value.type !== "none" && value.enableHttps === true && value.sslMode === "lets-encrypt") {
+      if (value.letsEncryptEmail && value.letsEncryptEmail.trim() !== "") {
+        // Validate email format only if email is actually provided
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.letsEncryptEmail.trim())) {
+          return this.createError({ path: `${this.path}.letsEncryptEmail`, message: "Invalid email format" });
+        }
+      }
+      // Email is optional - don't require it
     }
     return true;
   });
@@ -136,11 +246,35 @@ const domainInputSchema = yup
     parentDomainId: yup.string().uuid().nullable().optional()
   })
   .test("managed-coherence", "Managed flag does not match selected domain mode", function (value) {
-    if (!value) return false;
+    if (!value) return true; // Make this more lenient - return true instead of false
     if (value.mode && value.managed !== undefined) {
       const expected = value.mode === "managed";
       if (value.managed !== expected) {
         return this.createError({ path: "managed", message: "Managed flag does not match selected domain mode" });
+      }
+    }
+    return true;
+  })
+  .test("dns-provider-required", "DNS provider type is required for provider mode", function (value) {
+    if (!value) return true;
+    // Only require dnsProvider.type if mode is "provider" or "third-party"
+    // Check both the normalized mode and the original mode values
+    const normalizedMode = normalizeDomainMode(value.mode);
+    const originalMode = value.mode;
+
+    // Check if mode is provider-related (before or after normalization)
+    const isProviderMode = normalizedMode === "provider" ||
+      originalMode === "provider" ||
+      originalMode === "third-party";
+
+    if (isProviderMode) {
+      // If dnsProvider object is provided, it must have a type
+      // But if dnsProvider is not provided at all, that's okay (it's optional)
+      if (value.dnsProvider !== undefined && value.dnsProvider !== null && !value.dnsProvider.type) {
+        return this.createError({
+          path: "dnsProvider.type",
+          message: "DNS provider type is required when using provider mode"
+        });
       }
     }
     return true;
@@ -410,6 +544,18 @@ export const getDomain = async (domainId: string): Promise<Domain | null> => {
   return domain ? mapDomainEntity(domain) : null;
 };
 
+const normalizeExternalUrl = (url: string | null | undefined): string | null => {
+  if (!url || url.trim().length === 0) {
+    return null;
+  }
+  const trimmed = url.trim();
+  // Auto-add http:// if no protocol is specified
+  if (!urlPattern.test(trimmed)) {
+    return `http://${trimmed}`;
+  }
+  return trimmed;
+};
+
 const buildDomainData = (
   payload: yup.InferType<typeof domainInputSchema>,
   aliases: string[],
@@ -428,7 +574,7 @@ const buildDomainData = (
   targetContainerId: payload.target.containerId ?? null,
   targetContainerPort: payload.target.containerPort ?? null,
   targetServiceHost: payload.target.serviceHost ?? null,
-  targetExternalUrl: payload.target.externalUrl ?? null,
+  targetExternalUrl: normalizeExternalUrl(payload.target.externalUrl),
   targetStaticRoot: payload.target.staticRoot ?? null,
   enableHttp: payload.target.enableHttp,
   enableHttps: payload.target.enableHttps,
@@ -461,7 +607,12 @@ const ensureParentDomain = async (parentDomainId: string | null, name: string, c
 };
 
 export const createDomain = async (input: DomainUpsertInput): Promise<Domain> => {
-  const payload = await domainInputSchema.validate(input, { abortEarly: false });
+  let payload: yup.InferType<typeof domainInputSchema>;
+  try {
+    payload = await domainInputSchema.validate(input, { abortEarly: false });
+  } catch (error) {
+    throw new Error(formatValidationError(error));
+  }
   const aliases = normalizeAliases(payload.aliases);
   const normalizedName = payload.name.toLowerCase().trim();
   const parent = await ensureParentDomain(payload.parentDomainId ?? null, normalizedName);
@@ -542,7 +693,12 @@ export const createDomain = async (input: DomainUpsertInput): Promise<Domain> =>
 };
 
 export const updateDomain = async (domainId: string, input: DomainUpsertInput): Promise<Domain> => {
-  const payload = await domainInputSchema.validate(input, { abortEarly: false });
+  let payload: yup.InferType<typeof domainInputSchema>;
+  try {
+    payload = await domainInputSchema.validate(input, { abortEarly: false });
+  } catch (error) {
+    throw new Error(formatValidationError(error));
+  }
   const aliases = normalizeAliases(payload.aliases);
   const normalizedName = payload.name.toLowerCase().trim();
   const parent = await ensureParentDomain(payload.parentDomainId ?? null, normalizedName, domainId);

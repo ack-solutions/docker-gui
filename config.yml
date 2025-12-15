@@ -29,18 +29,16 @@ nginx:
 email:
   enabled: true
   smtp:
-    host: "mailhog"
-    port: 1025
-    secure: false
+    host: "${SMTP_HOST:-localhost}"
+    port: ${SMTP_PORT:-587}
+    secure: ${SMTP_SECURE:-true}
   from:
     name: "Docker GUI"
     address: "noreply@docker-gui.local"
 
 dns:
   enabled: true
-  provider: "powerdns"
-  apiUrl: "http://powerdns:8081"
-  apiKey: ${DNS_API_KEY}
+  provider: "manual"
 
 
 proxies:

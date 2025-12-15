@@ -42,6 +42,7 @@ interface SslConfigurationProps {
   onCertificateIdChange: (id: string) => void;
   onForceHttpsChange?: (force: boolean) => void;
   availableCertificates?: SSLCertificate[];
+  onCreateCertificate?: () => void;
 }
 
 export default function SslConfiguration({
@@ -56,7 +57,8 @@ export default function SslConfiguration({
   onLetsEncryptEmailChange,
   onCertificateIdChange,
   onForceHttpsChange,
-  availableCertificates = []
+  availableCertificates = [],
+  onCreateCertificate,
 }: SslConfigurationProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -216,7 +218,9 @@ export default function SslConfiguration({
                     <strong>Custom SSL Certificate</strong>
                   </Typography>
                   <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                    • Upload certificates in the SSL/Certificates page
+                    • Select an existing certificate from the common SSL library
+                    <br />
+                    • Or create a new certificate that will be saved to the common library
                     <br />
                     • Certificate must match this domain name
                     <br />
@@ -225,14 +229,25 @@ export default function SslConfiguration({
                   </Typography>
                 </Alert>
 
-                <Button
-                  variant="outlined"
-                  startIcon={<UploadFileIcon />}
-                  size="small"
-                  sx={{ mt: 2 }}
-                >
-                  Upload New Certificate
-                </Button>
+                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadFileIcon />}
+                    size="small"
+                    onClick={onCreateCertificate}
+                  >
+                    Create New Certificate
+                  </Button>
+                  {availableCertificates.length > 0 && (
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => window.open("/ssl", "_blank")}
+                    >
+                      Manage Certificates
+                    </Button>
+                  )}
+                </Stack>
               </Box>
             )}
 

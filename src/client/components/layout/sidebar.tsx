@@ -65,7 +65,15 @@ const navigationTree: Array<{ label: string; items: NavigationNode[] }> = [
       { label: "Domains", href: "/domains", icon: <LanguageIcon />, permission: "domains:view" },
       { label: "SSL Certificates", href: "/ssl", icon: <LockIcon />, permission: "ssl:view" },
       { label: "Nginx Config", href: "/nginx", icon: <SettingsEthernetIcon />, permission: "nginx:view" },
-      { label: "Email", href: "/email", icon: <EmailIcon />, permission: "email:view" },
+      {
+        label: "Email",
+        icon: <EmailIcon />,
+        permission: "email:view",
+        children: [
+          { label: "Inbox", href: "/email", icon: <EmailIcon />, permission: "email:view" },
+          { label: "Accounts", href: "/email/accounts", icon: <PeopleIcon />, permission: "email:view" }
+        ]
+      },
       { label: "User Management", href: "/users", icon: <PeopleIcon />, permission: "users:manage" }
     ]
   }
@@ -142,7 +150,24 @@ const Sidebar = ({ onNavigate }: SidebarProps = {}) => {
       if (!href) {
         return false;
       }
-      return href === "/" ? pathname === href : pathname?.startsWith(href ?? "");
+      if (href === "/") {
+        return pathname === href;
+      }
+      // For exact matches, check if pathname equals href
+      if (pathname === href) {
+        return true;
+      }
+      // For parent routes, check if pathname starts with href followed by / or end of string
+      // But exclude child routes that shouldn't match (e.g., /email shouldn't match /email/accounts)
+      const hrefWithSlash = href.endsWith("/") ? href : `${href}/`;
+      if (pathname?.startsWith(hrefWithSlash)) {
+        // Special case: /email should only match /email exactly, not /email/accounts
+        if (href === "/email") {
+          return pathname === "/email";
+        }
+        return true;
+      }
+      return false;
     },
     [pathname]
   );
