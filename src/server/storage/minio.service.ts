@@ -297,6 +297,15 @@ export async function setBucketPolicy(name: string, policy: string): Promise<voi
 }
 
 /**
+ * Delete bucket policy (removes the policy by setting it to empty)
+ */
+export async function deleteBucketPolicy(name: string): Promise<void> {
+    const client = getMinioClient();
+    // MinIO/S3 doesn't have a direct delete method, so we set it to empty string
+    await client.setBucketPolicy(name, '');
+}
+
+/**
  * List objects in a bucket
  */
 export async function listObjects(options: ListObjectsOptions): Promise<ObjectInfo[]> {

@@ -5,8 +5,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteObjects, isMinioEnabled } from '@/server/storage/minio.service';
-import archiver from 'archiver';
-import { Readable } from 'stream';
 
 export async function POST(request: NextRequest) {
     try {

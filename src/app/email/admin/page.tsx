@@ -245,7 +245,7 @@ const EmailAdminPage = () => {
 
                 {/* Stats Cards */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
-                    <Grid item xs={12} md={4}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                         <Paper sx={{ p: 2, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
                             <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'primary.soft', color: 'primary.main' }}>
                                 <EmailIcon />
@@ -256,7 +256,7 @@ const EmailAdminPage = () => {
                             </Box>
                         </Paper>
                     </Grid>
-                    <Grid item xs={12} md={4}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                         <Paper sx={{ p: 2, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
                             <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'success.soft', color: 'success.main' }}>
                                 <CheckCircleIcon />
@@ -267,7 +267,7 @@ const EmailAdminPage = () => {
                             </Box>
                         </Paper>
                     </Grid>
-                    <Grid item xs={12} md={4}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                         <Paper sx={{ p: 2, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
                             <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'warning.soft', color: 'warning.main' }}>
                                 <StorageIcon />
@@ -614,7 +614,7 @@ const MailboxDialog = ({
                 <DialogContent sx={{ pt: 3 }}>
                     <Grid container spacing={2}>
                         {/* Email Address Field */}
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
                                 <TextField
                                     label="Username"
@@ -657,7 +657,7 @@ const MailboxDialog = ({
                         </Grid>
 
                         {/* Password Fields */}
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                             <TextField
                                 label={mailbox ? "New Password (leave blank to keep current)" : "Password"}
                                 type="password"
@@ -675,7 +675,7 @@ const MailboxDialog = ({
                         </Grid>
 
                         {(password || !mailbox) && (
-                            <Grid item xs={12}>
+                            <Grid size={{ xs: 12 }}>
                                 <TextField
                                     label="Confirm Password"
                                     type="password"
@@ -690,7 +690,7 @@ const MailboxDialog = ({
                         )}
 
                         {/* Quota Field */}
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 label="Storage Quota (GB)"
                                 type="number"
@@ -708,7 +708,7 @@ const MailboxDialog = ({
                         </Grid>
 
                         {/* Active Toggle */}
-                        <Grid item xs={12} sm={6} sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Grid size={{ xs: 12, sm: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
                             <Paper variant="outlined" sx={{ p: 1, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Box sx={{ ml: 1 }}>
                                     <Typography variant="body2" fontWeight="bold">Account Status</Typography>

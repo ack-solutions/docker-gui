@@ -116,11 +116,11 @@ const dnsRecordSchema = yup
       .default(300),
     priority: yup
       .number()
-      .transform((value, originalValue, context) => {
+      .transform(function(value, originalValue) {
         // Handle empty string, undefined, null as "not provided"
         if (originalValue === "" || originalValue === undefined || originalValue === null) {
           // For MX and SRV records, priority is required - default to 0
-          const record = context?.parent;
+          const record = (this as any).parent;
           if (record && (record.type === 'MX' || record.type === 'SRV')) {
             return 0;
           }

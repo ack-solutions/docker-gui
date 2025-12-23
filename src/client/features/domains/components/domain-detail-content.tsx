@@ -119,8 +119,6 @@ export default function DomainDetailContent({
       status: domain.status,
       notes: domain.notes,
       parentDomainId: domain.parentDomainId ?? null,
-      records: sanitizedRecords,
-      target: updates.target || domain.target || defaultTarget,
       provider: domain.provider ?? null,
       dnsProvider: domain.dnsProvider
         ? {

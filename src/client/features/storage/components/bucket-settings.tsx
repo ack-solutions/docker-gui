@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import {
@@ -47,12 +47,13 @@ export default function BucketSettings({ bucket }: BucketSettingsProps) {
             const res = await axios.get(`/api/storage/buckets/${bucket}/policy`);
             return res.data;
         },
-        onSuccess: (data) => {
-            if (data.policy) {
-                setCustomPolicy(data.policy);
-            }
-        },
     });
+
+    useEffect(() => {
+        if (currentPolicy?.policy) {
+            setCustomPolicy(currentPolicy.policy);
+        }
+    }, [currentPolicy]);
 
     const savePolicyMutation = useMutation({
         mutationFn: async ({ policy, template }: { policy?: string; template?: string }) => {

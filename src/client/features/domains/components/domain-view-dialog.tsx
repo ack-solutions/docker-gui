@@ -226,9 +226,7 @@ export default function DomainViewDialog({
           <DnsSectionEditor
             domain={domain}
             allDomains={allDomains}
-            isEditing={editingSection === "dns"}
             onEdit={() => handleSectionEdit("dns")}
-            onCancel={handleSectionCancel}
             onSave={(updates) => handleSectionSave("dns", updates)}
             isSaving={updateMutation.isPending}
           />
@@ -238,11 +236,7 @@ export default function DomainViewDialog({
           {/* Routing Section */}
           <RoutingSectionEditor
             domain={domain}
-            isEditing={editingSection === "routing"}
             onEdit={() => handleSectionEdit("routing")}
-            onCancel={handleSectionCancel}
-            onSave={(updates) => handleSectionSave("routing", updates)}
-            isSaving={updateMutation.isPending}
           />
 
           <Divider />
@@ -250,11 +244,7 @@ export default function DomainViewDialog({
           {/* SSL Section */}
           <SslSectionEditor
             domain={domain}
-            isEditing={editingSection === "ssl"}
             onEdit={() => handleSectionEdit("ssl")}
-            onCancel={handleSectionCancel}
-            onSave={(updates) => handleSectionSave("ssl", updates)}
-            isSaving={updateMutation.isPending}
           />
 
           <Divider />
@@ -262,11 +252,7 @@ export default function DomainViewDialog({
           {/* Status Section */}
           <StatusSectionEditor
             domain={domain}
-            isEditing={editingSection === "status"}
             onEdit={() => handleSectionEdit("status")}
-            onCancel={handleSectionCancel}
-            onSave={(updates) => handleSectionSave("status", updates)}
-            isSaving={updateMutation.isPending}
           />
 
           <Divider />
@@ -275,11 +261,7 @@ export default function DomainViewDialog({
           <HierarchySectionEditor
             domain={domain}
             allDomains={allDomains}
-            isEditing={editingSection === "hierarchy"}
             onEdit={() => handleSectionEdit("hierarchy")}
-            onCancel={handleSectionCancel}
-            onSave={(updates) => handleSectionSave("hierarchy", updates)}
-            isSaving={updateMutation.isPending}
           />
 
           <Divider />
@@ -287,11 +269,7 @@ export default function DomainViewDialog({
           {/* Advanced Section */}
           <AdvancedSectionEditor
             domain={domain}
-            isEditing={editingSection === "advanced"}
             onEdit={() => handleSectionEdit("advanced")}
-            onCancel={handleSectionCancel}
-            onSave={(updates) => handleSectionSave("advanced", updates)}
-            isSaving={updateMutation.isPending}
           />
         </Stack>
       </DialogContent>

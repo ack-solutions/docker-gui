@@ -16,11 +16,21 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SaveIcon from "@mui/icons-material/Save";
-import type { Domain as DomainModel, DomainUpsertInput } from "@/types/server";
+import type { Domain as DomainModel, DomainUpsertInput, DomainDnsRecord } from "@/types/server";
 import DnsModeSelector, { type DnsMode } from "../dns-mode-selector";
 import DnsSetupInstructions from "../dns-setup-instructions";
 import ThirdPartyDnsSetup from "../third-party-dns-setup";
 import DnsRecordsManager from "../dns-records-manager";
+
+// Type matching DnsRecordsManager's DnsRecord interface
+interface DnsRecord {
+  id?: string;
+  type: DomainDnsRecord["type"];
+  host: string;
+  value: string;
+  ttl: number;
+  priority?: number | null;
+}
 
 interface DnsEditDialogProps {
   open: boolean;
@@ -64,6 +74,32 @@ const sanitizeProviderConfig = (config: any) => {
     }
   });
   return Object.keys(cloned).length ? cloned : undefined;
+};
+
+// Convert DomainDnsRecord[] to DnsRecord[] (for DnsRecordsManager)
+const toDnsRecords = (records: DomainDnsRecord[]): DnsRecord[] => {
+  return records.map(({ id, type, host, value, ttl, priority }) => ({
+    id,
+    type,
+    host,
+    value,
+    ttl,
+    priority,
+  }));
+};
+
+// Convert DnsRecord[] to DomainDnsRecord[] (for state)
+const toDomainDnsRecords = (records: DnsRecord[]): DomainDnsRecord[] => {
+  return records.map((record, index) => ({
+    id: record.id || `temp-${index}`,
+    type: record.type,
+    host: record.host,
+    value: record.value,
+    ttl: record.ttl,
+    priority: record.priority ?? null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
 };
 
 export default function DnsEditDialog({
@@ -183,8 +219,8 @@ export default function DnsEditDialog({
 
           {(dnsMode === "managed" || dnsMode === "third-party") && (
             <DnsRecordsManager
-              records={dnsRecords}
-              onChange={setDnsRecords}
+              records={toDnsRecords(dnsRecords)}
+              onChange={(records) => setDnsRecords(toDomainDnsRecords(records))}
               domainName={domain.name}
             />
           )}

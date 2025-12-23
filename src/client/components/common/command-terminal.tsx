@@ -25,6 +25,18 @@ const HISTORY_LIMIT = 1_000;
 const BRACKET_PASTE_START = "\u001b[200~";
 const BRACKET_PASTE_END = "\u001b[201~";
 
+const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
+  // Remove # if present
+  const cleanHex = hex.replace('#', '');
+  
+  // Parse hex values
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  
+  return { r, g, b };
+};
+
 const tokenizeInput = (value: string): string[] => {
   const tokens: string[] = [];
   let current = "";

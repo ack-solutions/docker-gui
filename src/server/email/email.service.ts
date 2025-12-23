@@ -322,7 +322,6 @@ export class EmailService {
                                         textBody: parsed.text,
                                         htmlBody: parsed.html || parsed.textAsHtml,
                                         isRead: message.attributes.flags.includes("\\Seen"),
-                                        hasAttachments: parsed.attachments && parsed.attachments.length > 0,
                                     },
                                 });
                             }
@@ -374,7 +373,6 @@ export class EmailService {
                     to: true,
                     date: true,
                     isRead: true,
-                    hasAttachments: true,
                     // Don't fetch body for list view to save bandwidth
                 },
             }),

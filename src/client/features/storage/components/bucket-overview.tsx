@@ -99,7 +99,7 @@ export default function BucketOverview({ bucket }: BucketOverviewProps) {
             {/* Statistics Cards */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 {stats.map((stat, index) => (
-                    <Grid item xs={12} sm={6} md={3} key={index}>
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
                         <Paper
                             elevation={0}
                             sx={{
@@ -142,7 +142,7 @@ export default function BucketOverview({ bucket }: BucketOverviewProps) {
                 </Box>
                 <Box sx={{ p: 3 }}>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <Typography variant="body2" color="text.secondary" gutterBottom>
                                 Bucket Name
                             </Typography>
@@ -150,7 +150,7 @@ export default function BucketOverview({ bucket }: BucketOverviewProps) {
                                 {details.name}
                             </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <Typography variant="body2" color="text.secondary" gutterBottom>
                                 Creation Date
                             </Typography>
@@ -158,7 +158,7 @@ export default function BucketOverview({ bucket }: BucketOverviewProps) {
                                 {new Date(details.creationDate).toLocaleString()}
                             </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <Typography variant="body2" color="text.secondary" gutterBottom>
                                 Policy Status
                             </Typography>
@@ -166,7 +166,7 @@ export default function BucketOverview({ bucket }: BucketOverviewProps) {
                                 {details.policy ? "Custom Policy Applied" : "No Policy"}
                             </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <Typography variant="body2" color="text.secondary" gutterBottom>
                                 Versioning
                             </Typography>
@@ -189,7 +189,7 @@ export default function BucketOverview({ bucket }: BucketOverviewProps) {
                     <Box sx={{ p: 3 }}>
                         <Grid container spacing={2}>
                             {Object.entries(details.tags).map(([key, value]) => (
-                                <Grid item xs={12} sm={6} key={key}>
+                                <Grid size={{ xs: 12, sm: 6 }} key={key}>
                                     <Paper variant="outlined" sx={{ p: 2 }}>
                                         <Typography variant="caption" color="text.secondary">
                                             {key}
