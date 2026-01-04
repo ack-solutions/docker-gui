@@ -3,9 +3,12 @@
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import StopIcon from "@mui/icons-material/Stop";
+import TerminalIcon from "@mui/icons-material/Terminal";
+import DescriptionIcon from "@mui/icons-material/Description";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { Button, Chip, Stack, Tooltip, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import Link from "next/link";
 import moment from "moment";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -162,6 +165,26 @@ const ContainerDetailHeader = ({ container, inspect }: ContainerDetailHeaderProp
               </Button>
             </Tooltip>
           )}
+          <Tooltip title="Open interactive shell">
+            <Button
+              component={Link}
+              href={`/docker/containers/${containerId}/shell`}
+              variant="outlined"
+              startIcon={<TerminalIcon fontSize="small" />}
+            >
+              Shell
+            </Button>
+          </Tooltip>
+          <Tooltip title="View logs page">
+            <Button
+              component={Link}
+              href={`/docker/logs?containerId=${containerId}`}
+              variant="outlined"
+              startIcon={<DescriptionIcon fontSize="small" />}
+            >
+              Logs
+            </Button>
+          </Tooltip>
           <Tooltip title="Remove container">
             <Button
               variant="outlined"

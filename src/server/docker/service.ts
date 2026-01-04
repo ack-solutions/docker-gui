@@ -84,15 +84,6 @@ class DockerService {
     return "info";
   }
 
-  /**
-   * Strip ANSI escape codes from log messages
-   */
-  private static stripAnsiCodes(text: string): string {
-    // Remove ANSI escape sequences
-    // Matches: \x1b[...m, \x1b[38;5;...m, \x1b[95m, etc.
-    return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
-  }
-
   private static parseDockerLogLines(payload: Buffer | string, containerId: string): DockerLogEntry[] {
     if (!payload || payload.length === 0) {
       return [];
@@ -118,9 +109,7 @@ class DockerService {
       lines.forEach((line, index) => {
         const [timestamp, ...rest] = line.split(/\s/);
         const ts = Number.isNaN(Date.parse(timestamp)) ? new Date().toISOString() : new Date(timestamp).toISOString();
-        let message = rest.join(" ") || line;
-        // Strip ANSI escape codes from the message
-        message = DockerService.stripAnsiCodes(message);
+        const message = rest.join(" ") || line;
         entries.push({
           id: `${containerId}-${cursor}-${index}`,
           containerId,

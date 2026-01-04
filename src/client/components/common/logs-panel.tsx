@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
@@ -14,8 +14,8 @@ import { styled } from "@mui/material/styles";
 import moment from "moment";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import LogsTerminal from "@/components/common/logs-terminal";
 import { useLogs } from "@/features/docker/logs/hooks/use-logs";
+import type { DockerLogEntry } from "@/types/docker";
 
 const CompactSearchField = styled(TextField)(({ theme }) => ({
   minWidth: 160,
@@ -30,6 +30,55 @@ const CompactLevelField = styled(TextField)(({ theme }) => ({
     minWidth: 90
   }
 }));
+
+const LogViewport = styled(Box)(({ theme }) => ({
+  flex: 1,
+  minHeight: 0, // Important for flex scrolling
+  overflow: "auto",
+  backgroundColor: theme.palette.mode === "dark" ? "#050B1A" : "#f8fafc",
+  padding: theme.spacing(1.5),
+  fontFamily: 'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  fontSize: "0.8125rem",
+  lineHeight: 1.6,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  userSelect: "text",
+  "&::-webkit-scrollbar": {
+    width: "8px",
+    height: "8px"
+  },
+  "&::-webkit-scrollbar-track": {
+    backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)"
+  },
+  "&::-webkit-scrollbar-thumb": {
+    backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)",
+    borderRadius: "4px",
+    "&:hover": {
+      backgroundColor: theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)"
+    }
+  }
+}));
+
+const LogLine = styled(Typography, {
+  shouldForwardProp: (prop) => prop !== "$level"
+})<{ $level: "info" | "warn" | "error" }>(({ theme, $level }) => {
+  const colors = {
+    error: theme.palette.error.main,
+    warn: theme.palette.warning.main,
+    info: theme.palette.text.primary
+  } as const;
+
+  return {
+    color: colors[$level],
+    margin: 0,
+    padding: 0,
+    fontFamily: 'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    fontSize: "0.8125rem",
+    lineHeight: 1.6,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word"
+  };
+});
 
 const logLevels = [
   { label: "All", value: "all" },
@@ -54,7 +103,9 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
   const { logs, isStreaming, toggleStreaming, severityCounters } = useLogs({ containerId });
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [scrollToBottomSignal, setScrollToBottomSignal] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const isUserScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { control, register, watch } = useForm<LogFilterForm>({
     defaultValues: {
@@ -88,11 +139,72 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
     );
   }, [logs, level, query]);
 
+  // Check if user is near bottom of scroll
+  const isNearBottom = useCallback((element: HTMLElement, threshold = 100) => {
+    const { scrollTop, scrollHeight, clientHeight } = element;
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  }, []);
+
+  // Scroll to bottom
+  const scrollToBottom = useCallback((smooth = false) => {
+    if (viewportRef.current) {
+      viewportRef.current.scrollTo({
+        top: viewportRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto"
+      });
+    }
+  }, []);
+
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    if (!viewportRef.current) return;
+
+    const nearBottom = isNearBottom(viewportRef.current);
+    
+    if (nearBottom) {
+      // User is at bottom, enable auto-scroll
+      setAutoScroll(true);
+      isUserScrollingRef.current = false;
+    } else {
+      // User scrolled up, disable auto-scroll
+      if (autoScroll) {
+        setAutoScroll(false);
+        isUserScrollingRef.current = true;
+      }
+    }
+
+    // Clear existing timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Set a timeout to detect when user stops scrolling
+    scrollTimeoutRef.current = setTimeout(() => {
+      isUserScrollingRef.current = false;
+    }, 150);
+  }, [autoScroll, isNearBottom]);
+
+  // Auto-scroll when new logs arrive (if auto-scroll is enabled)
+  useEffect(() => {
+    if (autoScroll && !isUserScrollingRef.current && viewportRef.current) {
+      // Check if we're already near bottom before scrolling
+      if (isNearBottom(viewportRef.current, 200)) {
+        // Use requestAnimationFrame for smooth scrolling
+        requestAnimationFrame(() => {
+          scrollToBottom(false);
+        });
+      }
+    }
+  }, [filteredLogs.length, autoScroll, scrollToBottom, isNearBottom]);
+
   // Reset auto-scroll when container changes
   useEffect(() => {
     setAutoScroll(true);
-    setScrollToBottomSignal((prev) => prev + 1);
-  }, [containerId]);
+    const timeoutId = setTimeout(() => {
+      scrollToBottom(false);
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [containerId, scrollToBottom]);
 
   const handleDownloadLogs = () => {
     const logText = filteredLogs
@@ -183,7 +295,7 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
             sx={{ cursor: "pointer" }}
             onClick={() => {
               setAutoScroll(true);
-              setScrollToBottomSignal((prev) => prev + 1);
+              scrollToBottom(true);
             }}
           />
         </Tooltip>
@@ -251,15 +363,17 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
         </Stack>
       </Collapse>
 
-      <Box sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      {/* Log Content */}
+      <LogViewport 
+        ref={viewportRef}
+        onScroll={handleScroll}
+      >
         {filteredLogs.length > 0 ? (
-          <LogsTerminal
-            logs={filteredLogs}
-            autoScroll={autoScroll}
-            onAutoScrollChange={setAutoScroll}
-            scrollToBottomSignal={scrollToBottomSignal}
-            sx={{ flex: 1, minHeight: 0 }}
-          />
+          filteredLogs.map((log) => (
+            <LogLine key={log.id} $level={log.level} as="div">
+              {log.message}
+            </LogLine>
+          ))
         ) : (
           <Box 
             sx={{ 
@@ -275,7 +389,7 @@ export const LogsPanel = ({ containerId, containerName }: LogsPanelProps) => {
             </Typography>
           </Box>
         )}
-      </Box>
+      </LogViewport>
     </Stack>
   );
 };
