@@ -552,9 +552,7 @@ const ContainerList = () => {
         container={selectedContainer}
         onClose={handleMenuClose}
         onOpenTerminalDrawer={openTerminal}
-        onOpenTerminalTab={(id) => window.open(`/docker/containers/${id}/shell`, "_blank", "noopener,noreferrer")}
         onOpenLogsDrawer={openLogs}
-        onOpenLogsTab={(id) => window.open(`/docker/logs?containerId=${id}`, "_blank", "noopener,noreferrer")}
         onRemove={handleRemove}
       />
       <CreateContainerDialog open={isCreateOpen} onClose={closeCreateDialog} />

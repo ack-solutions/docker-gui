@@ -12,9 +12,7 @@ interface ContainerContextMenuProps {
   container: DockerContainer | undefined;
   onClose: () => void;
   onOpenTerminalDrawer: (id: string, name: string) => void;
-  onOpenTerminalTab: (id: string) => void;
   onOpenLogsDrawer: (id: string, name: string) => void;
-  onOpenLogsTab: (id: string) => void;
   onRemove: (id: string, name: string) => void;
 }
 
@@ -23,9 +21,7 @@ const ContainerContextMenu = ({
   container,
   onClose,
   onOpenTerminalDrawer,
-  onOpenTerminalTab,
   onOpenLogsDrawer,
-  onOpenLogsTab,
   onRemove
 }: ContainerContextMenuProps) => {
   if (!container) {
@@ -62,19 +58,7 @@ const ContainerContextMenu = ({
         <ListItemIcon>
           <TerminalIcon fontSize="small" />
         </ListItemIcon>
-        <ListItemText primary="Open terminal in drawer" />
-      </MenuItem>
-      <MenuItem
-        onClick={() => {
-          onOpenTerminalTab(container.id);
-          onClose();
-        }}
-        disabled={container.state !== "running"}
-      >
-        <ListItemIcon>
-          <OpenInNewIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Open terminal in new tab" />
+        <ListItemText primary="Open terminal" />
       </MenuItem>
       <MenuItem onClick={() => {
         onOpenLogsDrawer(container.id, container.name);
@@ -83,16 +67,7 @@ const ContainerContextMenu = ({
         <ListItemIcon>
           <ArticleIcon fontSize="small" />
         </ListItemIcon>
-        <ListItemText primary="View logs in drawer" />
-      </MenuItem>
-      <MenuItem onClick={() => {
-        onOpenLogsTab(container.id);
-        onClose();
-      }}>
-        <ListItemIcon>
-          <OpenInNewIcon fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="View logs in new tab" />
+        <ListItemText primary="View logs" />
       </MenuItem>
       <Divider sx={{ my: 0.5 }} />
       <MenuItem onClick={() => {

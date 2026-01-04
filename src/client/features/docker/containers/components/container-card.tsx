@@ -188,7 +188,7 @@ const ContainerCard = ({
                     )}
                   </ActionIconButton>
                 </Tooltip>
-                <Tooltip title="Open terminal in drawer">
+                <Tooltip title="Open terminal">
                   <ActionIconButton
                     color="default"
                     size="small"
@@ -197,7 +197,7 @@ const ContainerCard = ({
                     <TerminalIcon fontSize="small" />
                   </ActionIconButton>
                 </Tooltip>
-                <Tooltip title="View logs in drawer">
+                <Tooltip title="View logs">
                   <ActionIconButton
                     color="default"
                     size="small"
