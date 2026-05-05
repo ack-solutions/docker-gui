@@ -11,37 +11,31 @@ metrics.
 
 ---
 
-## Install on a fresh Linux server
+## Install
 
-> **Alpha note:** until pre-built images ship, the install runs a build
-> step on the target server. The eventual public one-liner is
-> `curl -fsSL https://get.docker-gui.io/install.sh | sudo bash`; today
-> you point the installer at your own copy of the source.
-
-Simplest path right now — copy the source to the server and run with
-`DOCKER_GUI_LOCAL=1`:
+On your Linux server (Ubuntu 22.04+, Debian 11+, RHEL 9+ — fresh or
+existing), paste this and press Enter:
 
 ```bash
-# On your laptop (in this repo):
-tar czf /tmp/docker-gui.tar.gz \
-  --exclude=node_modules --exclude=.next --exclude=.git \
-  --exclude='apps/api/data' --exclude='apps/api/node_modules' .
-scp /tmp/docker-gui.tar.gz user@your-server:/tmp/
-
-# On the server:
-ssh user@your-server
-mkdir -p /tmp/dgui-src && cd /tmp/dgui-src
-tar xzf /tmp/docker-gui.tar.gz
-DOCKER_GUI_LOCAL=1 sudo -E ./scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh | sudo bash
 ```
 
-The installer generates secrets, builds the Docker images, starts the
-stack, installs the `docker-gui` CLI, and prints your URL + a one-time
-setup secret. Open the URL, paste the secret, create the first admin,
-you're in.
+That's it. The installer takes 3–5 minutes and:
 
-Other paths (GitHub fork, explicit tarball URL, manual compose):
-**[docs/INSTALL.md](docs/INSTALL.md)**
+- Installs Docker if it isn't already
+- Downloads the latest release (or `develop` if no release is published yet)
+- Generates random secrets in `/opt/docker-gui/.env`
+- Builds and starts the api / web / caddy containers
+- Installs the `docker-gui` CLI to `/usr/local/bin`
+
+When it finishes you'll see your URL and a one-time setup secret. Open
+the URL, paste the secret, create your admin — you're in.
+
+**Re-run the same command to upgrade.** Your data, secrets, and config
+are preserved.
+
+Custom port, install dir, air-gapped install, inspect-script-first: see
+**[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ---
 
@@ -89,11 +83,9 @@ CLI reference: **[docs/CLI.md](docs/CLI.md)**
 
 ### For users
 
-- **[INSTALL.md](docs/INSTALL.md)** — install on any Linux server
+- **[INSTALL.md](docs/INSTALL.md)** — install, update, troubleshoot, uninstall
 - **[CONFIG.md](docs/CONFIG.md)** — `config.yml` + `.env` reference
-- **[UPDATE.md](docs/UPDATE.md)** — updating, rolling back, automation
 - **[CLI.md](docs/CLI.md)** — `docker-gui` command reference
-- **[SCRIPTS.md](docs/SCRIPTS.md)** — install / doctor / uninstall internals
 
 ### For contributors
 
@@ -102,13 +94,6 @@ CLI reference: **[docs/CLI.md](docs/CLI.md)**
 - **[ROADMAP.md](docs/ROADMAP.md)** — phased plan
 - **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** — local dev workflow + tests
 - **[COMPONENTS.md](docs/COMPONENTS.md)** — UI design system
-
-### Phase notes (delivery log)
-
-- [PHASE_0_RUN.md](docs/PHASE_0_RUN.md) — foundation
-- [PHASE_1_RUN.md](docs/PHASE_1_RUN.md) — auth + containers
-- [PHASE_2_RUN.md](docs/PHASE_2_RUN.md) — images + volumes + networks + production stack
-- [PHASE_3_RUN.md](docs/PHASE_3_RUN.md) — Sites + Caddy
 
 ---
 

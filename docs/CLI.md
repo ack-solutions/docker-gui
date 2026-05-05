@@ -169,7 +169,7 @@ docker-gui update                       # latest main
 docker-gui update --version v0.4.0      # a specific tag
 ```
 
-See [UPDATE.md](UPDATE.md) for what this does.
+See [INSTALL.md](INSTALL.md#update) for what this does.
 
 ### `doctor [--feature x]`
 
@@ -180,7 +180,7 @@ docker-gui doctor --feature caddy
 docker-gui doctor --json                # machine-readable output
 ```
 
-See [SCRIPTS.md](SCRIPTS.md#scriptsdoctorsh).
+See [INSTALL.md](INSTALL.md#verify).
 
 ### `version`
 
@@ -262,6 +262,4 @@ that's fine, both installs share the same wrapper.
 
 See also:
 [INSTALL.md](INSTALL.md) ·
-[CONFIG.md](CONFIG.md) ·
-[UPDATE.md](UPDATE.md) ·
-[SCRIPTS.md](SCRIPTS.md)
+[CONFIG.md](CONFIG.md)
