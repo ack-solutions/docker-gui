@@ -93,21 +93,45 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 ok "Docker daemon reachable"
 
+# ---------- migrate from older installs ----------
+#
+# Old versions baked Caddy into docker-compose.yml (always on 80/443). The
+# new model only ships api + web in compose; Caddy is a feature toggled from
+# /features in the UI. If we find an existing docker-gui-caddy container
+# from the old layout, stop + remove it now so the new modular flow can
+# manage it cleanly. Named volumes (docker-gui_caddy-data, _caddy-config)
+# are not touched — sites + TLS certs survive.
+
+if docker ps -a --format '{{.Names}}' | grep -q '^docker-gui-caddy$'; then
+  log "Migrating: stopping legacy docker-gui-caddy (data preserved in named volumes)"
+  docker stop docker-gui-caddy >/dev/null 2>&1 || true
+  docker rm   docker-gui-caddy >/dev/null 2>&1 || true
+  ok "legacy caddy removed — re-enable it from /features after the upgrade"
+fi
+
 # ---------- ports ----------
+#
+# Only the panel port matters at install time. Optional features (Caddy on
+# 80/443, MinIO on 9000/9001, …) are toggled later from the /features page —
+# the installer itself reserves nothing else.
 
 log "Checking ports"
-for port in "$WEB_PORT" 80 443; do
-  if ss -tnlp 2>/dev/null | awk '{print $4}' | grep -q ":${port}\$"; then
-    if [[ -d "$INSTALL_DIR" ]]; then
-      ok "port $port in use (probably docker-gui)"
-    else
-      err "Port $port is already in use. Stop the process or use --port to pick another."
-      exit 1
-    fi
+if ss -tnlp 2>/dev/null | awk '{print $4}' | grep -q ":${WEB_PORT}\$"; then
+  if [[ -d "$INSTALL_DIR" ]]; then
+    ok "port $WEB_PORT in use (probably docker-gui — re-running for upgrade)"
   else
-    ok "port $port free"
+    err "Port $WEB_PORT is already in use."
+    err ""
+    err "Pick another with DOCKER_GUI_WEB_PORT, e.g.:"
+    err "  curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh \\"
+    err "    | sudo DOCKER_GUI_WEB_PORT=3001 bash"
+    err ""
+    err "Or stop whatever is on :$WEB_PORT and re-run."
+    exit 1
   fi
-done
+else
+  ok "port $WEB_PORT free"
+fi
 
 # ---------- download source ----------
 
