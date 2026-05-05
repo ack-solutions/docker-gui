@@ -1,38 +1,22 @@
 /** @type {import('next').NextConfig} */
-const externalModules = ["dockerode", "ssh2", "@prisma/client", ".prisma/client", "nodemailer"];
+
+const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://127.0.0.1:4000";
 
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  webpack: (config, { isServer, webpack }) => {
-    if (isServer) {
-      if (typeof config.externals === "function") {
-        const originalExternals = config.externals;
-        config.externals = (context, request, callback) => {
-          if (request && externalModules.includes(request)) {
-            return callback(null, `commonjs ${request}`);
-          }
-          return originalExternals(context, request, callback);
-        };
-      } else {
-        config.externals = [...(config.externals ?? []), ...externalModules];
+  // The web app is purely a UI client. All server work lives in apps/api.
+  // No dockerode/prisma/nodemailer here — they don't get imported.
+  async rewrites() {
+    // Always proxy /api/v1/* to the Fastify backend.
+    // - Dev: API_PROXY_TARGET defaults to http://127.0.0.1:4000
+    // - Prod (compose): API_PROXY_TARGET=http://api:4000 (set by docker-compose)
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${API_PROXY_TARGET}/api/v1/:path*`
       }
-
-      // Provide polyfill for 'self' global used by @xterm/xterm during SSR
-      // This injects the polyfill at the top of all server-side chunks
-      config.plugins.push(
-        new webpack.BannerPlugin({
-          banner: "if (typeof global !== 'undefined' && typeof self === 'undefined') { global.self = global; }",
-          raw: true,
-          entryOnly: false,
-        })
-      );
-    }
-
-    return config;
+    ];
   }
 };
 
