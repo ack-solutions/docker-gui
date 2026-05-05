@@ -12,6 +12,8 @@ import { DockerContainersService } from '../services/docker-containers.service.j
 import { DockerImagesService } from '../services/docker-images.service.js';
 import { DockerVolumesService } from '../services/docker-volumes.service.js';
 import { DockerNetworksService } from '../services/docker-networks.service.js';
+import { SitesService } from '../services/sites.service.js';
+import { CaddyClient } from '../lib/caddy.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
@@ -32,6 +34,7 @@ export interface TestEnv {
 
 export interface BuildTestEnvOptions {
   docker?: Docker;
+  caddy?: CaddyClient | null;
 }
 
 function defaultFakeDocker(): Docker {
@@ -94,6 +97,8 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   const images = new DockerImagesService(docker);
   const volumes = new DockerVolumesService(docker);
   const networks = new DockerNetworksService(docker);
+  const caddy = opts.caddy === undefined ? null : opts.caddy;
+  const sites = new SitesService(prisma, caddy);
 
   const app = await buildApp({
     logger: false,
@@ -104,6 +109,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     images,
     volumes,
     networks,
+    sites,
     jwtConfig: TEST_JWT_CONFIG,
     setupSecret: TEST_SETUP_SECRET,
   });

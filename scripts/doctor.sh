@@ -175,6 +175,18 @@ if run_section service; then
     fi
   fi
 
+  if [[ -f "$INSTALL_DIR/config.yml" ]]; then
+    ok "config.yml present"
+  else
+    warn "config.yml" "missing — run docker-gui restart to recreate from template"
+  fi
+
+  if [[ -x /usr/local/bin/docker-gui ]]; then
+    ok "docker-gui CLI installed (/usr/local/bin/docker-gui)"
+  else
+    warn "docker-gui CLI" "not installed — run sudo cp $INSTALL_DIR/source/scripts/cli.sh /usr/local/bin/docker-gui"
+  fi
+
   # Live endpoint
   if curl -fsS "http://127.0.0.1:${WEB_PORT}/api/v1/health/live" >/dev/null 2>&1; then
     ok "API /health/live responds"
@@ -192,6 +204,37 @@ if run_section service; then
       warn "overall status" "degraded — see /health"
     elif [[ -n "$overall" ]]; then
       fail "overall status" "$overall"
+    fi
+  fi
+fi
+
+# ---------- Caddy ----------
+
+if run_section caddy; then
+  section "Caddy (reverse proxy)"
+
+  caddy_running=0
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^docker-gui-caddy$'; then
+    ok "container running"
+    caddy_running=1
+  else
+    warn "container" "docker-gui-caddy not running (Caddy is optional in dev)"
+  fi
+
+  if [[ $caddy_running -eq 1 ]]; then
+    if docker exec docker-gui-caddy wget -qO- --tries=1 --timeout=3 http://127.0.0.1:2019/ >/dev/null 2>&1; then
+      ok "admin API reachable from inside container"
+    else
+      fail "admin API" "not responding inside docker-gui-caddy"
+    fi
+  fi
+
+  # Check that the API can reach Caddy via the configured CADDY_ADMIN_URL
+  if [[ -n "${health_json:-}" ]]; then
+    if curl -fsS "http://127.0.0.1:${WEB_PORT}/api/v1/sites/status" \
+         -H "authorization: Bearer ignored" 2>/dev/null \
+         | grep -q '"caddyConfigured":true'; then
+      ok "API has CADDY_ADMIN_URL configured"
     fi
   fi
 fi

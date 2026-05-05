@@ -1,0 +1,110 @@
+/**
+ * Tiny client for Caddy's admin API.
+ *
+ * Caddy exposes a JSON config over HTTP. POST /load atomically replaces
+ * the running config; GET /config returns the current config; the server
+ * validates internally and returns 400 with the error on bad config.
+ *
+ * Docs: https://caddyserver.com/docs/api
+ */
+
+export interface CaddyClientOptions {
+  /** Base URL like "http://127.0.0.1:2019" or "http://caddy:2019" */
+  adminUrl: string;
+  /** Per-request timeout in ms. Default 10s. */
+  timeoutMs?: number;
+  /** Custom fetch impl (used in tests). */
+  fetch?: typeof fetch;
+}
+
+export class CaddyError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode?: number,
+    public readonly body?: unknown,
+  ) {
+    super(message);
+    this.name = 'CaddyError';
+  }
+}
+
+export class CaddyClient {
+  private readonly adminUrl: string;
+  private readonly timeoutMs: number;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(opts: CaddyClientOptions) {
+    this.adminUrl = opts.adminUrl.replace(/\/$/, '');
+    this.timeoutMs = opts.timeoutMs ?? 10_000;
+    this.fetchImpl = opts.fetch ?? fetch;
+  }
+
+  /** Replace the entire running config. Atomic. */
+  async loadConfig(config: unknown): Promise<void> {
+    await this.request('POST', '/load', config);
+  }
+
+  /** Fetch the currently running config. */
+  async getConfig(): Promise<unknown> {
+    const res = await this.request('GET', '/config/');
+    return res;
+  }
+
+  /** Liveness probe — `GET /` returns "Caddy is running" plain text. */
+  async ping(): Promise<boolean> {
+    try {
+      await this.request('GET', '/');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async request(
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    body?: unknown,
+  ): Promise<unknown> {
+    const url = `${this.adminUrl}${path}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await this.fetchImpl(url, {
+        method,
+        ...(body !== undefined
+          ? {
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            }
+          : {}),
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        let parsed: unknown;
+        try {
+          parsed = text ? JSON.parse(text) : undefined;
+        } catch {
+          parsed = text;
+        }
+        throw new CaddyError(
+          `Caddy ${method} ${path} failed: ${res.status}`,
+          res.status,
+          parsed,
+        );
+      }
+      if (text.length === 0) return undefined;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    } catch (err) {
+      if (err instanceof CaddyError) throw err;
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      throw new CaddyError(`Caddy ${method} ${path}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}

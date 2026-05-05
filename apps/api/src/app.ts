@@ -4,6 +4,7 @@ import sensible from '@fastify/sensible';
 import { healthRoutes } from './routes/health.routes.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { dockerRoutes } from './routes/docker.routes.js';
+import { sitesRoutes } from './routes/sites.routes.js';
 import type { HealthDeps } from './services/health.service.js';
 import type { AuthService } from './services/auth.service.js';
 import type { UserService } from './services/user.service.js';
@@ -11,6 +12,7 @@ import type { DockerContainersService } from './services/docker-containers.servi
 import type { DockerImagesService } from './services/docker-images.service.js';
 import type { DockerVolumesService } from './services/docker-volumes.service.js';
 import type { DockerNetworksService } from './services/docker-networks.service.js';
+import type { SitesService } from './services/sites.service.js';
 import type { JwtConfig } from './lib/jwt.js';
 import { AppError } from './lib/errors.js';
 
@@ -26,6 +28,7 @@ export interface BuildAppOptions {
   images: DockerImagesService;
   volumes: DockerVolumesService;
   networks: DockerNetworksService;
+  sites: SitesService;
   jwtConfig: JwtConfig;
   setupSecret: string;
 }
@@ -123,6 +126,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         images: opts.images,
         volumes: opts.volumes,
         networks: opts.networks,
+        authMiddleware: { jwtConfig: opts.jwtConfig },
+      });
+      await api.register(sitesRoutes, {
+        sites: opts.sites,
         authMiddleware: { jwtConfig: opts.jwtConfig },
       });
     },

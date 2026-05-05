@@ -9,6 +9,8 @@ import { DockerContainersService } from './services/docker-containers.service.js
 import { DockerImagesService } from './services/docker-images.service.js';
 import { DockerVolumesService } from './services/docker-volumes.service.js';
 import { DockerNetworksService } from './services/docker-networks.service.js';
+import { SitesService } from './services/sites.service.js';
+import { CaddyClient } from './lib/caddy.js';
 
 const startedAt = Date.now();
 
@@ -29,6 +31,14 @@ async function main(): Promise<void> {
   const images = new DockerImagesService(docker);
   const volumes = new DockerVolumesService(docker);
   const networks = new DockerNetworksService(docker);
+  const caddy = config.CADDY_ADMIN_URL
+    ? new CaddyClient({ adminUrl: config.CADDY_ADMIN_URL })
+    : null;
+  const sites = new SitesService(prisma, caddy, {
+    rendererDefaults: config.CADDY_DEFAULT_LE_EMAIL
+      ? { defaultLetsEncryptEmail: config.CADDY_DEFAULT_LE_EMAIL }
+      : {},
+  });
 
   const app = await buildApp({
     logger: buildLoggerOptions(config),
@@ -45,6 +55,7 @@ async function main(): Promise<void> {
     images,
     volumes,
     networks,
+    sites,
     jwtConfig,
     setupSecret: config.SETUP_SECRET,
   });

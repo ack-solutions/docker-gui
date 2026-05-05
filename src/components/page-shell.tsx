@@ -39,6 +39,7 @@ const DEFAULT_NAV: NavItem[] = [
   { label: "Images", href: "/images" },
   { label: "Volumes", href: "/volumes" },
   { label: "Networks", href: "/networks" },
+  { label: "Sites", href: "/sites" },
   { label: "Health", href: "/health" }
 ];
 

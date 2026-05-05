@@ -25,13 +25,18 @@ COPY --from=deps /build/node_modules ./node_modules
 COPY apps/api/tsconfig.json ./
 COPY apps/api/prisma ./prisma
 COPY apps/api/src ./src
+COPY apps/api/scripts ./scripts
 
 # prisma generate (postinstall already ran during deps; re-run to be safe)
 RUN npx prisma generate
 RUN yarn build
 
-# Prune dev deps for the runtime layer
-RUN yarn install --frozen-lockfile --production --no-progress
+# We keep `tsx` in the runtime image so the operational admin scripts
+# (admin-create / admin-reset / admin-list) can run from TS source. They
+# are tiny one-shots; the cost of pulling tsx in runtime is fine.
+# Prune dev deps for the runtime layer (tsx is in devDeps; re-add it).
+RUN yarn install --frozen-lockfile --production --no-progress && \
+    yarn add tsx@^4.20.6 --no-progress
 
 #####################
 # Stage 3 — runtime #
@@ -45,11 +50,15 @@ RUN apk add --no-cache libc6-compat openssl tini wget && \
 COPY --from=build --chown=api:nodejs /build/node_modules ./node_modules
 COPY --from=build --chown=api:nodejs /build/dist ./dist
 COPY --from=build --chown=api:nodejs /build/prisma ./prisma
+COPY --from=build --chown=api:nodejs /build/scripts ./scripts
+COPY --from=build --chown=api:nodejs /build/src ./src
+COPY --from=build --chown=api:nodejs /build/tsconfig.json ./
 COPY --from=build --chown=api:nodejs /build/package.json ./
 
 # Data dir mounted at runtime (see compose volume)
 RUN mkdir -p /data && chown api:nodejs /data
-ENV DATABASE_URL=file:/data/app.db
+# Default config path; override via CONFIG_PATH env var.
+ENV CONFIG_PATH=/etc/docker-gui/config.yml
 
 USER api
 

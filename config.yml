@@ -1,0 +1,85 @@
+# =====================================================================
+# docker-gui — operational config
+#
+# This file is the user-facing configuration for docker-gui. Edit it,
+# then run `docker-gui restart` to apply changes.
+#
+# - Production install path:  /opt/docker-gui/config.yml
+# - Dev path:                  ./config.yml (in the repo root)
+# - Override path with CONFIG_PATH env var.
+#
+# Secrets (JWT_SECRET, SETUP_SECRET, DATABASE_URL) are NOT in this file —
+# they belong in `.env` next to this file (mode 600). See `.env.example`
+# for the full secret list.
+#
+# Precedence: any matching environment variable overrides the value here.
+# That lets you ship a default config.yml and override per-deployment with
+# environment vars without editing the file.
+#
+# Full reference: docs/CONFIG.md
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# api
+# ---------------------------------------------------------------------
+# The Fastify backend. In production it listens only on the docker
+# network (the `web` and `caddy` containers proxy to it); the host
+# never sees port 4000 directly.
+api:
+  # Bind address. Production default `0.0.0.0` (inside the container).
+  # For native installs on a single host, `127.0.0.1` keeps it private.
+  host: 0.0.0.0
+
+  # Backend port. The web container talks to it; the host doesn't need
+  # to expose this directly.
+  port: 4000
+
+  # Log level: trace | debug | info | warn | error | fatal
+  log_level: info
+
+  # Pretty-print logs (true in dev, false in production for JSON logs
+  # that ship cleanly to log aggregators).
+  log_pretty: false
+
+  # Origins allowed by CORS for browser requests to the API. Production
+  # behind Caddy doesn't need this set since same-origin applies. Add
+  # extra origins (separated by commas in env, list here in YAML) only
+  # if a browser app on a different origin needs to call the API.
+  cors_origins:
+    - http://localhost:3000
+
+# ---------------------------------------------------------------------
+# auth
+# ---------------------------------------------------------------------
+auth:
+  # Lifetime of access (Bearer) tokens, in seconds.
+  # Default 15 minutes — short enough that revocation matters quickly.
+  access_token_ttl: 900
+
+  # Lifetime of refresh tokens, in seconds.
+  # Default 7 days. Tokens are rotated on every refresh.
+  refresh_token_ttl: 604800
+
+# ---------------------------------------------------------------------
+# docker
+# ---------------------------------------------------------------------
+docker:
+  # Path to the Docker daemon socket the API will manage.
+  # - Linux:                  /var/run/docker.sock
+  # - macOS Docker Desktop:   ~/.docker/run/docker.sock
+  # - Production compose:     /var/run/docker.sock (mounted read-only)
+  socket: /var/run/docker.sock
+
+# ---------------------------------------------------------------------
+# caddy (reverse proxy)
+# ---------------------------------------------------------------------
+caddy:
+  # The Caddy admin URL. Inside the production compose network it's
+  # `http://caddy:2019`. For dev with a host-bound Caddy, use
+  # `http://127.0.0.1:2019`. Leave unset (or null) to disable site
+  # apply from the UI — sites can still be created and edited.
+  admin_url: http://caddy:2019
+
+  # Default email used for Let's Encrypt account registration when a
+  # Site doesn't override it. Required for production HTTPS.
+  default_le_email: ""

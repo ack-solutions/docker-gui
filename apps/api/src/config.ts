@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { loadYamlConfig } from './lib/yaml-config.js';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -13,12 +14,32 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(900), // 15m
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(604800), // 7d
+  CADDY_ADMIN_URL: z.string().url().optional(),
+  CADDY_DEFAULT_LE_EMAIL: z.string().email().optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;
 
+/**
+ * Default location of `config.yml` inside the production container. Override
+ * with the `CONFIG_PATH` env var. In dev, leave it unset and it falls back
+ * to `./config.yml` (relative to cwd) — present if the user ran the
+ * installer locally, absent otherwise.
+ */
+const DEFAULT_CONFIG_PATH = '/etc/docker-gui/config.yml';
+
 export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): Config {
-  const parsed = envSchema.safeParse(env);
+  // Layer 1: config.yml (operational settings)
+  const yamlPath = env['CONFIG_PATH'] ?? DEFAULT_CONFIG_PATH;
+  const fromYaml = loadYamlConfig(yamlPath);
+
+  // Layer 2: process env / .env (secrets + overrides). Env always wins.
+  const merged: Record<string, string | undefined> = { ...fromYaml };
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) merged[key] = value;
+  }
+
+  const parsed = envSchema.safeParse(merged);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.') || '<root>'}: ${i.message}`)

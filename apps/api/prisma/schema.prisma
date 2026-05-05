@@ -43,6 +43,25 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model Site {
+  id               String    @id @default(uuid())
+  primaryDomain    String    @unique
+  aliasDomains     String    @default("[]") // JSON array of additional domains
+  upstreamUrl      String // host:port (e.g. "web:80") or full URL
+  enableHttps      Boolean   @default(true)
+  forceHttps       Boolean   @default(true)
+  letsEncryptEmail String?
+  enabled          Boolean   @default(true)
+  status           String    @default("draft") // draft | applied | error
+  lastError        String?
+  lastAppliedAt    DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("sites")
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?
