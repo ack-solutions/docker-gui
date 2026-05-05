@@ -93,6 +93,27 @@ caddy:
     expect(loadYamlConfig(path)).toEqual({ API_PORT: '4000' });
   });
 
+  it('treats empty / whitespace strings as unset (so schema defaults apply)', () => {
+    const path = writeConfig(`
+api:
+  port: 4000
+caddy:
+  default_le_email: ""
+docker:
+  socket: "   "
+`);
+    expect(loadYamlConfig(path)).toEqual({ API_PORT: '4000' });
+  });
+
+  it('skips empty arrays', () => {
+    const path = writeConfig(`
+api:
+  port: 4000
+  cors_origins: []
+`);
+    expect(loadYamlConfig(path)).toEqual({ API_PORT: '4000' });
+  });
+
   it('returns empty object on malformed YAML', () => {
     const path = writeConfig('this is: not [valid: yaml');
     expect(loadYamlConfig(path)).toEqual({});

@@ -109,6 +109,67 @@ export class DockerContainersService {
       throw mapDockerError(err);
     }
   }
+
+  /**
+   * Open a follow=true log stream from Docker. The returned stream is
+   * dockerode's raw multiplexed stream (or plain text for TTY containers);
+   * demux with `LogStreamDemuxer` if you need stdout/stderr split.
+   *
+   * The caller is responsible for `stream.destroy()` when done.
+   */
+  async streamLogs(id: string, opts: { tail?: number } = {}): Promise<NodeJS.ReadableStream> {
+    try {
+      const stream = (await this.docker.getContainer(id).logs({
+        follow: true,
+        stdout: true,
+        stderr: true,
+        tail: opts.tail ?? 100,
+        timestamps: false,
+      })) as NodeJS.ReadableStream;
+      return stream;
+    } catch (err) {
+      throw mapDockerError(err);
+    }
+  }
+}
+
+/**
+ * Streaming demuxer for Docker's multiplexed log format. Push partial
+ * buffers via `feed`; emit complete-frame strings tagged with their stream
+ * (1=stdout, 2=stderr) via the `onFrame` callback. Buffers leftover bytes
+ * across calls.
+ */
+export class LogStreamDemuxer {
+  private buf: Buffer = Buffer.alloc(0);
+  private tty = false;
+
+  /**
+   * If we receive data and the first byte isn't a valid stream type, we
+   * treat the entire stream as TTY (plain text) for the rest of its life.
+   */
+  feed(chunk: Buffer, onFrame: (kind: 'stdout' | 'stderr', text: string) => void): void {
+    this.buf = this.buf.length === 0 ? chunk : Buffer.concat([this.buf, chunk]);
+    if (this.tty) {
+      onFrame('stdout', this.buf.toString('utf8'));
+      this.buf = Buffer.alloc(0);
+      return;
+    }
+    while (this.buf.length >= 8) {
+      const first = this.buf[0]!;
+      if (first > 2) {
+        // not multiplexed — flip to TTY mode
+        this.tty = true;
+        onFrame('stdout', this.buf.toString('utf8'));
+        this.buf = Buffer.alloc(0);
+        return;
+      }
+      const size = this.buf.readUInt32BE(4);
+      if (this.buf.length < 8 + size) break;
+      const payload = this.buf.subarray(8, 8 + size).toString('utf8');
+      onFrame(first === 2 ? 'stderr' : 'stdout', payload);
+      this.buf = this.buf.subarray(8 + size);
+    }
+  }
 }
 
 export function toSummary(info: DockerodeContainerInfo): ContainerSummary {

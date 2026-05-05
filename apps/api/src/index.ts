@@ -10,7 +10,9 @@ import { DockerImagesService } from './services/docker-images.service.js';
 import { DockerVolumesService } from './services/docker-volumes.service.js';
 import { DockerNetworksService } from './services/docker-networks.service.js';
 import { SitesService } from './services/sites.service.js';
+import { DnsService } from './services/dns.service.js';
 import { CaddyClient } from './lib/caddy.js';
+import { CryptoBox } from './lib/crypto-box.js';
 
 const startedAt = Date.now();
 
@@ -39,6 +41,11 @@ async function main(): Promise<void> {
       ? { defaultLetsEncryptEmail: config.CADDY_DEFAULT_LE_EMAIL }
       : {},
   });
+  const cryptoBox = new CryptoBox(config.JWT_SECRET);
+  const dns = new DnsService(prisma, cryptoBox, {
+    ...(config.SYSTEM_PUBLIC_IP ? { publicIp: config.SYSTEM_PUBLIC_IP } : {}),
+    ...(config.SYSTEM_PUBLIC_IP6 ? { publicIp6: config.SYSTEM_PUBLIC_IP6 } : {}),
+  });
 
   const app = await buildApp({
     logger: buildLoggerOptions(config),
@@ -56,6 +63,7 @@ async function main(): Promise<void> {
     volumes,
     networks,
     sites,
+    dns,
     jwtConfig,
     setupSecret: config.SETUP_SECRET,
   });

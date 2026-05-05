@@ -10,8 +10,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControlLabel,
   IconButton,
+  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -24,6 +26,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { toast } from "sonner";
 import {
   AuthGuard,
@@ -65,6 +68,26 @@ interface SiteForm {
   letsEncryptEmail: string;
   enabled: boolean;
   notes: string;
+}
+
+interface DnsProviderLite {
+  id: string;
+  name: string;
+  kind: string;
+  verified: boolean;
+}
+
+interface DnsRecordPreview {
+  type: string;
+  name: string;
+  value: string;
+  ttl?: number;
+  proxied?: boolean;
+}
+
+interface DnsRecommendation {
+  zone: { id: string; name: string };
+  recommended: { zone: string; isApex: boolean; records: DnsRecordPreview[] };
 }
 
 const EMPTY_FORM: SiteForm = {
@@ -118,6 +141,14 @@ function SitesInner({ user }: { user: PublicUser }) {
   const [submitting, setSubmitting] = useState(false);
   const dialogOpen = creating || editing !== null;
 
+  // DNS state inside the dialog
+  const [providers, setProviders] = useState<DnsProviderLite[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("");
+  const [dnsLookup, setDnsLookup] = useState<DnsRecommendation | null>(null);
+  const [dnsLookupError, setDnsLookupError] = useState<string | null>(null);
+  const [dnsLooking, setDnsLooking] = useState(false);
+  const [dnsApplying, setDnsApplying] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const [list, status] = await Promise.all([
@@ -136,22 +167,91 @@ function SitesInner({ user }: { user: PublicUser }) {
     load();
   }, [load]);
 
+  // Load DNS providers when the dialog opens (deferred — most users won't
+  // configure them and we shouldn't block dialog open on the network).
+  useEffect(() => {
+    if (!dialogOpen) return;
+    let cancelled = false;
+    apiFetch<DnsProviderLite[]>("/api/v1/dns/providers")
+      .then((list) => {
+        if (cancelled) return;
+        setProviders(list);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProviders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen]);
+
   function openCreate() {
     setForm(EMPTY_FORM);
     setEditing(null);
     setCreating(true);
+    setDnsLookup(null);
+    setDnsLookupError(null);
   }
 
   function openEdit(site: SiteSummary) {
     setForm(siteToForm(site));
     setEditing(site);
     setCreating(false);
+    setDnsLookup(null);
+    setDnsLookupError(null);
   }
 
   function closeDialog() {
-    if (submitting) return;
+    if (submitting || dnsApplying) return;
     setCreating(false);
     setEditing(null);
+    setSelectedProviderId("");
+    setDnsLookup(null);
+    setDnsLookupError(null);
+  }
+
+  async function checkDns() {
+    setDnsLookupError(null);
+    setDnsLookup(null);
+    if (!selectedProviderId || !form.primaryDomain.trim()) return;
+    setDnsLooking(true);
+    try {
+      const data = await apiFetch<DnsRecommendation>(
+        `/api/v1/dns/recommended?providerId=${encodeURIComponent(selectedProviderId)}&domain=${encodeURIComponent(form.primaryDomain.trim())}`
+      );
+      setDnsLookup(data);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : String(err);
+      setDnsLookupError(msg);
+    } finally {
+      setDnsLooking(false);
+    }
+  }
+
+  async function applyDnsRecords() {
+    if (!dnsLookup || !selectedProviderId) return;
+    setDnsApplying(true);
+    try {
+      for (const rec of dnsLookup.recommended.records) {
+        await apiFetch(
+          `/api/v1/dns/providers/${encodeURIComponent(selectedProviderId)}/zones/${encodeURIComponent(dnsLookup.zone.id)}/records`,
+          { method: "POST", body: JSON.stringify(rec) }
+        );
+      }
+      toast.success(
+        `Created ${dnsLookup.recommended.records.length} DNS record${
+          dnsLookup.recommended.records.length === 1 ? "" : "s"
+        } in ${dnsLookup.zone.name}`
+      );
+      // Re-check so the user sees the live state (and any drift).
+      await checkDns();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : String(err);
+      toast.error(`DNS apply failed: ${msg}`);
+    } finally {
+      setDnsApplying(false);
+    }
   }
 
   async function submit(e: FormEvent) {
@@ -517,6 +617,105 @@ function SitesInner({ user }: { user: PublicUser }) {
                 multiline
                 minRows={2}
               />
+
+              {!editing && providers.length > 0 && (
+                <Box>
+                  <Divider sx={{ mb: 2 }}>
+                    <Chip size="small" label="DNS automation (optional)" />
+                  </Divider>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        select
+                        label="DNS provider"
+                        value={selectedProviderId}
+                        onChange={(e) => {
+                          setSelectedProviderId(e.target.value);
+                          setDnsLookup(null);
+                          setDnsLookupError(null);
+                        }}
+                        disabled={submitting || dnsApplying}
+                        size="small"
+                        sx={{ minWidth: 220 }}
+                      >
+                        <MenuItem value="">
+                          <em>None — I&apos;ll set DNS manually</em>
+                        </MenuItem>
+                        {providers.map((p) => (
+                          <MenuItem key={p.id} value={p.id} disabled={!p.verified}>
+                            {p.name}
+                            {!p.verified && " (unverified)"}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={checkDns}
+                        disabled={
+                          !selectedProviderId ||
+                          !form.primaryDomain.trim() ||
+                          dnsLooking ||
+                          dnsApplying
+                        }
+                      >
+                        {dnsLooking ? "Looking up…" : "Preview records"}
+                      </Button>
+                    </Stack>
+
+                    {dnsLookupError && (
+                      <Alert severity="warning" onClose={() => setDnsLookupError(null)}>
+                        {dnsLookupError}
+                      </Alert>
+                    )}
+
+                    {dnsLookup && (
+                      <Box sx={{ p: 1.5, border: 1, borderColor: "divider", borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Zone: <strong>{dnsLookup.zone.name}</strong>
+                          {dnsLookup.recommended.isApex && " · apex"}
+                        </Typography>
+                        {dnsLookup.recommended.records.length === 0 ? (
+                          <Alert severity="info" sx={{ mt: 1 }}>
+                            No records to suggest. Set <code>system.public_ip</code> in
+                            <code> config.yml</code> so we know which IP to point at.
+                          </Alert>
+                        ) : (
+                          <>
+                            <Stack spacing={0.5} sx={{ mt: 1 }}>
+                              {dnsLookup.recommended.records.map((r, i) => (
+                                <Stack
+                                  key={i}
+                                  direction="row"
+                                  spacing={1}
+                                  sx={{ fontFamily: "monospace", fontSize: 12 }}
+                                >
+                                  <Chip size="small" label={r.type} />
+                                  <Box component="code">{r.name}</Box>
+                                  <Box component="code" sx={{ color: "text.secondary" }}>
+                                    →
+                                  </Box>
+                                  <Box component="code">{r.value}</Box>
+                                </Stack>
+                              ))}
+                            </Stack>
+                            <Button
+                              startIcon={<CloudUploadIcon />}
+                              size="small"
+                              variant="contained"
+                              sx={{ mt: 1.5 }}
+                              onClick={applyDnsRecords}
+                              disabled={dnsApplying}
+                            >
+                              {dnsApplying ? "Applying…" : "Auto-create / update records"}
+                            </Button>
+                          </>
+                        )}
+                      </Box>
+                    )}
+                  </Stack>
+                </Box>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>

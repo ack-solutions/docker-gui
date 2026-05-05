@@ -115,6 +115,38 @@ caddy:
 If `admin_url` is unset, the `/sites` page lets you define sites but the
 "Apply to Caddy" button is disabled.
 
+### `system`
+
+```yaml
+system:
+  public_ip: 203.0.113.10
+  public_ip6: 2001:db8::1   # optional
+```
+
+| Key          | Env var              | Type / default     | What it does                                                                                       |
+| ------------ | -------------------- | ------------------ | -------------------------------------------------------------------------------------------------- |
+| `public_ip`  | `SYSTEM_PUBLIC_IP`   | IPv4, *unset*      | The public IPv4 of this server. Drives the DNS wizard's recommended A records.                     |
+| `public_ip6` | `SYSTEM_PUBLIC_IP6`  | IPv6, *unset*      | Optional public IPv6. If set, the DNS wizard adds AAAA records.                                    |
+
+If neither is set, the Sites wizard still creates Sites and applies them
+to Caddy — it just won't have anything to suggest under "Auto-create DNS
+records". Set this once when you install and forget about it.
+
+---
+
+## DNS providers
+
+Provider credentials (e.g. Cloudflare API tokens) are *not* in `config.yml`
+or `.env` — they're added through the UI under **DNS providers**, encrypted
+with a key derived from `JWT_SECRET`, and stored in the SQLite DB. Rotating
+`JWT_SECRET` invalidates all stored provider credentials and you'll need
+to re-enter them. That's a deliberate trade-off so a leaked DB file alone
+doesn't expose the tokens.
+
+The Cloudflare token needs two scopes: `Zone:Read` and `Zone:DNS:Edit`,
+restricted to the zones you want managed. Create one at
+<https://dash.cloudflare.com/profile/api-tokens>.
+
 ---
 
 ## `.env` reference (secrets)

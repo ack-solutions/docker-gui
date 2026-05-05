@@ -16,6 +16,16 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(604800), // 7d
   CADDY_ADMIN_URL: z.string().url().optional(),
   CADDY_DEFAULT_LE_EMAIL: z.string().email().optional(),
+  // Public-facing IP addresses, used to recommend DNS records.
+  // Optional — without these the DNS wizard skips suggesting A/AAAA records.
+  SYSTEM_PUBLIC_IP: z
+    .string()
+    .regex(/^(\d{1,3}\.){3}\d{1,3}$/, 'Must be an IPv4 address')
+    .optional(),
+  SYSTEM_PUBLIC_IP6: z
+    .string()
+    .regex(/^[0-9a-fA-F:]+$/, 'Must be an IPv6 address')
+    .optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;

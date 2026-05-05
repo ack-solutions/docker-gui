@@ -17,6 +17,7 @@ import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
+import OndemandVideoIcon from "@mui/icons-material/OndemandVideo";
 import { toast } from "sonner";
 import {
   AuthGuard,
@@ -171,10 +172,21 @@ function ContainersInner({ user }: { user: PublicUser }) {
     const running = c.state === "running";
     return (
       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-        <Tooltip title="Logs">
+        <Tooltip title="Logs (last 200 lines)">
           <span>
             <IconButton size="small" onClick={() => viewLogs(c)} disabled={busy}>
               <ArticleOutlinedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Live logs (follow)">
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => router.push(`/containers/${c.id}/logs`)}
+              disabled={busy}
+            >
+              <OndemandVideoIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>

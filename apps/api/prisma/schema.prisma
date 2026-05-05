@@ -56,10 +56,37 @@ model Site {
   lastError        String?
   lastAppliedAt    DateTime?
   notes            String?
+  // Optional link to a DNS provider that manages this domain. Set when the
+  // site was created via the wizard and the user chose auto-DNS. Used to
+  // surface drift warnings and one-click DNS reconcile.
+  dnsProviderId    String?
+  dnsProvider      DnsProvider? @relation(fields: [dnsProviderId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  @@index([dnsProviderId])
   @@map("sites")
+}
+
+model DnsProvider {
+  id                String    @id @default(uuid())
+  // Human label shown in the UI ("Cloudflare — main account")
+  name              String    @unique
+  // Backend kind. Only "cloudflare" today; future: route53, digitalocean, ...
+  kind              String
+  // Encrypted credentials blob (base64). Format depends on kind:
+  //   cloudflare → JSON { apiToken: string }, then encrypted with CryptoBox.
+  // We never expose this over the API; only `verified` + `lastVerifiedAt`.
+  credentialsCipher String
+  verified          Boolean   @default(false)
+  lastVerifiedAt    DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  sites             Site[]
+
+  @@map("dns_providers")
 }
 
 model AuditLog {

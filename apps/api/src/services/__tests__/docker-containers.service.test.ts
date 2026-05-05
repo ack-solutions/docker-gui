@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import type Docker from 'dockerode';
-import { DockerContainersService, toSummary, demuxLogs } from '../docker-containers.service.js';
+import {
+  DockerContainersService,
+  LogStreamDemuxer,
+  toSummary,
+  demuxLogs,
+} from '../docker-containers.service.js';
 import { AppError, NotFoundError } from '../../lib/errors.js';
 
 interface ContainerStub {
@@ -165,5 +170,53 @@ describe('DockerContainersService.logs', () => {
     });
     const svc = new DockerContainersService(docker);
     await expect(svc.logs('id')).rejects.toBeInstanceOf(AppError);
+  });
+});
+
+function frame(stream: 0 | 1 | 2, payload: string): Buffer {
+  const data = Buffer.from(payload, 'utf-8');
+  const header = Buffer.alloc(8);
+  header.writeUInt8(stream, 0);
+  header.writeUInt32BE(data.length, 4);
+  return Buffer.concat([header, data]);
+}
+
+describe('LogStreamDemuxer', () => {
+  it('demultiplexes stdout and stderr frames', () => {
+    const out: Array<[string, string]> = [];
+    const d = new LogStreamDemuxer();
+    d.feed(frame(1, 'hello'), (k, t) => out.push([k, t]));
+    d.feed(frame(2, 'oops'), (k, t) => out.push([k, t]));
+    expect(out).toEqual([
+      ['stdout', 'hello'],
+      ['stderr', 'oops'],
+    ]);
+  });
+
+  it('buffers across feed calls (split header)', () => {
+    const out: Array<[string, string]> = [];
+    const d = new LogStreamDemuxer();
+    const full = frame(1, 'hi');
+    d.feed(full.subarray(0, 4), (k, t) => out.push([k, t]));
+    expect(out).toHaveLength(0);
+    d.feed(full.subarray(4), (k, t) => out.push([k, t]));
+    expect(out).toEqual([['stdout', 'hi']]);
+  });
+
+  it('buffers across feed calls (split payload)', () => {
+    const out: Array<[string, string]> = [];
+    const d = new LogStreamDemuxer();
+    const full = frame(1, 'abcdef');
+    d.feed(full.subarray(0, 10), (k, t) => out.push([k, t]));
+    expect(out).toHaveLength(0);
+    d.feed(full.subarray(10), (k, t) => out.push([k, t]));
+    expect(out).toEqual([['stdout', 'abcdef']]);
+  });
+
+  it('falls back to TTY mode for non-multiplexed streams', () => {
+    const out: Array<[string, string]> = [];
+    const d = new LogStreamDemuxer();
+    d.feed(Buffer.from('plain log line\n'), (k, t) => out.push([k, t]));
+    expect(out).toEqual([['stdout', 'plain log line\n']]);
   });
 });

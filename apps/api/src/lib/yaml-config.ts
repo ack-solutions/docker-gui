@@ -21,6 +21,8 @@ export const YAML_TO_ENV: ReadonlyArray<readonly [string, string]> = [
   ['caddy.default_le_email', 'CADDY_DEFAULT_LE_EMAIL'],
   ['auth.access_token_ttl', 'ACCESS_TOKEN_TTL'],
   ['auth.refresh_token_ttl', 'REFRESH_TOKEN_TTL'],
+  ['system.public_ip', 'SYSTEM_PUBLIC_IP'],
+  ['system.public_ip6', 'SYSTEM_PUBLIC_IP6'],
 ];
 
 function getNested(obj: unknown, path: string): unknown {
@@ -58,13 +60,16 @@ export function loadYamlConfig(path: string): Record<string, string> {
     const value = getNested(parsed, yamlKey);
     if (value === undefined || value === null) continue;
     if (Array.isArray(value)) {
-      out[envKey] = value.map(String).join(',');
-    } else if (
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
+      const joined = value.map(String).join(',');
+      if (joined.length > 0) out[envKey] = joined;
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
       out[envKey] = String(value);
+    } else if (typeof value === 'string') {
+      // Empty strings are treated as "not set" — same as YAML `null` /
+      // `~`. This lets the schema's defaults / .optional() apply, instead
+      // of failing validation on `field: ""` placeholders in the template.
+      const trimmed = value.trim();
+      if (trimmed.length > 0) out[envKey] = trimmed;
     }
   }
   return out;

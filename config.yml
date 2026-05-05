@@ -81,5 +81,20 @@ caddy:
   admin_url: http://caddy:2019
 
   # Default email used for Let's Encrypt account registration when a
-  # Site doesn't override it. Required for production HTTPS.
-  default_le_email: ""
+  # Site doesn't override it. Recommended for production HTTPS so cert
+  # renewal failures get reported. Uncomment and set:
+  # default_le_email: ops@example.com
+
+# ---------------------------------------------------------------------
+# system
+# ---------------------------------------------------------------------
+# Information about this server that the UI uses for nice-to-haves like
+# "auto-create DNS records pointing here". Optional — set to enable the
+# Sites wizard's DNS auto-creation step.
+system:
+  # Public IPv4 of this server. Used to suggest A records in the Sites
+  # wizard. If unset, the wizard will skip A-record suggestions.
+  # public_ip: 203.0.113.10
+
+  # Public IPv6 of this server (optional). Used to suggest AAAA records.
+  # public_ip6: 2001:db8::1

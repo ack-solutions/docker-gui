@@ -40,6 +40,7 @@ const DEFAULT_NAV: NavItem[] = [
   { label: "Volumes", href: "/volumes" },
   { label: "Networks", href: "/networks" },
   { label: "Sites", href: "/sites" },
+  { label: "DNS", href: "/dns" },
   { label: "Health", href: "/health" }
 ];
 

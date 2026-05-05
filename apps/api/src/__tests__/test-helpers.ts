@@ -13,7 +13,9 @@ import { DockerImagesService } from '../services/docker-images.service.js';
 import { DockerVolumesService } from '../services/docker-volumes.service.js';
 import { DockerNetworksService } from '../services/docker-networks.service.js';
 import { SitesService } from '../services/sites.service.js';
+import { DnsService, type DnsServiceOptions } from '../services/dns.service.js';
 import { CaddyClient } from '../lib/caddy.js';
+import { CryptoBox } from '../lib/crypto-box.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
@@ -35,6 +37,7 @@ export interface TestEnv {
 export interface BuildTestEnvOptions {
   docker?: Docker;
   caddy?: CaddyClient | null;
+  dnsOptions?: DnsServiceOptions;
 }
 
 function defaultFakeDocker(): Docker {
@@ -99,6 +102,8 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   const networks = new DockerNetworksService(docker);
   const caddy = opts.caddy === undefined ? null : opts.caddy;
   const sites = new SitesService(prisma, caddy);
+  const cryptoBox = new CryptoBox(TEST_JWT_CONFIG.secret);
+  const dns = new DnsService(prisma, cryptoBox, opts.dnsOptions ?? {});
 
   const app = await buildApp({
     logger: false,
@@ -110,6 +115,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     volumes,
     networks,
     sites,
+    dns,
     jwtConfig: TEST_JWT_CONFIG,
     setupSecret: TEST_SETUP_SECRET,
   });
