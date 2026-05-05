@@ -251,7 +251,7 @@ on this server, plus external connections.
 - `scripts/uninstall.sh` — clean removal with optional data preservation
 - Multi-arch images on GHCR: `ghcr.io/<owner>/docker-gui:<version>` for
   `amd64` and `arm64`
-- Docs: `docs/SETUP.md` (production), `docs/DEVELOPMENT.md` (local)
+- Docs: `docs/INSTALL.md` (production), `docs/DEVELOPMENT.md` (local)
 - Demo screencast (3 min): install → first admin → deploy a site
 
 **Tests**

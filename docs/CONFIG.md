@@ -253,6 +253,5 @@ api:
 
 See also:
 [INSTALL.md](INSTALL.md) ·
-[UPDATE.md](UPDATE.md) ·
 [CLI.md](CLI.md) ·
 [ARCHITECTURE.md](ARCHITECTURE.md)

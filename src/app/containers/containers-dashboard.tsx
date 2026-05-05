@@ -18,6 +18,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import OndemandVideoIcon from "@mui/icons-material/OndemandVideo";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import { toast } from "sonner";
 import {
   AuthGuard,
@@ -187,6 +188,17 @@ function ContainersInner({ user }: { user: PublicUser }) {
               disabled={busy}
             >
               <OndemandVideoIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title={running ? "Open terminal (exec)" : "Container must be running"}>
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => router.push(`/containers/${c.id}/terminal`)}
+              disabled={busy || !running}
+            >
+              <TerminalIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>

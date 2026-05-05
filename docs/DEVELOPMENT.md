@@ -1,7 +1,7 @@
 # Development guide
 
 How to run, change, and test docker-gui locally. For production install, see
-[SETUP.md](SETUP.md).
+[INSTALL.md](INSTALL.md).
 
 ---
 

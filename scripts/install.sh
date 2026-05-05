@@ -22,11 +22,15 @@ set -euo pipefail
 
 INSTALL_DIR="${DOCKER_GUI_DIR:-/opt/docker-gui}"
 SOURCE_DIR="$INSTALL_DIR/source"
-REPO="${DOCKER_GUI_REPO:-anthropics/docker-gui}"
-VERSION="${DOCKER_GUI_VERSION:-main}"
+REPO="${DOCKER_GUI_REPO:-ack-solutions/docker-gui}"
 WEB_PORT="${DOCKER_GUI_WEB_PORT:-3000}"
-TARBALL_URL="${DOCKER_GUI_TARBALL_URL:-https://github.com/${REPO}/archive/${VERSION}.tar.gz}"
 LOCAL="${DOCKER_GUI_LOCAL:-0}"
+
+# VERSION is resolved later. Empty = auto-detect: latest GitHub release
+# if one exists, otherwise the `develop` branch.
+VERSION="${DOCKER_GUI_VERSION:-}"
+TARBALL_URL_OVERRIDE="${DOCKER_GUI_TARBALL_URL:-}"
+TARBALL_URL=""
 
 # ---------- helpers ----------
 
@@ -110,6 +114,27 @@ done
 log "Setting up $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR" "$INSTALL_DIR/caddy"
 
+# Resolve VERSION → TARBALL_URL.
+# Skipped if installing from a local checkout or an explicit tarball URL.
+if [[ "$LOCAL" != "1" && -z "$TARBALL_URL_OVERRIDE" ]]; then
+  if [[ -z "$VERSION" ]]; then
+    log "Looking up latest release"
+    LATEST_TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+                  | grep -E '"tag_name":' | head -1 \
+                  | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true)"
+    if [[ -n "$LATEST_TAG" ]]; then
+      VERSION="$LATEST_TAG"
+      ok "Latest release: $VERSION"
+    else
+      VERSION="develop"
+      warn "No GitHub releases yet — falling back to the develop branch"
+    fi
+  else
+    ok "Using requested version: $VERSION"
+  fi
+fi
+TARBALL_URL="${TARBALL_URL_OVERRIDE:-https://github.com/${REPO}/archive/${VERSION}.tar.gz}"
+
 if [[ "$LOCAL" == "1" ]]; then
   ok "DOCKER_GUI_LOCAL=1 — using current directory as source"
   CURRENT="$(pwd)"
@@ -134,21 +159,19 @@ else
   if ! curl -fsSL -o "$TMP_TARBALL" "$TARBALL_URL"; then
     err "Failed to download source from $TARBALL_URL"
     err ""
-    err "While docker-gui is in alpha, the default public URL may not exist"
-    err "yet. To proceed, choose one of:"
+    err "Check that this server has outbound HTTPS to github.com, or"
+    err "fall back to a local install:"
     err ""
-    err "  1) Local source (recommended for first install):"
-    err "       scp -r your-repo your-server:/tmp/docker-gui-src"
-    err "       ssh your-server"
-    err "       cd /tmp/docker-gui-src && DOCKER_GUI_LOCAL=1 sudo -E ./scripts/install.sh"
+    err "  git clone https://github.com/ack-solutions/docker-gui.git"
+    err "  cd docker-gui"
+    err "  DOCKER_GUI_LOCAL=1 sudo -E ./scripts/install.sh"
     err ""
-    err "  2) Your own GitHub fork:"
-    err "       sudo DOCKER_GUI_REPO=youruser/docker-gui ./install.sh"
+    err "Other overrides:"
+    err "  DOCKER_GUI_REPO=youruser/docker-gui    # your own fork"
+    err "  DOCKER_GUI_VERSION=v0.4.0              # tag or branch"
+    err "  DOCKER_GUI_TARBALL_URL=...             # explicit URL"
     err ""
-    err "  3) An explicit tarball URL:"
-    err "       sudo DOCKER_GUI_TARBALL_URL=https://example.com/dgui.tar.gz ./install.sh"
-    err ""
-    err "Full guide: docs/INSTALL.md (Alpha install section)"
+    err "Full guide: docs/INSTALL.md"
     exit 1
   fi
   ok "Downloaded $(du -h "$TMP_TARBALL" | cut -f1)"

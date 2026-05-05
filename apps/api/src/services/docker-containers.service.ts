@@ -131,6 +131,71 @@ export class DockerContainersService {
       throw mapDockerError(err);
     }
   }
+
+  /**
+   * Open an interactive exec session in the container.
+   *
+   * Returns a hijacked duplex stream (write to send stdin, read stdout/stderr)
+   * plus a `resize(rows, cols)` helper and an `inspect()` to read the exit
+   * code once the process ends. Tty=true means the stream is NOT multiplexed —
+   * read it as raw bytes / UTF-8.
+   *
+   * The caller MUST call `stream.destroy()` when done.
+   */
+  async exec(
+    id: string,
+    opts: { cmd: string[]; cols?: number; rows?: number; user?: string; workingDir?: string } = {
+      cmd: ['/bin/sh'],
+    },
+  ): Promise<ExecSession> {
+    try {
+      const container = this.docker.getContainer(id);
+      const exec = await container.exec({
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: true,
+        Cmd: opts.cmd,
+        ...(opts.user !== undefined ? { User: opts.user } : {}),
+        ...(opts.workingDir !== undefined ? { WorkingDir: opts.workingDir } : {}),
+      });
+
+      const stream = (await exec.start({
+        hijack: true,
+        stdin: true,
+        ...(opts.cols !== undefined && opts.rows !== undefined
+          ? { Detach: false, Tty: true }
+          : {}),
+      })) as NodeJS.ReadWriteStream;
+
+      if (opts.cols !== undefined && opts.rows !== undefined) {
+        try {
+          await exec.resize({ h: opts.rows, w: opts.cols });
+        } catch {
+          // pre-output resize sometimes fails on slow daemons; ignore
+        }
+      }
+
+      return {
+        stream,
+        resize: async (rows: number, cols: number) => {
+          await exec.resize({ h: rows, w: cols });
+        },
+        inspect: async () => {
+          const info = (await exec.inspect()) as { ExitCode: number | null; Running: boolean };
+          return { exitCode: info.ExitCode, running: info.Running };
+        },
+      };
+    } catch (err) {
+      throw mapDockerError(err);
+    }
+  }
+}
+
+export interface ExecSession {
+  stream: NodeJS.ReadWriteStream;
+  resize: (rows: number, cols: number) => Promise<void>;
+  inspect: () => Promise<{ exitCode: number | null; running: boolean }>;
 }
 
 /**
