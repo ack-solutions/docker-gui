@@ -1,0 +1,151 @@
+/**
+ * Render docker-gui Site rows into a Caddy admin-API JSON config.
+ *
+ * Pure function — no I/O, no side effects, deterministic output for given
+ * input. This makes it easy to unit-test and snapshot.
+ *
+ * Caddy config docs: https://caddyserver.com/docs/json/
+ */
+
+import type { Site } from '@prisma/client';
+
+export interface RendererOptions {
+  /** Default Let's Encrypt email if a Site doesn't supply its own. */
+  defaultLetsEncryptEmail?: string;
+  /** Listen ports for HTTPS. Default `[":443"]`. */
+  httpsPorts?: string[];
+  /** Listen ports for HTTP. Default `[":80"]`. */
+  httpPorts?: string[];
+}
+
+interface CaddyRoute {
+  match: Array<{ host: string[] }>;
+  handle: Array<Record<string, unknown>>;
+  terminal?: boolean;
+}
+
+interface CaddyServer {
+  listen: string[];
+  routes: CaddyRoute[];
+  automatic_https?: { disable_redirects?: boolean };
+}
+
+export interface CaddyConfig {
+  admin: { listen: string };
+  apps: {
+    http: { servers: Record<string, CaddyServer> };
+    tls?: {
+      automation?: {
+        policies?: Array<{
+          subjects?: string[];
+          issuers?: Array<{ module: string; email?: string }>;
+        }>;
+      };
+    };
+  };
+}
+
+/**
+ * Render the full Caddy config from a list of Sites + options.
+ *
+ * Sites that are disabled or have no domains are skipped silently.
+ */
+export function render(sites: readonly Site[], opts: RendererOptions = {}): CaddyConfig {
+  const httpsPorts = opts.httpsPorts ?? [':443'];
+  const httpPorts = opts.httpPorts ?? [':80'];
+
+  const enabled = sites.filter((s) => s.enabled);
+
+  const httpsRoutes: CaddyRoute[] = [];
+  const httpOnlyRoutes: CaddyRoute[] = [];
+  const tlsPolicies: NonNullable<CaddyConfig['apps']['tls']>['automation'] extends infer T
+    ? Array<{ subjects?: string[]; issuers?: Array<{ module: string; email?: string }> }>
+    : never = [];
+
+  for (const site of enabled) {
+    const hosts = collectHosts(site);
+    if (hosts.length === 0) continue;
+
+    const route: CaddyRoute = {
+      match: [{ host: hosts }],
+      handle: [reverseProxy(site.upstreamUrl)],
+      terminal: true,
+    };
+
+    if (site.enableHttps) {
+      httpsRoutes.push(route);
+      const email = site.letsEncryptEmail ?? opts.defaultLetsEncryptEmail;
+      tlsPolicies.push({
+        subjects: hosts,
+        issuers: [{ module: 'acme', ...(email ? { email } : {}) }],
+      });
+    } else {
+      httpOnlyRoutes.push(route);
+    }
+  }
+
+  const servers: Record<string, CaddyServer> = {};
+  if (httpsRoutes.length > 0) {
+    servers['https'] = {
+      listen: httpsPorts,
+      routes: httpsRoutes,
+    };
+  }
+  if (httpOnlyRoutes.length > 0 || enabledForceHttps(enabled)) {
+    servers['http'] = {
+      listen: httpPorts,
+      routes: httpOnlyRoutes,
+      // When any site has forceHttps, we let Caddy redirect HTTP→HTTPS
+      // automatically (the default). Otherwise disable to allow plain HTTP.
+      automatic_https: { disable_redirects: !enabledForceHttps(enabled) },
+    };
+  }
+
+  const config: CaddyConfig = {
+    admin: { listen: ':2019' },
+    apps: {
+      http: { servers },
+    },
+  };
+  if (tlsPolicies.length > 0) {
+    config.apps.tls = { automation: { policies: tlsPolicies } };
+  }
+  return config;
+}
+
+function collectHosts(site: Site): string[] {
+  const aliases = parseJsonArray(site.aliasDomains);
+  const all = [site.primaryDomain, ...aliases]
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
+  // dedupe while preserving order
+  return Array.from(new Set(all));
+}
+
+function parseJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((v): v is string => typeof v === 'string');
+    }
+  } catch {
+    // fall through
+  }
+  return [];
+}
+
+function reverseProxy(upstream: string): Record<string, unknown> {
+  return {
+    handler: 'reverse_proxy',
+    upstreams: [{ dial: stripScheme(upstream) }],
+  };
+}
+
+function stripScheme(url: string): string {
+  return url.replace(/^https?:\/\//, '');
+}
+
+function enabledForceHttps(sites: readonly Site[]): boolean {
+  return sites.some((s) => s.enableHttps && s.forceHttps);
+}

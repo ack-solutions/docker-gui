@@ -1,88 +1,100 @@
-# Central configuration. Override any value by setting the corresponding
-# environment variable (see .env.example for suggested variables).
+# =====================================================================
+# docker-gui — operational config
+#
+# This file is the user-facing configuration for docker-gui. Edit it,
+# then run `docker-gui restart` to apply changes.
+#
+# - Production install path:  /opt/docker-gui/config.yml
+# - Dev path:                  ./config.yml (in the repo root)
+# - Override path with CONFIG_PATH env var.
+#
+# Secrets (JWT_SECRET, SETUP_SECRET, DATABASE_URL) are NOT in this file —
+# they belong in `.env` next to this file (mode 600). See `.env.example`
+# for the full secret list.
+#
+# Precedence: any matching environment variable overrides the value here.
+# That lets you ship a default config.yml and override per-deployment with
+# environment vars without editing the file.
+#
+# Full reference: docs/CONFIG.md
+# =====================================================================
 
-app:
-  port: ${PORT}
-  hostname: "${HOSTNAME}"
-  environment: "${NODE_ENV}"
-  baseUrl: "${BASE_URL}"
+# ---------------------------------------------------------------------
+# api
+# ---------------------------------------------------------------------
+# The Fastify backend. In production it listens only on the docker
+# network (the `web` and `caddy` containers proxy to it); the host
+# never sees port 4000 directly.
+api:
+  # Bind address. Production default `0.0.0.0` (inside the container).
+  # For native installs on a single host, `127.0.0.1` keeps it private.
+  host: 0.0.0.0
 
-setup:
-  initialSecret: "${SETUP_SECRET}"
+  # Backend port. The web container talks to it; the host doesn't need
+  # to expose this directly.
+  port: 4000
 
-security:
-  jwtSecret: "${JWT_SECRET}"
-  jwtExpiresIn: "24h"
-  bcryptRounds: 10
-  cookieSecure: ${AUTH_COOKIE_SECURE:-false}
+  # Log level: trace | debug | info | warn | error | fatal
+  log_level: info
 
+  # Pretty-print logs (true in dev, false in production for JSON logs
+  # that ship cleanly to log aggregators).
+  log_pretty: false
+
+  # Origins allowed by CORS for browser requests to the API. Production
+  # behind Caddy doesn't need this set since same-origin applies. Add
+  # extra origins (separated by commas in env, list here in YAML) only
+  # if a browser app on a different origin needs to call the API.
+  cors_origins:
+    - http://localhost:3000
+
+# ---------------------------------------------------------------------
+# auth
+# ---------------------------------------------------------------------
+auth:
+  # Lifetime of access (Bearer) tokens, in seconds.
+  # Default 15 minutes — short enough that revocation matters quickly.
+  access_token_ttl: 900
+
+  # Lifetime of refresh tokens, in seconds.
+  # Default 7 days. Tokens are rotated on every refresh.
+  refresh_token_ttl: 604800
+
+# ---------------------------------------------------------------------
+# docker
+# ---------------------------------------------------------------------
 docker:
-  host: "${DOCKER_HOST}"
+  # Path to the Docker daemon socket the API will manage.
+  # - Linux:                  /var/run/docker.sock
+  # - macOS Docker Desktop:   ~/.docker/run/docker.sock
+  # - Production compose:     /var/run/docker.sock (mounted read-only)
+  socket: /var/run/docker.sock
 
-nginx:
-  enabled: true
-  containerName: "nginx-proxy"
-  configPath: "/etc/nginx/sites-enabled"
-  sitesPath: "/etc/nginx/sites-available"
-  reloadCommand: "docker exec nginx-proxy nginx -s reload"
+# ---------------------------------------------------------------------
+# caddy (reverse proxy)
+# ---------------------------------------------------------------------
+caddy:
+  # The Caddy admin URL. Inside the production compose network it's
+  # `http://caddy:2019`. For dev with a host-bound Caddy, use
+  # `http://127.0.0.1:2019`. Leave unset (or null) to disable site
+  # apply from the UI — sites can still be created and edited.
+  admin_url: http://caddy:2019
 
-email:
-  enabled: true
-  smtp:
-    host: "${SMTP_HOST:-localhost}"
-    port: ${SMTP_PORT:-587}
-    secure: ${SMTP_SECURE:-true}
-  from:
-    name: "Docker GUI"
-    address: "noreply@docker-gui.local"
+  # Default email used for Let's Encrypt account registration when a
+  # Site doesn't override it. Recommended for production HTTPS so cert
+  # renewal failures get reported. Uncomment and set:
+  # default_le_email: ops@example.com
 
-dns:
-  enabled: true
-  provider: "manual"
+# ---------------------------------------------------------------------
+# system
+# ---------------------------------------------------------------------
+# Information about this server that the UI uses for nice-to-haves like
+# "auto-create DNS records pointing here". Optional — set to enable the
+# Sites wizard's DNS auto-creation step.
+system:
+  # Public IPv4 of this server. Used to suggest A records in the Sites
+  # wizard. If unset, the wizard will skip A-record suggestions.
+  # public_ip: 203.0.113.10
 
-
-proxies:
-  enabled: true
-  autoDiscovery: false
-
-features:
-  containerManagement: true
-  imageManagement: true
-  volumeManagement: true
-  networkManagement: true
-  nginxManagement: true
-  emailManagement: true
-  dnsManagement: true
-  sslManagement: true
-  proxyManagement: true
-  userManagement: true
-  systemMetrics: true
-  storageManagement: true
-
-minio:
-  enabled: true
-  endpoint: "${MINIO_ENDPOINT:-localhost}"
-  port: ${MINIO_PORT:-9000}
-  useSSL: ${MINIO_USE_SSL:-false}
-  accessKey: "${MINIO_ROOT_USER:-minioadmin}"
-  secretKey: "${MINIO_ROOT_PASSWORD:-minioadmin}"
-  console:
-    port: ${MINIO_CONSOLE_PORT:-9001}
-
-
-performance:
-  metricsRefreshInterval: 5000
-  logsRefreshInterval: 2000
-  containerStatsInterval: 3000
-  metricsRetentionDays: 30
-  logsRetentionDays: 7
-  maxLogLines: 1000
-
-backup:
-  enabled: false
-  schedule: "0 2 * * *"
-  path: "./backups"
-  retention: 7
-  includeDatabase: true
-  includeConfigs: true
-  includeLogs: false
+  # Public IPv6 of this server (optional). Used to suggest AAAA records.
+  # public_ip6: 2001:db8::1

@@ -1,0 +1,77 @@
+# syntax=docker/dockerfile:1.6
+# Multi-stage build for apps/api (Fastify backend).
+#
+# Build context: repo root (`docker build -f docker/Dockerfile.api .`)
+
+###################
+# Stage 1 — deps  #
+###################
+FROM node:22-alpine AS deps
+WORKDIR /build
+RUN apk add --no-cache libc6-compat openssl
+
+COPY apps/api/package.json apps/api/yarn.lock ./
+RUN yarn install --frozen-lockfile --no-progress
+
+###################
+# Stage 2 — build #
+###################
+FROM node:22-alpine AS build
+WORKDIR /build
+RUN apk add --no-cache libc6-compat openssl
+
+COPY apps/api/package.json apps/api/yarn.lock ./
+COPY --from=deps /build/node_modules ./node_modules
+COPY apps/api/tsconfig.json ./
+COPY apps/api/prisma ./prisma
+COPY apps/api/src ./src
+COPY apps/api/scripts ./scripts
+
+# prisma generate (postinstall already ran during deps; re-run to be safe)
+RUN npx prisma generate
+RUN yarn build
+
+# We keep `tsx` in the runtime image so the operational admin scripts
+# (admin-create / admin-reset / admin-list) can run from TS source. They
+# are tiny one-shots; the cost of pulling tsx in runtime is fine.
+# Prune dev deps for the runtime layer (tsx is in devDeps; re-add it).
+RUN yarn install --frozen-lockfile --production --no-progress && \
+    yarn add tsx@^4.20.6 --no-progress
+
+#####################
+# Stage 3 — runtime #
+#####################
+FROM node:22-alpine AS runtime
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl tini wget && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S -u 1001 -G nodejs api
+
+COPY --from=build --chown=api:nodejs /build/node_modules ./node_modules
+COPY --from=build --chown=api:nodejs /build/dist ./dist
+COPY --from=build --chown=api:nodejs /build/prisma ./prisma
+COPY --from=build --chown=api:nodejs /build/scripts ./scripts
+COPY --from=build --chown=api:nodejs /build/src ./src
+COPY --from=build --chown=api:nodejs /build/tsconfig.json ./
+COPY --from=build --chown=api:nodejs /build/package.json ./
+
+# Data dir mounted at runtime (see compose volume)
+RUN mkdir -p /data && chown api:nodejs /data
+# Default config path; override via CONFIG_PATH env var.
+ENV CONFIG_PATH=/etc/docker-gui/config.yml
+
+USER api
+
+EXPOSE 4000
+ENV NODE_ENV=production
+ENV API_HOST=0.0.0.0
+ENV API_PORT=4000
+
+# tini reaps zombies + forwards signals
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Apply pending migrations on every boot, then start.
+CMD sh -c 'npx prisma migrate deploy && node dist/index.js'
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- --tries=1 --timeout=3 http://127.0.0.1:4000/api/v1/health/live || exit 1

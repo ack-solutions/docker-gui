@@ -1,341 +1,168 @@
-# Docker GUI
+# docker-gui
 
-A modern web interface for managing Docker infrastructure with integrated Nginx, Email, DNS, and SSL management. Built with Next.js and Material UI, featuring a responsive design that works as a mobile PWA.
+Self-hosted server management. One UI for Docker, reverse proxy + SSL,
+databases, on-premise email, S3-compatible storage, DNS, and system
+metrics.
 
-## Features
+> **Status: alpha.** Phases 0–3 shipped: auth, Docker resources
+> (containers / images / volumes / networks), Sites with Caddy + auto-HTTPS,
+> production deployment via a one-line installer + CLI. See
+> [docs/ROADMAP.md](docs/ROADMAP.md) for what's next.
 
-**Docker Management**
-- Container management with real-time metrics
-- Image catalog with pull/push operations  
-- Volume and network management
-- Live log viewer with filtering
-- Interactive terminal access
-- File browser for containers
+---
 
-**Infrastructure Tools**
-- Nginx reverse proxy configuration
-- Domain and DNS management (Cloudflare, Route53, or Manual)
-- Email account management (SMTP)
-- SSL certificate automation (Let's Encrypt)
-- Proxy and load balancer setup
+## Install on a fresh Linux server
 
-**Modern Interface**
-- Responsive mobile-first design
-- PWA support (installable as app)
-- Bottom navigation on mobile
-- Dark/light theme
-- Real-time updates
+> **Alpha note:** until pre-built images ship, the install runs a build
+> step on the target server. The eventual public one-liner is
+> `curl -fsSL https://get.docker-gui.io/install.sh | sudo bash`; today
+> you point the installer at your own copy of the source.
 
-## Quick Start
-
-### Interactive Setup (Recommended)
+Simplest path right now — copy the source to the server and run with
+`DOCKER_GUI_LOCAL=1`:
 
 ```bash
-# 1. Configure everything (asks for port, admin, features, etc.)
-./scripts/setup-interactive.sh
+# On your laptop (in this repo):
+tar czf /tmp/docker-gui.tar.gz \
+  --exclude=node_modules --exclude=.next --exclude=.git \
+  --exclude='apps/api/data' --exclude='apps/api/node_modules' .
+scp /tmp/docker-gui.tar.gz user@your-server:/tmp/
 
-# 2. Start with Docker
-docker-compose -f docker-compose.yml up -d
-
-# 3. Open http://localhost:3000 (or your chosen port)
-# 4. Login with credentials from config.yml
+# On the server:
+ssh user@your-server
+mkdir -p /tmp/dgui-src && cd /tmp/dgui-src
+tar xzf /tmp/docker-gui.tar.gz
+DOCKER_GUI_LOCAL=1 sudo -E ./scripts/install.sh
 ```
 
-### Quick Docker Start
+The installer generates secrets, builds the Docker images, starts the
+stack, installs the `docker-gui` CLI, and prints your URL + a one-time
+setup secret. Open the URL, paste the secret, create the first admin,
+you're in.
+
+Other paths (GitHub fork, explicit tarball URL, manual compose):
+**[docs/INSTALL.md](docs/INSTALL.md)**
+
+---
+
+## Day-to-day
+
+After install, every common operation is one command.
 
 ```bash
-docker-compose up -d
-# Access: http://localhost:3000
-# Login: admin@example.com (check logs for password)
+docker-gui status            # see what's running
+docker-gui logs api          # tail logs
+docker-gui config            # edit /opt/docker-gui/config.yml + auto-restart
+docker-gui doctor            # diagnose problems
+docker-gui update            # upgrade to the latest version
+docker-gui backup            # tarball the database
+docker-gui admin reset alice@example.com 'NewPass1'
 ```
 
-### Native Installation (No Docker)
+CLI reference: **[docs/CLI.md](docs/CLI.md)**
 
-```bash
-./scripts/setup-interactive.sh
-sudo ./scripts/install.sh
-# Service starts automatically
-```
+---
 
-| Method | Command | Time | Best For |
-|--------|---------|------|----------|
-| Interactive | `./scripts/setup-interactive.sh` | 3 min | First-time users |
-| Docker Simple | `docker-compose up -d` | 2 min | Quick testing |
-| Native | `sudo ./scripts/install.sh` | 5 min | No Docker needed |
+## What works today
 
-## Configuration
+| Area                              | Status     |
+| --------------------------------- | ---------- |
+| Auth (login, refresh, RBAC)       | ✅ shipped |
+| First-admin bootstrap from UI     | ✅ shipped |
+| Container management              | ✅ shipped |
+| Image pull / list / remove        | ✅ shipped |
+| Volume + Network manage + prune   | ✅ shipped |
+| Health dashboard + system metrics | ✅ shipped |
+| Sites: domains + auto-HTTPS (Caddy)| ✅ shipped|
+| DNS automation (Cloudflare)       | ✅ shipped |
+| Live container log streaming (WS) | ✅ shipped |
+| Production install / update / CLI | ✅ shipped |
+| YAML config + secrets separation  | ✅ shipped |
+| Container exec terminal (xterm)   | 🛠 next    |
+| Postgres GUI                      | 🛠 later   |
+| Email server (Mailu wizard)       | 🛠 later   |
+| MinIO / S3 storage                | 🛠 later   |
 
-**Docker GUI uses `.env` for secrets/database plus `config.yml` for feature toggles.**
+---
 
-> Tip: You can reference host environment variables anywhere inside `config.yml` using `${VAR}` or `${VAR:-fallback}`.  
-> Example: `port: ${APP_PORT:-3000}` or `jwtSecret: "${JWT_SECRET:-change-me}"`.
+## Documentation
 
-### Quick Setup
+### For users
 
-```bash
-# 1. Copy environment template
-cp .env.example .env
+- **[INSTALL.md](docs/INSTALL.md)** — install on any Linux server
+- **[CONFIG.md](docs/CONFIG.md)** — `config.yml` + `.env` reference
+- **[UPDATE.md](docs/UPDATE.md)** — updating, rolling back, automation
+- **[CLI.md](docs/CLI.md)** — `docker-gui` command reference
+- **[SCRIPTS.md](docs/SCRIPTS.md)** — install / doctor / uninstall internals
 
-# 2. Edit .env values (port, secrets, database, SMTP, ...)
-nano .env
+### For contributors
 
-# 3. Adjust config overrides if needed
-nano config.yml
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — what we're building, why,
+  tech stack, security model
+- **[ROADMAP.md](docs/ROADMAP.md)** — phased plan
+- **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** — local dev workflow + tests
+- **[COMPONENTS.md](docs/COMPONENTS.md)** — UI design system
 
-# 4. Start the app
-docker-compose up -d
-```
+### Phase notes (delivery log)
 
-### Key Configuration Sections
+- [PHASE_0_RUN.md](docs/PHASE_0_RUN.md) — foundation
+- [PHASE_1_RUN.md](docs/PHASE_1_RUN.md) — auth + containers
+- [PHASE_2_RUN.md](docs/PHASE_2_RUN.md) — images + volumes + networks + production stack
+- [PHASE_3_RUN.md](docs/PHASE_3_RUN.md) — Sites + Caddy
 
-```yaml
-app:
-  port: 3000              # Web UI port
-  environment: "production"
+---
 
-admin:
-  email: "admin@example.com"
-  password: "YourPassword"
-
-features:
-  nginxManagement: false  # Enable/disable features
-  emailManagement: false
-  dnsManagement: false
-
-performance:
-  metricsRefreshInterval: 5000
-  logsRefreshInterval: 2000
-```
-
-## Authentication
-
-- Login required for all features
-- Bootstrap and maintenance are done via CLI scripts
-- Login at: http://localhost:3000/auth/login
-- Manage users in: User Management section
-- JWT-based sessions with configurable timeout
-
-## Database
-
-- Prisma ORM with SQLite (default)
-- Automatic migrations on startup via `yarn db:migrate`
-- Configurable in `config.yml`:
-  ```yaml
-  database:
-    type: "sqlite"
-    path: "/var/lib/docker-gui/docker-gui.db"
-  ```
-
-**Commands:**
-```bash
-yarn db:migrate         # Run migrations
-yarn db:seed            # Ensure base settings
-yarn db:migrate:reset   # Reset database (DANGEROUS)
-```
-
-## Local Setup
-
-If you prefer an interactive bootstrap, run:
-
-```bash
-./setup.sh
-```
-
-The helper installs dependencies, runs migrations/seeds, and creates the first administrator after prompting for credentials.
-
-1. **Copy env template:** `cp .env.example .env` and fill in secrets (setup + JWT), database URL, SMTP, etc.
-2. **Optionally adjust `config.yml` for hostnames/feature flags.**
-3. **Install dependencies:** `yarn install`
-4. **Prepare the database:**  
-   ```bash
-   yarn prisma:generate   # optional, runs automatically on postinstall
-   yarn db:migrate
-   yarn db:seed
-   ```
-5. **Start the dev server:** `yarn dev`
-6. **Bootstrap the first administrator (CLI):**
-   ```bash
-   # Using direct tsx
-   npx tsx scripts/create-admin.ts admin@example.com "Super Administrator" "ChangeMe123!"
-
-   # Or via package scripts
-   yarn user:create-admin admin@example.com "Super Administrator" "ChangeMe123!"
-   ```
-   Then sign in at `/auth/login`.
-
-   Need to reset a password later?
-   ```bash
-   # Using direct tsx
-   npx tsx scripts/reset-password.ts admin@example.com "NewStrongPass123!"
-
-   # Or via package scripts
-   yarn user:reset-password admin@example.com "NewStrongPass123!"
-   ```
-
-## Domain Management
-
-- Three DNS workflows per domain:
-  1. **Nameserver managed** – update your registrar to point NS records at Docker GUI and manage all records here.
-  2. **Provider API** – connect Cloudflare (zone ID + API token) or other providers and the platform synchronizes desired records automatically.
-  3. **Manual / proxy-only** – keep DNS elsewhere while still routing traffic through nginx/SSL managed here.
-- Cloudflare is supported out of the box (zone-scoped API token + zone ID with DNS:Edit permissions). Additional providers share the same pluggable adapter.
-- Subdomains can inherit or override their parent configuration. Link entries via the *Parent Domain* selector and point each child at different upstream ports or services.
-- Advanced nginx directives per domain/subdomain (custom blocks injected in the generated server config).
-- SSL options: Let’s Encrypt automation, reuse uploaded certificates across domains, or manually assign certificates per subdomain.
-
-## Production Deployment
-
-1. **Provision infrastructure** – a Linux host with Docker Engine or Kubernetes works; ensure ports 80/443 are reachable if you want Let’s Encrypt.
-2. **Deploy a production `config.yml`** with the secrets you intend to use:
-   ```yaml
-   setup:
-     initialSecret: "super-long-random-secret"
-   security:
-     jwtSecret: "another-long-secret"
-   database:
-     type: "sqlite"
-     path: "/app/data/docker-gui.db"   # or configure postgres/mysql here
-   ```
-   Extend the file with SMTP/DNS/NGINX settings as required by your environment.
-3. **Build and launch the stack** (Docker example):
-   ```bash
-   docker compose -f docker-compose.production.yml up -d --build
-   ```
-4. **Run migrations once** (if you disable the entrypoint hook): `docker compose exec docker-gui yarn db:migrate && yarn db:seed`
-5. **Bootstrap the administrator** using the public hostname:
-   ```bash
-   curl -X POST https://your-domain.com/api/setup/bootstrap \
-     -H "Content-Type: application/json" \
-     -H "x-setup-secret: <setup.initialSecret>" \
-     -d '{"email":"admin@your-domain.com","password":"ChangeMe123!","name":"Operations"}'
-   ```
-6. **Point DNS** – either change your NS records to the addresses shown on the installation page (managed mode) or connect Cloudflare/Route53 via the new Domain editor (provider mode).
-
-Once the first admin is created you can finish the installation checklist inside the UI (domain provisioning, nginx configuration, SSL upload/issuance, etc.).
-
-## Docker Compose
-
-| File | Purpose | Services |
-|------|---------|----------|
-| `docker-compose.yml` | Simple dev | Docker GUI only |
-| `docker-compose.yml` | Full dev | GUI + Nginx |
-| `docker-compose.production.yml` | Production | GUI + Nginx + Postfix + DNS + SSL |
-
-```bash
-# Simple
-docker-compose up -d
-
-# Full stack
-docker-compose -f docker-compose.full.yml up -d
-
-# Production
-docker-compose -f docker-compose.production.yml up -d
-```
-
-> **Windows:** Use WSL2 for Docker socket access
-
-See [Docker Setup Guide](./docs/DOCKER_SETUP.md) for complete service documentation.
-
-## Integrated Services
-
-- **Nginx**: Reverse proxy with GUI management
-- **Email**: Configure SMTP settings (Postfix in production)
-- **DNS**: Cloudflare, Route53, or Manual DNS management
-- **SSL**: Let's Encrypt automation
-
-## Helper Scripts
-
-```bash
-./scripts/setup-interactive.sh    # Interactive setup wizard
-./scripts/validate-config.sh      # Validate configuration
-./scripts/nginx-reload.sh         # Reload Nginx
-./scripts/backup.sh               # Backup data
-./scripts/ssl-request.sh          # Request SSL certificate
-sudo ./scripts/install.sh         # Native installation
-```
-
-See [scripts/README.md](./scripts/README.md) for detailed documentation.
-
-## Available Scripts
-
-```bash
-# Setup
-yarn setup              # Interactive configuration wizard
-yarn config:validate    # Validate configuration
-
-# Development
-yarn dev                # Start development server
-yarn build              # Build for production
-yarn start              # Run production build
-yarn lint               # Lint code
-
-# Database
-yarn db:migrate         # Run migrations
-yarn db:seed            # Seed database
-yarn db:migrate:reset   # Drop & reapply migrations (DANGEROUS)
-
-# Utilities
-yarn nginx:reload       # Reload Nginx configuration
-yarn backup             # Backup all data
-yarn ssl:request        # Request SSL certificate
-
-# Tests
-yarn test:domains       # Validate domain + SSL/Nginx API flows (creates temporary records)
-```
-
-## Requirements
-
-- Node.js 18.18+ (automatically installed by install scripts)
-- Docker 20.10+ (if using Docker installation)
-- 2GB RAM minimum
-- 10GB disk space
-
-## Project Structure
+## Repo layout
 
 ```
 docker-gui/
-├── src/
-│   ├── app/            # Next.js App Router pages
-│   ├── client/         # React components, features, stores
-│   ├── server/         # Server-side code, database, services
-│   └── types/          # Shared TypeScript types
-├── docs/               # Documentation
-├── scripts/            # Installation and utility scripts
-├── .env.example        # Environment template
-└── config.yml          # Active configuration overrides
+├── apps/
+│   └── api/                 # Fastify backend (Docker, auth, sites, system)
+├── src/                     # Next.js web app (UI only)
+│   ├── app/                 # Pages: /login, /containers, /images,
+│   │                        # /volumes, /networks, /sites, /health
+│   ├── components/          # Design system primitives
+│   └── lib/v2/              # Auth client + API helpers
+├── docker/                  # Production Dockerfiles + Caddy bootstrap
+├── docker-compose.yml       # Production stack: api + web + caddy
+├── config.yml               # User config template (well-commented)
+├── scripts/
+│   ├── install.sh           # One-line installer
+│   ├── cli.sh               # `docker-gui` command (installed to /usr/local/bin)
+│   ├── doctor.sh            # Health diagnostics
+│   └── uninstall.sh         # Clean removal
+└── docs/                    # All the manuals above
 ```
 
-## Development
+---
+
+## Local development
 
 ```bash
-# Clone and install
-git clone <repo-url>
-cd docker-gui
+# Terminal 1 — API (Fastify, port 4000)
+cd apps/api
 yarn install
-
-# Configure
 cp .env.example .env
-nano .env
-nano config.yml
+npx prisma migrate deploy
+yarn dev
 
-# Setup database
-yarn db:migrate
-yarn db:seed
-
-# Start development server
+# Terminal 2 — Web (Next.js, port 3000)
+yarn install
 yarn dev
 ```
 
-Access: http://localhost:3000/auth/login
+Open <http://localhost:3000>. Tests + typecheck:
 
+```bash
+yarn api:test        # 193 backend tests, ~3s
+yarn api:typecheck   # strict TS, zero errors
+yarn typecheck       # web, strict, zero errors
+yarn build           # production build, all routes dynamic
+```
 
-## Contributing
+Full guide: **[DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+---
 
 ## License
 
