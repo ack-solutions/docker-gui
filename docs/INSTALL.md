@@ -7,21 +7,38 @@ Get docker-gui running on a fresh Linux server.
 
 ---
 
-## At a glance
+## ⚠️ Alpha state — read this first
 
-```bash
-curl -fsSL https://get.docker-gui.io/install.sh | sudo bash
-```
+docker-gui is in alpha. **There is no public install URL yet.**
+The eventual one-liner will be `curl -fsSL https://get.docker-gui.io/install.sh | sudo bash`,
+but until pre-built images and a release pipeline are published, you have
+three options for the first install:
 
-That's it. The installer will:
+1. **From your local source** (simplest, recommended for first install) —
+   you copy the source to the server with `scp` / `rsync` and run the
+   installer with `DOCKER_GUI_LOCAL=1`. Skips all download steps.
+2. **From your own GitHub fork** — push this repo to your account, then
+   run the installer with `DOCKER_GUI_REPO=youruser/docker-gui`. Closest
+   to the eventual one-liner experience.
+3. **From an explicit tarball URL** — point `DOCKER_GUI_TARBALL_URL` at
+   any URL that serves a `tar.gz` of the repo (S3, Nexus, file://, …).
 
-1. Detect your OS and install Docker if it's missing
-2. Download the latest source tarball (no `git` required)
-3. Generate strong random secrets in `/opt/docker-gui/.env`
-4. Build the production images (api + web + caddy)
-5. Start the stack
-6. Install the `docker-gui` CLI to `/usr/local/bin/`
-7. Print your URL and a one-time setup secret
+Pick one. Skip to the matching section below.
+
+---
+
+## What the installer does
+
+Regardless of source, the installer:
+
+1. Detects your OS and installs Docker if it's missing
+2. Lays out files at `/opt/docker-gui/` (config + secrets + source)
+3. Generates strong random secrets in `/opt/docker-gui/.env`
+4. Builds the production images (api + web + caddy)
+5. Starts the stack with `docker compose up -d`
+6. Installs the `docker-gui` CLI to `/usr/local/bin/`
+7. Polls `/api/v1/health/live` until ready
+8. Prints your URL and a one-time setup secret
 
 When the installer finishes you'll see:
 
@@ -58,9 +75,72 @@ admin, and you're in.
 
 ---
 
-## Method 1 — One-line install (recommended)
+## Method 1 — From local source (recommended for first install)
+
+This is the path I recommend if you're trying docker-gui for the first
+time. It avoids any reliance on a public download URL and gives you a
+clean reproducible install.
+
+On your laptop:
 
 ```bash
+# Pack the repo (excludes node_modules / .next / .git for speed)
+tar czf docker-gui.tar.gz \
+  --exclude=node_modules --exclude=.next --exclude=.git \
+  --exclude='apps/api/data' --exclude='apps/api/node_modules' \
+  -C /path/to/docker-gui .
+
+# Send it to your server
+scp docker-gui.tar.gz user@your-server:/tmp/
+```
+
+On the server:
+
+```bash
+ssh user@your-server
+
+# Unpack and run the installer in local mode
+mkdir -p /tmp/docker-gui-src && cd /tmp/docker-gui-src
+tar xzf /tmp/docker-gui.tar.gz
+DOCKER_GUI_LOCAL=1 sudo -E ./scripts/install.sh
+```
+
+The installer skips the network download and uses the current directory
+as the source. Updates: re-run the same `scp` + `tar` + install steps.
+
+## Method 2 — From a GitHub fork
+
+```bash
+sudo DOCKER_GUI_REPO=youruser/docker-gui \
+     DOCKER_GUI_VERSION=main \
+     bash <(curl -fsSL https://raw.githubusercontent.com/youruser/docker-gui/main/scripts/install.sh)
+```
+
+The `bash <(curl ...)` form lets you inspect the script first if you
+prefer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/youruser/docker-gui/main/scripts/install.sh -o install.sh
+less install.sh
+sudo DOCKER_GUI_REPO=youruser/docker-gui bash install.sh
+```
+
+## Method 3 — Explicit tarball URL
+
+```bash
+sudo DOCKER_GUI_TARBALL_URL=https://your-host.example.com/docker-gui-v0.4.tar.gz \
+     bash install.sh
+```
+
+The URL must serve a `tar.gz` whose top-level directory contains the
+repo (the same shape as `git archive` or GitHub's `/archive/` URLs).
+`file://` URLs work too — handy for fully air-gapped servers.
+
+## Future: one-line install (not yet — coming with the public release)
+
+```bash
+# Reserved for when pre-built images and a release pipeline ship.
+# Until then this URL doesn't exist.
 curl -fsSL https://get.docker-gui.io/install.sh | sudo bash
 ```
 
@@ -80,29 +160,11 @@ sudo -E bash -c 'curl -fsSL https://get.docker-gui.io/install.sh | bash'
 | `DOCKER_GUI_VERSION`    | `main`                               | Branch or tag to use (e.g. `v0.4.0`)                     |
 | `DOCKER_GUI_TARBALL_URL`| derived                              | Override the tarball URL entirely                        |
 | `DOCKER_GUI_WEB_PORT`   | `3000`                               | Host port the web UI binds to                            |
-| `DOCKER_GUI_LOCAL`      | `0`                                  | Set to `1` to install from the current directory (devs)  |
+| `DOCKER_GUI_LOCAL`      | `0`                                  | Set to `1` to install from the current directory (Method 1) |
 
 ---
 
-## Method 2 — Manual install (no curl-pipe-bash)
-
-If you'd rather see what's happening:
-
-```bash
-# 1. Make sure Docker is installed and running
-sudo systemctl status docker || curl -fsSL https://get.docker.com | sudo sh
-
-# 2. Download the installer (read it first if you like)
-curl -fsSL -o install.sh https://raw.githubusercontent.com/anthropics/docker-gui/main/scripts/install.sh
-less install.sh
-
-# 3. Run it
-sudo bash install.sh
-```
-
----
-
-## Method 3 — Compose-only (advanced)
+## Method 4 — Compose-only (advanced)
 
 If you want full control and don't want the helper scripts:
 

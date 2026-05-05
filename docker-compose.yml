@@ -33,9 +33,12 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      # Secrets — required, sourced from .env at the install root
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (run: openssl rand -hex 32)}
-      SETUP_SECRET: ${SETUP_SECRET:?SETUP_SECRET is required (run: openssl rand -hex 32)}
+      # Secrets — required, sourced from .env at the install root.
+      # Compose substitutes ${VAR:?msg} at startup; if the var is unset or
+      # empty, compose aborts with the message. Values are quoted so YAML
+      # parsers don't trip on the inner ":(".
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required - run: openssl rand -hex 32}"
+      SETUP_SECRET: "${SETUP_SECRET:?SETUP_SECRET is required - run: openssl rand -hex 32}"
       # DB lives on a named volume mounted at /data
       DATABASE_URL: file:/data/app.db
       # config.yml is mounted read-only below; CONFIG_PATH points to it

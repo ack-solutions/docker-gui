@@ -133,7 +133,22 @@ else
   trap 'rm -f "$TMP_TARBALL"' EXIT
   if ! curl -fsSL -o "$TMP_TARBALL" "$TARBALL_URL"; then
     err "Failed to download source from $TARBALL_URL"
-    err "Check DOCKER_GUI_REPO and DOCKER_GUI_VERSION."
+    err ""
+    err "While docker-gui is in alpha, the default public URL may not exist"
+    err "yet. To proceed, choose one of:"
+    err ""
+    err "  1) Local source (recommended for first install):"
+    err "       scp -r your-repo your-server:/tmp/docker-gui-src"
+    err "       ssh your-server"
+    err "       cd /tmp/docker-gui-src && DOCKER_GUI_LOCAL=1 sudo -E ./scripts/install.sh"
+    err ""
+    err "  2) Your own GitHub fork:"
+    err "       sudo DOCKER_GUI_REPO=youruser/docker-gui ./install.sh"
+    err ""
+    err "  3) An explicit tarball URL:"
+    err "       sudo DOCKER_GUI_TARBALL_URL=https://example.com/dgui.tar.gz ./install.sh"
+    err ""
+    err "Full guide: docs/INSTALL.md (Alpha install section)"
     exit 1
   fi
   ok "Downloaded $(du -h "$TMP_TARBALL" | cut -f1)"
