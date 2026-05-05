@@ -11,6 +11,8 @@ import { DockerVolumesService } from './services/docker-volumes.service.js';
 import { DockerNetworksService } from './services/docker-networks.service.js';
 import { SitesService } from './services/sites.service.js';
 import { DnsService } from './services/dns.service.js';
+import { FeaturesService } from './services/features.service.js';
+import { StorageService } from './services/storage.service.js';
 import { CaddyClient } from './lib/caddy.js';
 import { CryptoBox } from './lib/crypto-box.js';
 
@@ -46,6 +48,11 @@ async function main(): Promise<void> {
     ...(config.SYSTEM_PUBLIC_IP ? { publicIp: config.SYSTEM_PUBLIC_IP } : {}),
     ...(config.SYSTEM_PUBLIC_IP6 ? { publicIp6: config.SYSTEM_PUBLIC_IP6 } : {}),
   });
+  const features = new FeaturesService(docker, {
+    network: config.DOCKER_GUI_NETWORK,
+    hostInstallDir: config.DOCKER_GUI_INSTALL_DIR,
+  });
+  const storage = new StorageService(prisma, cryptoBox);
 
   const app = await buildApp({
     logger: buildLoggerOptions(config),
@@ -64,6 +71,8 @@ async function main(): Promise<void> {
     networks,
     sites,
     dns,
+    features,
+    storage,
     jwtConfig,
     setupSecret: config.SETUP_SECRET,
   });

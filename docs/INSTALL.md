@@ -64,6 +64,53 @@ regular sign-in form.
 
 ---
 
+## Features — turning on optional capabilities
+
+The default install runs only the **panel** (api + web). It does not bind
+ports 80 or 443 — those stay free for whatever else you're hosting until
+you explicitly turn on the reverse-proxy feature.
+
+To enable an optional capability, open **`/features`** in the web UI:
+
+| Feature | What it adds | Ports it reserves while running |
+|---|---|---|
+| **Caddy** — reverse proxy + auto HTTPS | Required for Sites: point a domain at this server, fill the form, Caddy issues a Lets Encrypt cert. | 80, 443 |
+| **MinIO** — object storage *(coming soon)* | S3-compatible storage with a custom UI for buckets, IAM, and visual policy editing. | 9000, 9001 |
+| **Email (Mailu)** *(coming soon)* | Self-hosted SMTP / IMAP / webmail with DKIM + SPF + DMARC wizard. | 25, 465, 587, 993 |
+| **Postgres GUI** *(coming soon)* | Browser-based Postgres explorer (pgweb). | — |
+
+Click **Enable** on a feature card and the api launches the corresponding
+container immediately. Click **Disable** to stop and remove it — the data
+volume is preserved, so re-enabling restores state.
+
+Each feature container is managed by docker-gui via the Docker socket.
+You'll see them on the `/containers` page tagged with the
+`docker-gui.managed-by=features-service` label. Don't manage them by
+hand from the CLI — use the Features page, or you'll get out of sync.
+
+### Examples
+
+**"I just want the panel — don't expose any HTTPS yet."**
+Default install. Nothing more to do. Use the panel at `http://server:3000`.
+
+**"I want a real domain with HTTPS for the panel itself."**
+1. Open `/features` → Enable **Caddy** (binds 80 + 443).
+2. Open `/sites` → New site for `panel.example.com` → Upstream `web:80` → Apply.
+3. Set DNS for `panel.example.com` → server IP. Wait ~30 seconds for Caddy
+   to issue the cert.
+4. Visit `https://panel.example.com`.
+
+**"I want object storage."**
+Open `/features` → look for **MinIO**. Currently *coming soon* — track
+progress in [docs/ROADMAP.md](ROADMAP.md).
+
+**"I want to free port 80 again."**
+Open `/features` → Disable **Caddy**. The container is removed; data
+volumes remain. Sites you defined are kept in the database — re-enabling
+restores them.
+
+---
+
 ## Update
 
 Same one command — re-run it:

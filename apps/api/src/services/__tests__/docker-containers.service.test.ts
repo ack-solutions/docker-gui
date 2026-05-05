@@ -15,6 +15,7 @@ interface ContainerStub {
   remove: ReturnType<typeof vi.fn>;
   inspect: ReturnType<typeof vi.fn>;
   logs: ReturnType<typeof vi.fn>;
+  exec: ReturnType<typeof vi.fn>;
 }
 
 function fakeDocker(stub: Partial<ContainerStub> = {}, listResponse: unknown[] = []): Docker {
@@ -25,6 +26,7 @@ function fakeDocker(stub: Partial<ContainerStub> = {}, listResponse: unknown[] =
     remove: stub.remove ?? vi.fn().mockResolvedValue(undefined),
     inspect: stub.inspect ?? vi.fn().mockResolvedValue({ Id: 'x', State: { Running: true } }),
     logs: stub.logs ?? vi.fn().mockResolvedValue(Buffer.from('hello\n')),
+    exec: stub.exec ?? vi.fn(),
   };
   return {
     listContainers: vi.fn().mockResolvedValue(listResponse),
@@ -180,6 +182,97 @@ function frame(stream: 0 | 1 | 2, payload: string): Buffer {
   header.writeUInt32BE(data.length, 4);
   return Buffer.concat([header, data]);
 }
+
+describe('DockerContainersService.exec', () => {
+  function fakeExec(opts: { startStream?: NodeJS.ReadWriteStream; exitCode?: number | null } = {}) {
+    const start = vi
+      .fn()
+      .mockResolvedValue(opts.startStream ?? ({ on: vi.fn() } as unknown as NodeJS.ReadWriteStream));
+    const resize = vi.fn().mockResolvedValue(undefined);
+    const inspect = vi
+      .fn()
+      .mockResolvedValue({ ExitCode: opts.exitCode ?? 0, Running: false });
+    return {
+      execInstance: { start, resize, inspect },
+      start,
+      resize,
+      inspect,
+    };
+  }
+
+  it('creates exec with TTY + AttachStdin/Stdout/Stderr and the requested cmd', async () => {
+    const exec = fakeExec();
+    const dockerExec = vi.fn().mockResolvedValue(exec.execInstance);
+    const docker = fakeDocker({ exec: dockerExec });
+
+    const svc = new DockerContainersService(docker);
+    await svc.exec('cid', { cmd: ['/bin/bash', '-l'], cols: 100, rows: 30 });
+
+    expect(dockerExec).toHaveBeenCalledTimes(1);
+    expect(dockerExec.mock.calls[0]?.[0]).toMatchObject({
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: true,
+      Cmd: ['/bin/bash', '-l'],
+    });
+    expect(exec.start).toHaveBeenCalled();
+    expect(exec.resize).toHaveBeenCalledWith({ h: 30, w: 100 });
+  });
+
+  it('does not call resize when cols/rows are not provided', async () => {
+    const exec = fakeExec();
+    const dockerExec = vi.fn().mockResolvedValue(exec.execInstance);
+    const docker = fakeDocker({ exec: dockerExec });
+
+    const svc = new DockerContainersService(docker);
+    await svc.exec('cid', { cmd: ['/bin/sh'] });
+    expect(exec.resize).not.toHaveBeenCalled();
+  });
+
+  it('returned session.resize forwards to dockerode', async () => {
+    const exec = fakeExec();
+    const dockerExec = vi.fn().mockResolvedValue(exec.execInstance);
+    const docker = fakeDocker({ exec: dockerExec });
+
+    const svc = new DockerContainersService(docker);
+    const session = await svc.exec('cid', { cmd: ['/bin/sh'] });
+    await session.resize(40, 120);
+    expect(exec.resize).toHaveBeenLastCalledWith({ h: 40, w: 120 });
+  });
+
+  it('returned session.inspect surfaces ExitCode + Running', async () => {
+    const exec = fakeExec({ exitCode: 137 });
+    const dockerExec = vi.fn().mockResolvedValue(exec.execInstance);
+    const docker = fakeDocker({ exec: dockerExec });
+
+    const svc = new DockerContainersService(docker);
+    const session = await svc.exec('cid', { cmd: ['/bin/sh'] });
+    expect(await session.inspect()).toEqual({ exitCode: 137, running: false });
+  });
+
+  it('maps a 404 from container.exec() to NotFoundError', async () => {
+    const dockerExec = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('no such container'), { statusCode: 404 }));
+    const docker = fakeDocker({ exec: dockerExec });
+
+    const svc = new DockerContainersService(docker);
+    await expect(svc.exec('cid', { cmd: ['/bin/sh'] })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('swallows errors from the pre-output resize so exec still starts', async () => {
+    const exec = fakeExec();
+    exec.resize.mockRejectedValueOnce(new Error('too early'));
+    const dockerExec = vi.fn().mockResolvedValue(exec.execInstance);
+    const docker = fakeDocker({ exec: dockerExec });
+
+    const svc = new DockerContainersService(docker);
+    await expect(
+      svc.exec('cid', { cmd: ['/bin/sh'], cols: 80, rows: 24 }),
+    ).resolves.toMatchObject({ stream: expect.anything() });
+  });
+});
 
 describe('LogStreamDemuxer', () => {
   it('demultiplexes stdout and stderr frames', () => {

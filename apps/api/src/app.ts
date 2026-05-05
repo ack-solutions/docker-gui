@@ -7,6 +7,8 @@ import { dockerRoutes } from './routes/docker.routes.js';
 import { sitesRoutes } from './routes/sites.routes.js';
 import { dnsRoutes } from './routes/dns.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
+import { featuresRoutes } from './routes/features.routes.js';
+import { storageRoutes } from './routes/storage.routes.js';
 import type { HealthDeps } from './services/health.service.js';
 import type { AuthService } from './services/auth.service.js';
 import type { UserService } from './services/user.service.js';
@@ -16,6 +18,8 @@ import type { DockerVolumesService } from './services/docker-volumes.service.js'
 import type { DockerNetworksService } from './services/docker-networks.service.js';
 import type { SitesService } from './services/sites.service.js';
 import type { DnsService } from './services/dns.service.js';
+import type { FeaturesService } from './services/features.service.js';
+import type { StorageService } from './services/storage.service.js';
 import type { JwtConfig } from './lib/jwt.js';
 import { AppError } from './lib/errors.js';
 
@@ -33,6 +37,8 @@ export interface BuildAppOptions {
   networks: DockerNetworksService;
   sites: SitesService;
   dns: DnsService;
+  features: FeaturesService;
+  storage: StorageService;
   jwtConfig: JwtConfig;
   setupSecret: string;
 }
@@ -138,6 +144,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(dnsRoutes, {
         dns: opts.dns,
+        authMiddleware: { jwtConfig: opts.jwtConfig },
+      });
+      await api.register(featuresRoutes, {
+        features: opts.features,
+        authMiddleware: { jwtConfig: opts.jwtConfig },
+      });
+      await api.register(storageRoutes, {
+        storage: opts.storage,
         authMiddleware: { jwtConfig: opts.jwtConfig },
       });
       await api.register(wsRoutes, {

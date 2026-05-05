@@ -89,6 +89,32 @@ model DnsProvider {
   @@map("dns_providers")
 }
 
+model S3Connection {
+  id                String    @id @default(uuid())
+  // Human label shown in the UI ("Local MinIO", "Wasabi prod")
+  name              String    @unique
+  // Endpoint URL — for AWS leave region-default; for MinIO/Wasabi/B2/R2 fill in
+  endpoint          String
+  region            String    @default("us-east-1")
+  // Backend flavor — affects which capabilities (IAM admin, etc.) are exposed.
+  // "auto" detects MinIO via /minio/admin/v3/info on first verify.
+  flavor            String    @default("auto") // auto | minio | aws | other
+  // Path-style addressing — required by MinIO, optional for AWS. Default true
+  // because most self-hosted endpoints need it.
+  pathStyle         Boolean   @default(true)
+  // Access key in plaintext (treated as identifier, not a secret on its own).
+  accessKey         String
+  // Secret key encrypted with CryptoBox(JWT_SECRET). Never exposed by API.
+  secretKeyCipher   String
+  verified          Boolean   @default(false)
+  lastVerifiedAt    DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("s3_connections")
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?

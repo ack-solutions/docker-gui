@@ -277,6 +277,12 @@ cat <<EOF
   Setup secret:  ${SETUP_SECRET}
                  (one-time use to create the first admin)
 
+  This install runs only the panel (api + web). Ports 80 / 443 stay free
+  until you turn on the reverse-proxy feature.
+
+  Optional features (Caddy reverse proxy, MinIO storage, email, …):
+  enable them after first login under \033[1m/features\033[0m in the web UI.
+
   CLI:           docker-gui --help
   Update:        docker-gui update
   Status:        docker-gui status

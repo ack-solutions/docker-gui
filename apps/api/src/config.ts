@@ -26,6 +26,12 @@ const envSchema = z.object({
     .string()
     .regex(/^[0-9a-fA-F:]+$/, 'Must be an IPv6 address')
     .optional(),
+  // Set by docker-compose so the api can attach feature containers (Caddy,
+  // MinIO, …) to the same network as itself.
+  DOCKER_GUI_NETWORK: z.string().default('docker-gui_dgui'),
+  // Host path to the install root, used to build bind mounts for feature
+  // containers (e.g. Caddy needs the host path to caddy/initial.json).
+  DOCKER_GUI_INSTALL_DIR: z.string().default('/opt/docker-gui'),
 });
 
 export type Config = z.infer<typeof envSchema>;
