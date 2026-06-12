@@ -1,4 +1,4 @@
-import { loadConfig, parseCorsOrigins } from './config.js';
+import { loadConfig, loadConfigSnapshot, parseCorsOrigins } from './config.js';
 import { buildLoggerOptions } from './lib/logger.js';
 import { createDockerClient } from './lib/docker.js';
 import { getPrisma, disconnectPrisma } from './lib/db.js';
@@ -20,6 +20,11 @@ const startedAt = Date.now();
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  const configSnapshot = loadConfigSnapshot();
+  for (const warning of configSnapshot.warnings()) {
+    // eslint-disable-next-line no-console
+    console.warn(`[config] ${warning}`);
+  }
   const docker = createDockerClient(config);
   const prisma = getPrisma();
 
@@ -73,6 +78,7 @@ async function main(): Promise<void> {
     dns,
     features,
     storage,
+    configSnapshot,
     jwtConfig,
     setupSecret: config.SETUP_SECRET,
   });

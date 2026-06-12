@@ -1,80 +1,86 @@
+/**
+ * Top-level config façade — preserves the historical API used by
+ * `apps/api/src/index.ts` so existing callers don't have to change.
+ *
+ * Under the hood we now delegate to the layered registry in `./config/`.
+ * The returned `Config` shape is the env-keyed object we always had;
+ * `loadConfigSnapshot()` (new) returns the richer typed snapshot for
+ * callers that want dotted-key access + source provenance.
+ */
+
 import { z } from 'zod';
-import { loadYamlConfig } from './lib/yaml-config.js';
+import { loadConfig as loadSnapshot } from './config/index.js';
+import type { ConfigSnapshot } from './config/index.js';
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  API_HOST: z.string().default('127.0.0.1'),
-  API_PORT: z.coerce.number().int().positive().default(4000),
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters of entropy'),
-  SETUP_SECRET: z.string().min(16, 'SETUP_SECRET must be at least 16 characters'),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  API_HOST: z.string(),
+  API_PORT: z.number(),
+  JWT_SECRET: z.string(),
+  SETUP_SECRET: z.string(),
+  DATABASE_URL: z.string(),
   DOCKER_SOCKET: z.string().optional(),
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-  LOG_PRETTY: z.coerce.boolean().default(false),
-  CORS_ORIGINS: z.string().default('http://localhost:3000'),
-  ACCESS_TOKEN_TTL: z.coerce.number().int().positive().default(900), // 15m
-  REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(604800), // 7d
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']),
+  LOG_PRETTY: z.boolean(),
+  CORS_ORIGINS: z.string(),
+  ACCESS_TOKEN_TTL: z.number(),
+  REFRESH_TOKEN_TTL: z.number(),
   CADDY_ADMIN_URL: z.string().url().optional(),
   CADDY_DEFAULT_LE_EMAIL: z.string().email().optional(),
-  // Public-facing IP addresses, used to recommend DNS records.
-  // Optional — without these the DNS wizard skips suggesting A/AAAA records.
-  SYSTEM_PUBLIC_IP: z
-    .string()
-    .regex(/^(\d{1,3}\.){3}\d{1,3}$/, 'Must be an IPv4 address')
-    .optional(),
-  SYSTEM_PUBLIC_IP6: z
-    .string()
-    .regex(/^[0-9a-fA-F:]+$/, 'Must be an IPv6 address')
-    .optional(),
-  // Set by docker-compose so the api can attach feature containers (Caddy,
-  // MinIO, …) to the same network as itself.
-  DOCKER_GUI_NETWORK: z.string().default('docker-gui_dgui'),
-  // Host path to the install root, used to build bind mounts for feature
-  // containers (e.g. Caddy needs the host path to caddy/initial.json).
-  DOCKER_GUI_INSTALL_DIR: z.string().default('/opt/docker-gui'),
+  SYSTEM_PUBLIC_IP: z.string().optional(),
+  SYSTEM_PUBLIC_IP6: z.string().optional(),
+  DOCKER_GUI_NETWORK: z.string(),
+  DOCKER_GUI_INSTALL_DIR: z.string(),
 });
 
 export type Config = z.infer<typeof envSchema>;
 
 /**
- * Default location of `config.yml` inside the production container. Override
- * with the `CONFIG_PATH` env var. In dev, leave it unset and it falls back
- * to `./config.yml` (relative to cwd) — present if the user ran the
- * installer locally, absent otherwise.
+ * Legacy entry point. Loads + validates via the central registry, then
+ * shapes the result into the historical env-keyed `Config` object so
+ * existing code in `index.ts` keeps working.
  */
-const DEFAULT_CONFIG_PATH = '/etc/docker-gui/config.yml';
+export function loadConfig(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): Config {
+  const snapshot = loadSnapshot({ env: env as Record<string, string | undefined> });
+  const cfg: Config = {
+    NODE_ENV: snapshot.get('core.env'),
+    API_HOST: snapshot.get('core.network.bindHost'),
+    API_PORT: snapshot.get('core.network.bindPort'),
+    JWT_SECRET: snapshot.get('core.auth.jwtSecret'),
+    SETUP_SECRET: snapshot.get('core.auth.setupSecret'),
+    DATABASE_URL: snapshot.get('core.network.databaseUrl'),
+    LOG_LEVEL: snapshot.get('core.log.level'),
+    LOG_PRETTY: snapshot.get('core.log.pretty'),
+    CORS_ORIGINS: snapshot.get('core.network.corsOrigins'),
+    ACCESS_TOKEN_TTL: snapshot.get('core.auth.accessTokenTtlSeconds'),
+    REFRESH_TOKEN_TTL: snapshot.get('core.auth.refreshTokenTtlSeconds'),
+    DOCKER_GUI_NETWORK: snapshot.get('docker.network'),
+    DOCKER_GUI_INSTALL_DIR: snapshot.get('docker.installDir'),
+  };
+  // Optional keys: only set when defined.
+  const dockerSocket = snapshot.getOptional<string>('docker.socket');
+  if (dockerSocket !== undefined) cfg.DOCKER_SOCKET = dockerSocket;
+  const caddyUrl = snapshot.getOptional<string>('caddy.adminUrl');
+  if (caddyUrl !== undefined) cfg.CADDY_ADMIN_URL = caddyUrl;
+  const caddyEmail = snapshot.getOptional<string>('caddy.defaultLetsEncryptEmail');
+  if (caddyEmail !== undefined) cfg.CADDY_DEFAULT_LE_EMAIL = caddyEmail;
+  const ip = snapshot.getOptional<string>('system.publicIp');
+  if (ip !== undefined) cfg.SYSTEM_PUBLIC_IP = ip;
+  const ip6 = snapshot.getOptional<string>('system.publicIp6');
+  if (ip6 !== undefined) cfg.SYSTEM_PUBLIC_IP6 = ip6;
+  return envSchema.parse(cfg);
+}
 
-export function loadConfig(env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): Config {
-  // Layer 1: config.yml (operational settings)
-  const yamlPath = env['CONFIG_PATH'] ?? DEFAULT_CONFIG_PATH;
-  const fromYaml = loadYamlConfig(yamlPath);
-
-  // Layer 2: process env / .env (secrets + overrides). Env always wins.
-  const merged: Record<string, string | undefined> = { ...fromYaml };
-  for (const [key, value] of Object.entries(env)) {
-    if (value !== undefined) merged[key] = value;
-  }
-
-  const parsed = envSchema.safeParse(merged);
-  if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((i) => `  - ${i.path.join('.') || '<root>'}: ${i.message}`)
-      .join('\n');
-    throw new Error(`Invalid environment configuration:\n${issues}`);
-  }
-  if (parsed.data.NODE_ENV === 'production') {
-    if (parsed.data.JWT_SECRET.startsWith('dev-secret')) {
-      throw new Error(
-        'JWT_SECRET appears to be the development default. Refusing to start in production.',
-      );
-    }
-    if (parsed.data.SETUP_SECRET.startsWith('dev-setup-secret')) {
-      throw new Error(
-        'SETUP_SECRET appears to be the development default. Refusing to start in production.',
-      );
-    }
-  }
-  return parsed.data;
+/**
+ * New: return the full registry-backed snapshot (preferred for new code).
+ * Provides `cfg.get('dotted.key')` + provenance.
+ */
+export function loadConfigSnapshot(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): ConfigSnapshot {
+  return loadSnapshot({ env: env as Record<string, string | undefined> });
 }
 
 export function parseCorsOrigins(value: string): string[] {

@@ -43,7 +43,8 @@ const DEFAULT_NAV: NavItem[] = [
   { label: "DNS", href: "/dns" },
   { label: "Health", href: "/health" },
   { label: "Storage", href: "/storage" },
-  { label: "Features", href: "/features" }
+  { label: "Features", href: "/features" },
+  { label: "Settings", href: "/settings" }
 ];
 
 /**

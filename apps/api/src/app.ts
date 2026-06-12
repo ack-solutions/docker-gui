@@ -9,6 +9,8 @@ import { dnsRoutes } from './routes/dns.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 import { featuresRoutes } from './routes/features.routes.js';
 import { storageRoutes } from './routes/storage.routes.js';
+import { configRoutes } from './routes/config.routes.js';
+import type { ConfigSnapshot } from './config/index.js';
 import type { HealthDeps } from './services/health.service.js';
 import type { AuthService } from './services/auth.service.js';
 import type { UserService } from './services/user.service.js';
@@ -39,6 +41,7 @@ export interface BuildAppOptions {
   dns: DnsService;
   features: FeaturesService;
   storage: StorageService;
+  configSnapshot: ConfigSnapshot;
   jwtConfig: JwtConfig;
   setupSecret: string;
 }
@@ -152,6 +155,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(storageRoutes, {
         storage: opts.storage,
+        authMiddleware: { jwtConfig: opts.jwtConfig },
+      });
+      await api.register(configRoutes, {
+        snapshot: opts.configSnapshot,
         authMiddleware: { jwtConfig: opts.jwtConfig },
       });
       await api.register(wsRoutes, {

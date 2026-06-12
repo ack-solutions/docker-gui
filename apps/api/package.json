@@ -19,6 +19,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
+    "docs:config": "tsx scripts/gen-config-docs.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

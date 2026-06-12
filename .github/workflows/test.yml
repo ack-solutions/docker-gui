@@ -1,0 +1,119 @@
+name: Tests
+
+# Real-services test workflow. Spins up the same Linux Docker the runtime
+# uses so integration tests can hit real Docker, real Postgres, real MinIO,
+# real Caddy via `testcontainers` without any mocks.
+#
+# Triggers on every PR + every push to develop/main. Nightly run kept for
+# the live-API suite (DNS providers, ACME staging) which uses real test
+# credentials gated on `live-api`.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit + service tests (api)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Prisma generate
+        working-directory: apps/api
+        run: yarn db:generate
+
+      - name: Regenerate docs/CONFIG.md (registry invariant)
+        working-directory: apps/api
+        run: yarn docs:config
+
+      - name: Verify docs/CONFIG.md is up-to-date
+        run: |
+          if ! git diff --quiet docs/CONFIG.md; then
+            echo "::error::docs/CONFIG.md is out of date. Run 'yarn workspace @dgui/api docs:config' locally and commit."
+            git diff docs/CONFIG.md
+            exit 1
+          fi
+
+      - name: API typecheck
+        working-directory: apps/api
+        run: yarn typecheck
+
+      - name: API tests
+        working-directory: apps/api
+        env:
+          NODE_ENV: test
+        run: yarn test
+
+  web:
+    name: Web typecheck + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Prisma generate
+        working-directory: apps/api
+        run: yarn db:generate
+
+      - name: Frontend typecheck
+        run: npx tsc --noEmit
+
+  integration:
+    name: Real-services integration (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Integration tests need real Docker available on the runner. ubuntu-latest
+    # provides /var/run/docker.sock out of the box, so no DinD service block
+    # is needed — we just opt into running them by setting RUN_INTEGRATION=1.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Verify Docker
+        run: docker info
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Prisma generate
+        working-directory: apps/api
+        run: yarn db:generate
+
+      - name: Run integration suite
+        working-directory: apps/api
+        env:
+          NODE_ENV: test
+          RUN_INTEGRATION: '1'
+          DOCKER_SOCKET: /var/run/docker.sock
+        run: yarn test

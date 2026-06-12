@@ -21,6 +21,7 @@ import {
 } from '../services/storage.service.js';
 import { CaddyClient } from '../lib/caddy.js';
 import { CryptoBox } from '../lib/crypto-box.js';
+import { loadConfig as loadConfigSnapshot } from '../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..', '..');
@@ -115,6 +116,14 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     hostInstallDir: '/opt/docker-gui',
   });
   const storage = new StorageService(prisma, cryptoBox, opts.storageOptions ?? {});
+  const configSnapshot = loadConfigSnapshot({
+    env: {
+      NODE_ENV: 'test',
+      JWT_SECRET: TEST_JWT_CONFIG.secret,
+      SETUP_SECRET: TEST_SETUP_SECRET,
+      DATABASE_URL: dbUrl,
+    },
+  });
 
   const app = await buildApp({
     logger: false,
@@ -129,6 +138,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     dns,
     features,
     storage,
+    configSnapshot,
     jwtConfig: TEST_JWT_CONFIG,
     setupSecret: TEST_SETUP_SECRET,
   });
