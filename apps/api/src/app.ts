@@ -10,6 +10,7 @@ import { dnsRoutes } from './routes/dns.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 import { featuresRoutes } from './routes/features.routes.js';
 import { storageRoutes } from './routes/storage.routes.js';
+import { registryRoutes } from './routes/registry.routes.js';
 import { configRoutes } from './routes/config.routes.js';
 import { auditRoutes } from './routes/audit.routes.js';
 import type { ConfigSnapshot } from './config/index.js';
@@ -24,6 +25,7 @@ import type { SitesService } from './services/sites.service.js';
 import type { DnsService } from './services/dns.service.js';
 import type { FeaturesService } from './services/features.service.js';
 import type { StorageService } from './services/storage.service.js';
+import type { RegistryService } from './services/registry.service.js';
 import {
   type AuditLogService,
   buildRecord,
@@ -48,6 +50,7 @@ export interface BuildAppOptions {
   dns: DnsService;
   features: FeaturesService;
   storage: StorageService;
+  registry: RegistryService;
   configSnapshot: ConfigSnapshot;
   audit: AuditLogService;
   jwtConfig: JwtConfig;
@@ -194,6 +197,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(storageRoutes, {
         storage: opts.storage,
+        authMiddleware,
+      });
+      await api.register(registryRoutes, {
+        registry: opts.registry,
         authMiddleware,
       });
       await api.register(configRoutes, {

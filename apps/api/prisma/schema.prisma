@@ -115,6 +115,33 @@ model S3Connection {
   @@map("s3_connections")
 }
 
+model RegistryConnection {
+  id             String    @id @default(uuid())
+  // Human label ("Local registry", "GHCR mirror")
+  name           String    @unique
+  // Base URL of the registry v2 API (e.g. http://docker-gui-registry:5000 or
+  // https://registry.example.com). No trailing slash.
+  endpoint       String
+  // Whether this points at the docker-gui-managed registry feature container.
+  // Managed connections get push-host hints + can be auto-reconciled.
+  managed        Boolean   @default(false)
+  // Optional basic-auth username. Empty when the registry is open (e.g. only
+  // reachable on the internal docker network).
+  username       String?
+  // Basic-auth password encrypted with CryptoBox(JWT_SECRET). Never exposed.
+  passwordCipher String?
+  // Host:port shown in `docker push` instructions for external clients. For a
+  // managed registry this is the public host once Caddy fronts it.
+  pushHost       String?
+  verified       Boolean   @default(false)
+  lastVerifiedAt DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("registry_connections")
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?

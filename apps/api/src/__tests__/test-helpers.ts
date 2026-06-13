@@ -19,6 +19,10 @@ import {
   StorageService,
   type StorageServiceOptions,
 } from '../services/storage.service.js';
+import {
+  RegistryService,
+  type RegistryServiceOptions,
+} from '../services/registry.service.js';
 import { AuditLogService } from '../services/audit-log.service.js';
 import { CaddyClient } from '../lib/caddy.js';
 import { CryptoBox } from '../lib/crypto-box.js';
@@ -48,6 +52,7 @@ export interface BuildTestEnvOptions {
   caddy?: CaddyClient | null;
   dnsOptions?: DnsServiceOptions;
   storageOptions?: StorageServiceOptions;
+  registryOptions?: RegistryServiceOptions;
 }
 
 export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
@@ -175,6 +180,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     hostInstallDir: '/opt/docker-gui',
   });
   const storage = new StorageService(prisma, cryptoBox, opts.storageOptions ?? {});
+  const registry = new RegistryService(prisma, cryptoBox, opts.registryOptions ?? {});
   const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
@@ -198,6 +204,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     dns,
     features,
     storage,
+    registry,
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,

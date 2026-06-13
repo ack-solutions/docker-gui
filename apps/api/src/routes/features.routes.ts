@@ -12,7 +12,7 @@ export interface FeaturesRoutesOptions {
   authMiddleware: AuthMiddlewareDeps;
 }
 
-const featureKeySchema = z.enum(['caddy', 'minio', 'email', 'postgres-gui']);
+const featureKeySchema = z.enum(['caddy', 'minio', 'email', 'postgres-gui', 'registry']);
 
 export const featuresRoutes: FastifyPluginAsync<FeaturesRoutesOptions> = async (app, opts) => {
   const requireAuth = createRequireAuth(opts.authMiddleware);
