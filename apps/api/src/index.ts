@@ -14,6 +14,7 @@ import { DnsService } from './services/dns.service.js';
 import { FeaturesService } from './services/features.service.js';
 import { StorageService } from './services/storage.service.js';
 import { RegistryService } from './services/registry.service.js';
+import { DatabaseService } from './services/database.service.js';
 import { AuditLogService } from './services/audit-log.service.js';
 import { CaddyClient } from './lib/caddy.js';
 import { CryptoBox } from './lib/crypto-box.js';
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
   });
   const storage = new StorageService(prisma, cryptoBox);
   const registry = new RegistryService(prisma, cryptoBox);
+  const databases = new DatabaseService(prisma, cryptoBox, docker);
   const audit = new AuditLogService(prisma);
 
   const app = await buildApp({
@@ -83,6 +85,7 @@ async function main(): Promise<void> {
     features,
     storage,
     registry,
+    databases,
     configSnapshot,
     audit,
     jwtConfig,
