@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { verifyPassword } from '../lib/password.js';
+import { verifyPassword, hashPassword } from '../lib/password.js';
 import {
   signAccessToken,
   generateRefreshToken,
@@ -81,6 +81,28 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Self-service password change. Verifies the current password, writes the
+   * new hash, and revokes ALL refresh tokens so other sessions are kicked.
+   * The caller's current access token stays valid until it expires (≤ TTL).
+   */
+  async changeOwnPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    if (newPassword.length < 8) {
+      throw new AppError('auth.weak_password', 'Password must be at least 8 characters', 400);
+    }
+    const user = await this.db.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedError('User no longer exists');
+    const ok = await verifyPassword(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError('Current password is incorrect');
+    const passwordHash = await hashPassword(newPassword);
+    await this.db.user.update({ where: { id: userId }, data: { passwordHash } });
+    await this.revokeAllForUser(userId);
   }
 
   private async issueTokens(

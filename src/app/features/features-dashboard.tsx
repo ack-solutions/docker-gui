@@ -19,6 +19,7 @@ import LanguageIcon from "@mui/icons-material/Language";
 import StorageIcon from "@mui/icons-material/Storage";
 import EmailIcon from "@mui/icons-material/Email";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import InventoryIcon from "@mui/icons-material/Inventory2";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { toast } from "sonner";
 import {
@@ -29,8 +30,8 @@ import {
 } from "@/components";
 import { ApiError, apiFetch, type PublicUser } from "@/lib/v2/auth-client";
 
-type FeatureKey = "caddy" | "minio" | "email" | "postgres-gui";
-type FeatureCategory = "networking" | "storage" | "database" | "email";
+type FeatureKey = "caddy" | "minio" | "email" | "postgres-gui" | "registry";
+type FeatureCategory = "networking" | "storage" | "database" | "email" | "registry";
 type FeatureStatus = "stopped" | "starting" | "running" | "error" | "coming-soon";
 
 interface Feature {
@@ -55,14 +56,16 @@ const CATEGORY_ICON: Record<FeatureCategory, JSX.Element> = {
   networking: <LanguageIcon sx={{ fontSize: 36, color: "primary.main" }} />,
   storage: <StorageIcon sx={{ fontSize: 36, color: "primary.main" }} />,
   database: <AccountTreeIcon sx={{ fontSize: 36, color: "primary.main" }} />,
-  email: <EmailIcon sx={{ fontSize: 36, color: "primary.main" }} />
+  email: <EmailIcon sx={{ fontSize: 36, color: "primary.main" }} />,
+  registry: <InventoryIcon sx={{ fontSize: 36, color: "primary.main" }} />
 };
 
 const CATEGORY_LABEL: Record<FeatureCategory, string> = {
   networking: "Networking",
   storage: "Storage",
   database: "Database",
-  email: "Email"
+  email: "Email",
+  registry: "Registry"
 };
 
 const STATUS_COLOR: Record<

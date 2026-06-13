@@ -27,6 +27,11 @@ const bootstrapSchema = z.object({
   name: z.string().trim().min(1).max(100),
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+
 function publicUser(user: { id: string; email: string; name: string; role: string; isActive: boolean }) {
   return {
     id: user.id,
@@ -102,6 +107,18 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
       });
     }
     return reply.send({ data: { user: publicUser(fresh) } });
+  });
+
+  // POST /auth/change-password — self-service; requires the current password
+  app.post('/auth/change-password', { preHandler: requireAuth }, async (req, reply) => {
+    if (!req.user) {
+      return reply.status(401).send({
+        error: { code: 'auth.unauthorized', message: 'Authentication required' },
+      });
+    }
+    const body = await parseBody(req, changePasswordSchema);
+    await opts.auth.changeOwnPassword(req.user.sub, body.currentPassword, body.newPassword);
+    return reply.status(204).send();
   });
 
   // POST /setup/bootstrap — only available when no users exist; requires SETUP_SECRET

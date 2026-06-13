@@ -13,8 +13,8 @@ import { AppError, NotFoundError } from '../lib/errors.js';
  *   3. Set `comingSoon: false` once it's actually wired up end-to-end
  */
 
-export type FeatureKey = 'caddy' | 'minio' | 'email' | 'postgres-gui';
-export type FeatureCategory = 'networking' | 'storage' | 'database' | 'email';
+export type FeatureKey = 'caddy' | 'minio' | 'email' | 'postgres-gui' | 'registry';
+export type FeatureCategory = 'networking' | 'storage' | 'database' | 'email' | 'registry';
 export type FeatureStatus =
   | 'stopped' // container does not exist or is exited
   | 'starting' // container exists, not yet healthy
@@ -136,6 +136,45 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     ports: [],
     containerName: 'docker-gui-pgweb',
     volumes: [],
+  },
+  {
+    key: 'registry',
+    displayName: 'Image registry',
+    category: 'registry',
+    description:
+      'A private Docker image registry (registry:2) running on this server. Push images from CI (GitHub Actions) and pull them back to deploy. Browse and prune tags from the Registry page. For external push, front it with the reverse proxy (TLS + auth); on the internal network the panel reaches it directly.',
+    ports: [5000],
+    containerName: 'docker-gui-registry',
+    volumes: [`${PROJECT}_registry-data`],
+    configHref: '/registry',
+    build: ({ network }) => ({
+      name: 'docker-gui-registry',
+      Image: 'registry:2',
+      Env: [
+        // Allow tag/manifest deletion so the panel's "delete tag" works.
+        'REGISTRY_STORAGE_DELETE_ENABLED=true',
+        // Permit the panel (and clients) to read across origins if fronted.
+        'REGISTRY_HTTP_HEADERS_Access-Control-Allow-Origin=[*]',
+      ],
+      Labels: {
+        'docker-gui.managed-by': 'features-service',
+        'docker-gui.feature': 'registry',
+      },
+      ExposedPorts: {
+        '5000/tcp': {},
+      },
+      HostConfig: {
+        RestartPolicy: { Name: 'unless-stopped' },
+        PortBindings: {
+          // Bind to loopback by default: external push should go through the
+          // reverse proxy (TLS + auth), not a raw open port. Operators who
+          // want a LAN-reachable port can rebind later.
+          '5000/tcp': [{ HostIp: '127.0.0.1', HostPort: '5000' }],
+        },
+        Binds: [`${PROJECT}_registry-data:/var/lib/registry`],
+        NetworkMode: network,
+      },
+    }),
   },
 ];
 

@@ -9,6 +9,16 @@ declare module 'fastify' {
 
 export interface AuthMiddlewareDeps {
   jwtConfig: JwtConfig;
+  /**
+   * Optional fresh-state loader. When provided, every authenticated request
+   * re-validates the subject against the database: if the user no longer
+   * exists or is inactive the request is rejected, and the user's CURRENT db
+   * role replaces whatever the (possibly stale) JWT carried. This closes the
+   * window where a deactivated / deleted / role-changed user keeps acting on
+   * an already-issued access token until it expires. Authentication still
+   * comes from the signed JWT; only authorization state is refreshed.
+   */
+  loadUser?: (id: string) => Promise<{ isActive: boolean; role: string } | null>;
 }
 
 export function createRequireAuth(deps: AuthMiddlewareDeps) {
@@ -32,6 +42,17 @@ export function createRequireAuth(deps: AuthMiddlewareDeps) {
       return reply.status(401).send({
         error: { code: 'auth.invalid_token', message },
       });
+    }
+    if (deps.loadUser) {
+      const fresh = await deps.loadUser(req.user.sub);
+      if (!fresh || !fresh.isActive) {
+        return reply.status(401).send({
+          error: { code: 'auth.session_revoked', message: 'Session is no longer valid' },
+        });
+      }
+      // DB is the source of truth for authorization — apply the live role so a
+      // role change (or deactivation) takes effect on the next request.
+      req.user = { ...req.user, role: fresh.role };
     }
   };
 }

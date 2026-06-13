@@ -70,12 +70,12 @@ function buildSvc(docker: MockedDocker): FeaturesService {
 }
 
 describe('FeaturesService.list', () => {
-  it('returns all 4 known features', async () => {
+  it('returns all known features', async () => {
     const docker = makeDocker();
     const svc = buildSvc(docker);
     const list = await svc.list();
     expect(list.map((f) => f.key).sort()).toEqual(
-      ['caddy', 'email', 'minio', 'postgres-gui'].sort(),
+      ['caddy', 'email', 'minio', 'postgres-gui', 'registry'].sort(),
     );
   });
 
@@ -86,6 +86,18 @@ describe('FeaturesService.list', () => {
     const minio = list.find((f) => f.key === 'minio');
     expect(minio?.comingSoon).toBe(true);
     expect(minio?.status).toBe('coming-soon');
+  });
+
+  it('registry is implemented (NOT coming-soon) and reports a real status', async () => {
+    const docker = makeDocker({ containerExists: false });
+    const svc = buildSvc(docker);
+    const list = await svc.list();
+    const registry = list.find((f) => f.key === 'registry');
+    expect(registry).toBeTruthy();
+    expect(registry?.comingSoon).toBe(false);
+    expect(registry?.status).toBe('stopped');
+    expect(registry?.category).toBe('registry');
+    expect(registry?.ports).toContain(5000);
   });
 
   it('returns caddy as "stopped" when no container exists', async () => {
