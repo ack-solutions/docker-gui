@@ -10,6 +10,7 @@ import { wsRoutes } from './routes/ws.routes.js';
 import { featuresRoutes } from './routes/features.routes.js';
 import { storageRoutes } from './routes/storage.routes.js';
 import { configRoutes } from './routes/config.routes.js';
+import { auditRoutes } from './routes/audit.routes.js';
 import type { ConfigSnapshot } from './config/index.js';
 import type { HealthDeps } from './services/health.service.js';
 import type { AuthService } from './services/auth.service.js';
@@ -22,6 +23,11 @@ import type { SitesService } from './services/sites.service.js';
 import type { DnsService } from './services/dns.service.js';
 import type { FeaturesService } from './services/features.service.js';
 import type { StorageService } from './services/storage.service.js';
+import {
+  type AuditLogService,
+  buildRecord,
+  shouldRecord,
+} from './services/audit-log.service.js';
 import type { JwtConfig } from './lib/jwt.js';
 import { AppError } from './lib/errors.js';
 
@@ -42,6 +48,7 @@ export interface BuildAppOptions {
   features: FeaturesService;
   storage: StorageService;
   configSnapshot: ConfigSnapshot;
+  audit: AuditLogService;
   jwtConfig: JwtConfig;
   setupSecret: string;
 }
@@ -125,6 +132,21 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     });
   });
 
+  /**
+   * Audit log writer. Runs after every response. Best-effort: a Prisma
+   * failure must NOT break the user request (we already shipped 200 by
+   * the time this fires). Skips reads + health probes via `shouldRecord`.
+   */
+  app.addHook('onResponse', async (req, reply) => {
+    try {
+      if (!shouldRecord(req, reply.statusCode)) return;
+      const record = buildRecord(req, reply.statusCode);
+      await opts.audit.record(record);
+    } catch (err) {
+      req.log.warn({ err }, 'audit log write failed');
+    }
+  });
+
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { deps: opts.healthDeps });
@@ -159,6 +181,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(configRoutes, {
         snapshot: opts.configSnapshot,
+        authMiddleware: { jwtConfig: opts.jwtConfig },
+      });
+      await api.register(auditRoutes, {
+        audit: opts.audit,
         authMiddleware: { jwtConfig: opts.jwtConfig },
       });
       await api.register(wsRoutes, {

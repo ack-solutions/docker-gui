@@ -115,8 +115,14 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
   const { skipAuth, headers: baseHeaders, ...rest } = opts;
   const tokens = skipAuth ? null : getTokens();
 
+  // Only declare a JSON content-type when we are actually sending a body.
+  // Fastify rejects an empty body with 400 when content-type is set to
+  // application/json — that would break every bodiless POST (feature
+  // enable/disable, container start/stop, connection verify, …). Let the
+  // caller override via `headers` if they need something else.
+  const hasBody = rest.body !== undefined && rest.body !== null;
   const headers: Record<string, string> = {
-    "content-type": "application/json",
+    ...(hasBody ? { "content-type": "application/json" } : {}),
     ...baseHeaders,
     ...(tokens ? { authorization: `Bearer ${tokens.accessToken}` } : {}),
   };

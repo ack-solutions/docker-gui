@@ -19,8 +19,10 @@ import {
   StorageService,
   type StorageServiceOptions,
 } from '../services/storage.service.js';
+import { AuditLogService } from '../services/audit-log.service.js';
 import { CaddyClient } from '../lib/caddy.js';
 import { CryptoBox } from '../lib/crypto-box.js';
+import { hashPassword } from '../lib/password.js';
 import { loadConfig as loadConfigSnapshot } from '../config/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -37,6 +39,7 @@ export const TEST_SETUP_SECRET = 'test-setup-secret-1234567890abcdef';
 export interface TestEnv {
   app: FastifyInstance;
   prisma: PrismaClient;
+  audit: AuditLogService;
   cleanup: () => Promise<void>;
 }
 
@@ -45,6 +48,62 @@ export interface BuildTestEnvOptions {
   caddy?: CaddyClient | null;
   dnsOptions?: DnsServiceOptions;
   storageOptions?: StorageServiceOptions;
+}
+
+export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
+
+/**
+ * Poll `fn` until it returns a truthy value or the timeout elapses. Used to
+ * wait on side-effects that complete AFTER the HTTP response is sent — most
+ * notably the audit-log `onResponse` writer, which is intentionally async so
+ * it never adds latency to the user's request.
+ */
+export async function waitFor<T>(
+  fn: () => Promise<T> | T,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<T> {
+  const timeout = opts.timeoutMs ?? 2000;
+  const interval = opts.intervalMs ?? 15;
+  const start = Date.now();
+  let last: T | undefined;
+  for (;;) {
+    last = await fn();
+    if (last) return last;
+    if (Date.now() - start > timeout) {
+      throw new Error('waitFor: condition not met before timeout');
+    }
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
+
+/**
+ * Create a real user row (real argon2 hash, real Prisma insert) with the
+ * given role, then log in through the real /auth/login route and return a
+ * usable access token. No mocks — exercises the full auth path.
+ */
+export async function createUserAndLogin(
+  env: TestEnv,
+  opts: { email: string; password: string; name: string; role: TestRole },
+): Promise<string> {
+  const passwordHash = await hashPassword(opts.password);
+  await env.prisma.user.create({
+    data: {
+      email: opts.email.toLowerCase().trim(),
+      passwordHash,
+      name: opts.name,
+      role: opts.role,
+    },
+  });
+  const res = await env.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    headers: { 'content-type': 'application/json' },
+    payload: { email: opts.email, password: opts.password },
+  });
+  if (res.statusCode !== 200) {
+    throw new Error(`login failed for ${opts.email}: ${res.statusCode} ${res.body}`);
+  }
+  return res.json().data.accessToken as string;
 }
 
 function defaultFakeDocker(): Docker {
@@ -116,6 +175,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     hostInstallDir: '/opt/docker-gui',
   });
   const storage = new StorageService(prisma, cryptoBox, opts.storageOptions ?? {});
+  const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
       NODE_ENV: 'test',
@@ -139,6 +199,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     features,
     storage,
     configSnapshot,
+    audit,
     jwtConfig: TEST_JWT_CONFIG,
     setupSecret: TEST_SETUP_SECRET,
   });
@@ -146,6 +207,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   return {
     app,
     prisma,
+    audit,
     async cleanup() {
       await app.close();
       await prisma.$disconnect();

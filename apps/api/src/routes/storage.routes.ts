@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   createRequireAuth,
+  requireRole,
   type AuthMiddlewareDeps,
 } from '../middleware/auth.middleware.js';
 import type { StorageService } from '../services/storage.service.js';
@@ -39,6 +40,10 @@ function parseInput<S extends z.ZodTypeAny>(
 
 export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (app, opts) => {
   const requireAuth = createRequireAuth(opts.authMiddleware);
+  // Reads are open to any authenticated user; any write (mutating a
+  // connection, bucket, object, or policy, or minting an upload URL) needs
+  // operator+ — same split the docker/sites/dns routes use.
+  const requireOperator = requireRole('owner', 'admin', 'operator');
   app.addHook('preHandler', requireAuth);
 
   // -------------------- Connections --------------------
@@ -51,7 +56,7 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
     return opts.storage.getConnection(req.params.id);
   });
 
-  app.post('/storage/connections', async (req, reply) => {
+  app.post('/storage/connections', { preHandler: requireOperator }, async (req, reply) => {
     const input = parseInput('body', req, createConnectionSchema);
     const created = await opts.storage.createConnection({
       name: input.name,
@@ -65,27 +70,39 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
     return reply.status(201).send(created);
   });
 
-  app.patch<{ Params: { id: string } }>('/storage/connections/:id', async (req) => {
-    const input = parseInput('body', req, updateConnectionSchema);
-    return opts.storage.updateConnection(req.params.id, {
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.endpoint !== undefined ? { endpoint: input.endpoint } : {}),
-      ...(input.region !== undefined ? { region: input.region } : {}),
-      ...(input.flavor !== undefined ? { flavor: input.flavor } : {}),
-      ...(input.pathStyle !== undefined ? { pathStyle: input.pathStyle } : {}),
-      ...(input.accessKey !== undefined ? { accessKey: input.accessKey } : {}),
-      ...(input.secretKey !== undefined ? { secretKey: input.secretKey } : {}),
-    });
-  });
+  app.patch<{ Params: { id: string } }>(
+    '/storage/connections/:id',
+    { preHandler: requireOperator },
+    async (req) => {
+      const input = parseInput('body', req, updateConnectionSchema);
+      return opts.storage.updateConnection(req.params.id, {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.endpoint !== undefined ? { endpoint: input.endpoint } : {}),
+        ...(input.region !== undefined ? { region: input.region } : {}),
+        ...(input.flavor !== undefined ? { flavor: input.flavor } : {}),
+        ...(input.pathStyle !== undefined ? { pathStyle: input.pathStyle } : {}),
+        ...(input.accessKey !== undefined ? { accessKey: input.accessKey } : {}),
+        ...(input.secretKey !== undefined ? { secretKey: input.secretKey } : {}),
+      });
+    },
+  );
 
-  app.delete<{ Params: { id: string } }>('/storage/connections/:id', async (req, reply) => {
-    await opts.storage.deleteConnection(req.params.id);
-    return reply.status(204).send();
-  });
+  app.delete<{ Params: { id: string } }>(
+    '/storage/connections/:id',
+    { preHandler: requireOperator },
+    async (req, reply) => {
+      await opts.storage.deleteConnection(req.params.id);
+      return reply.status(204).send();
+    },
+  );
 
-  app.post<{ Params: { id: string } }>('/storage/connections/:id/verify', async (req) => {
-    return opts.storage.verifyConnection(req.params.id);
-  });
+  app.post<{ Params: { id: string } }>(
+    '/storage/connections/:id/verify',
+    { preHandler: requireOperator },
+    async (req) => {
+      return opts.storage.verifyConnection(req.params.id);
+    },
+  );
 
   // -------------------- Buckets --------------------
 
@@ -93,14 +110,19 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
     return opts.storage.listBuckets(req.params.cid);
   });
 
-  app.post<{ Params: { cid: string } }>('/storage/:cid/buckets', async (req, reply) => {
-    const input = parseInput('body', req, createBucketSchema);
-    const created = await opts.storage.createBucket(req.params.cid, input.name);
-    return reply.status(201).send(created);
-  });
+  app.post<{ Params: { cid: string } }>(
+    '/storage/:cid/buckets',
+    { preHandler: requireOperator },
+    async (req, reply) => {
+      const input = parseInput('body', req, createBucketSchema);
+      const created = await opts.storage.createBucket(req.params.cid, input.name);
+      return reply.status(201).send(created);
+    },
+  );
 
   app.delete<{ Params: { cid: string; bucket: string } }>(
     '/storage/:cid/buckets/:bucket',
+    { preHandler: requireOperator },
     async (req, reply) => {
       await opts.storage.deleteBucket(req.params.cid, req.params.bucket);
       return reply.status(204).send();
@@ -124,6 +146,7 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
 
   app.post<{ Params: { cid: string; bucket: string } }>(
     '/storage/:cid/buckets/:bucket/objects/upload-url',
+    { preHandler: requireOperator },
     async (req) => {
       const input = parseInput('body', req, uploadUrlSchema);
       return opts.storage.getUploadUrl(req.params.cid, req.params.bucket, input.key, {
@@ -143,11 +166,15 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
   app.delete<{
     Params: { cid: string; bucket: string };
     Querystring: { key?: string };
-  }>('/storage/:cid/buckets/:bucket/objects', async (req, reply) => {
-    const q = parseInput('query', req, downloadUrlQuerySchema);
-    await opts.storage.deleteObject(req.params.cid, req.params.bucket, q.key);
-    return reply.status(204).send();
-  });
+  }>(
+    '/storage/:cid/buckets/:bucket/objects',
+    { preHandler: requireOperator },
+    async (req, reply) => {
+      const q = parseInput('query', req, downloadUrlQuerySchema);
+      await opts.storage.deleteObject(req.params.cid, req.params.bucket, q.key);
+      return reply.status(204).send();
+    },
+  );
 
   // -------------------- Bucket policy --------------------
 
@@ -160,6 +187,7 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
 
   app.put<{ Params: { cid: string; bucket: string } }>(
     '/storage/:cid/buckets/:bucket/policy',
+    { preHandler: requireOperator },
     async (req, reply) => {
       const input = parseInput('body', req, putBucketPolicySchema);
       await opts.storage.putBucketPolicy(req.params.cid, req.params.bucket, input.policy);
@@ -169,6 +197,7 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
 
   app.delete<{ Params: { cid: string; bucket: string } }>(
     '/storage/:cid/buckets/:bucket/policy',
+    { preHandler: requireOperator },
     async (req, reply) => {
       await opts.storage.deleteBucketPolicy(req.params.cid, req.params.bucket);
       return reply.status(204).send();
