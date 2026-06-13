@@ -21,6 +21,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon?: ReactNode;
+  /** When true, only owners/admins see this nav item. */
+  adminOnly?: boolean;
 }
 
 export interface PageShellProps {
@@ -44,6 +46,7 @@ const DEFAULT_NAV: NavItem[] = [
   { label: "Health", href: "/health" },
   { label: "Storage", href: "/storage" },
   { label: "Features", href: "/features" },
+  { label: "Audit", href: "/audit", adminOnly: true },
   { label: "Settings", href: "/settings" }
 ];
 
@@ -73,6 +76,9 @@ export function PageShell({
   const router = useRouter();
   const pathname = usePathname();
 
+  const isAdmin = user?.role === "owner" || user?.role === "admin";
+  const visibleNav = navItems.filter((n) => !n.adminOnly || isAdmin);
+
   async function handleLogout() {
     await logout();
     router.replace("/login");
@@ -90,7 +96,7 @@ export function PageShell({
               </Typography>
             </Stack>
             <Stack direction="row" spacing={0.5} sx={{ ml: 3, flexGrow: 1 }}>
-              {navItems.map((n) => {
+              {visibleNav.map((n) => {
                 const active = pathname === n.href || pathname?.startsWith(`${n.href}/`);
                 return (
                   <Button

@@ -13,6 +13,7 @@ import { SitesService } from './services/sites.service.js';
 import { DnsService } from './services/dns.service.js';
 import { FeaturesService } from './services/features.service.js';
 import { StorageService } from './services/storage.service.js';
+import { AuditLogService } from './services/audit-log.service.js';
 import { CaddyClient } from './lib/caddy.js';
 import { CryptoBox } from './lib/crypto-box.js';
 
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
     hostInstallDir: config.DOCKER_GUI_INSTALL_DIR,
   });
   const storage = new StorageService(prisma, cryptoBox);
+  const audit = new AuditLogService(prisma);
 
   const app = await buildApp({
     logger: buildLoggerOptions(config),
@@ -79,6 +81,7 @@ async function main(): Promise<void> {
     features,
     storage,
     configSnapshot,
+    audit,
     jwtConfig,
     setupSecret: config.SETUP_SECRET,
   });
