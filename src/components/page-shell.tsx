@@ -46,6 +46,7 @@ const DEFAULT_NAV: NavItem[] = [
   { label: "Health", href: "/health" },
   { label: "Storage", href: "/storage" },
   { label: "Features", href: "/features" },
+  { label: "Users", href: "/users", adminOnly: true },
   { label: "Audit", href: "/audit", adminOnly: true },
   { label: "Settings", href: "/settings" }
 ];

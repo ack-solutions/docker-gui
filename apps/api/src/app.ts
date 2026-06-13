@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
 import { healthRoutes } from './routes/health.routes.js';
 import { authRoutes } from './routes/auth.routes.js';
+import { usersRoutes } from './routes/users.routes.js';
 import { dockerRoutes } from './routes/docker.routes.js';
 import { sitesRoutes } from './routes/sites.routes.js';
 import { dnsRoutes } from './routes/dns.routes.js';
@@ -147,13 +148,29 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     }
   });
 
+  // Shared auth middleware deps. `loadUser` makes the DB the source of truth
+  // for authorization on every request, so deactivation / deletion / role
+  // changes take effect immediately rather than at access-token expiry.
+  const authMiddleware = {
+    jwtConfig: opts.jwtConfig,
+    loadUser: async (id: string) => {
+      const u = await opts.users.findById(id);
+      return u ? { isActive: u.isActive, role: u.role } : null;
+    },
+  };
+
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { deps: opts.healthDeps });
+      await api.register(usersRoutes, {
+        users: opts.users,
+        auth: opts.auth,
+        authMiddleware,
+      });
       await api.register(authRoutes, {
         auth: opts.auth,
         users: opts.users,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
         setupSecret: opts.setupSecret,
       });
       await api.register(dockerRoutes, {
@@ -161,31 +178,31 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         images: opts.images,
         volumes: opts.volumes,
         networks: opts.networks,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(sitesRoutes, {
         sites: opts.sites,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(dnsRoutes, {
         dns: opts.dns,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(featuresRoutes, {
         features: opts.features,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(storageRoutes, {
         storage: opts.storage,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(configRoutes, {
         snapshot: opts.configSnapshot,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(auditRoutes, {
         audit: opts.audit,
-        authMiddleware: { jwtConfig: opts.jwtConfig },
+        authMiddleware,
       });
       await api.register(wsRoutes, {
         containers: opts.containers,
