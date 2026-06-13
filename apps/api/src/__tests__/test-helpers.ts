@@ -23,6 +23,10 @@ import {
   RegistryService,
   type RegistryServiceOptions,
 } from '../services/registry.service.js';
+import {
+  DatabaseService,
+  type DatabaseServiceOptions,
+} from '../services/database.service.js';
 import { AuditLogService } from '../services/audit-log.service.js';
 import { CaddyClient } from '../lib/caddy.js';
 import { CryptoBox } from '../lib/crypto-box.js';
@@ -53,6 +57,7 @@ export interface BuildTestEnvOptions {
   dnsOptions?: DnsServiceOptions;
   storageOptions?: StorageServiceOptions;
   registryOptions?: RegistryServiceOptions;
+  databaseOptions?: DatabaseServiceOptions;
 }
 
 export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
@@ -181,6 +186,14 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   });
   const storage = new StorageService(prisma, cryptoBox, opts.storageOptions ?? {});
   const registry = new RegistryService(prisma, cryptoBox, opts.registryOptions ?? {});
+  // Default to a probe that resolves instantly so tests never open real
+  // sockets; failure-path tests inject a rejecting probe.
+  const databases = new DatabaseService(
+    prisma,
+    cryptoBox,
+    docker,
+    opts.databaseOptions ?? { tcpProbe: async () => {} },
+  );
   const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
@@ -205,6 +218,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     features,
     storage,
     registry,
+    databases,
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,

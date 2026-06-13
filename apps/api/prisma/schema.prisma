@@ -142,6 +142,34 @@ model RegistryConnection {
   @@map("registry_connections")
 }
 
+model DatabaseConnection {
+  id             String    @id @default(uuid())
+  // Human label ("App Postgres", "Analytics MySQL")
+  name           String    @unique
+  // Engine: postgres | mysql | mariadb
+  engine         String
+  // Host the api reaches the DB on. For a discovered container this is the
+  // container name on the shared docker network; for external DBs a hostname.
+  host           String
+  port           Int
+  username       String
+  // Password encrypted with CryptoBox(JWT_SECRET). Never exposed by the API.
+  passwordCipher String?
+  // Default database / schema to connect to.
+  database       String?
+  ssl            Boolean   @default(false)
+  // Set when this profile was discovered from a managed container, so the UI
+  // can show the link and we can offer to keep them in sync.
+  containerId    String?
+  verified       Boolean   @default(false)
+  lastVerifiedAt DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("database_connections")
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?
