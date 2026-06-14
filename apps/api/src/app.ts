@@ -13,6 +13,7 @@ import { storageRoutes } from './routes/storage.routes.js';
 import { registryRoutes } from './routes/registry.routes.js';
 import { databaseRoutes } from './routes/database.routes.js';
 import { backupRoutes } from './routes/backup.routes.js';
+import { explorerRoutes } from './routes/explorer.routes.js';
 import { configRoutes } from './routes/config.routes.js';
 import { auditRoutes } from './routes/audit.routes.js';
 import type { ConfigSnapshot } from './config/index.js';
@@ -31,6 +32,7 @@ import type { RegistryService } from './services/registry.service.js';
 import type { DatabaseService } from './services/database.service.js';
 import type { BackupService } from './services/backup.service.js';
 import type { BackupSchedulerService } from './services/backup-scheduler.service.js';
+import type { DbExplorerService } from './services/db-explorer.service.js';
 import {
   type AuditLogService,
   buildRecord,
@@ -59,6 +61,7 @@ export interface BuildAppOptions {
   databases: DatabaseService;
   backups: BackupService;
   scheduler: BackupSchedulerService;
+  explorer: DbExplorerService;
   configSnapshot: ConfigSnapshot;
   audit: AuditLogService;
   jwtConfig: JwtConfig;
@@ -218,6 +221,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(backupRoutes, {
         backups: opts.backups,
+        authMiddleware,
+      });
+      await api.register(explorerRoutes, {
+        explorer: opts.explorer,
         authMiddleware,
       });
       await api.register(configRoutes, {

@@ -35,6 +35,10 @@ import {
   BackupSchedulerService,
   type CronScheduler,
 } from '../services/backup-scheduler.service.js';
+import {
+  DbExplorerService,
+  type DbExplorerServiceOptions,
+} from '../services/db-explorer.service.js';
 import { AuditLogService } from '../services/audit-log.service.js';
 
 /**
@@ -91,6 +95,7 @@ export interface BuildTestEnvOptions {
   registryOptions?: RegistryServiceOptions;
   databaseOptions?: DatabaseServiceOptions;
   backupOptions?: BackupServiceOptions;
+  explorerOptions?: Partial<DbExplorerServiceOptions>;
 }
 
 export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
@@ -230,6 +235,10 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   const backups = new BackupService(prisma, cryptoBox, storage, opts.backupOptions ?? {});
   const cron = new FakeCronScheduler();
   const scheduler = new BackupSchedulerService(prisma, backups, cron);
+  const explorer = new DbExplorerService(prisma, cryptoBox, docker, {
+    network: 'docker-gui_dgui',
+    ...(opts.explorerOptions ?? {}),
+  });
   const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
@@ -257,6 +266,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     databases,
     backups,
     scheduler,
+    explorer,
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,

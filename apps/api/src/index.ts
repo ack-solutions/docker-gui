@@ -17,6 +17,7 @@ import { RegistryService } from './services/registry.service.js';
 import { DatabaseService } from './services/database.service.js';
 import { BackupService } from './services/backup.service.js';
 import { BackupSchedulerService, NodeCronScheduler } from './services/backup-scheduler.service.js';
+import { DbExplorerService } from './services/db-explorer.service.js';
 import { DockerBackupEngine } from './lib/backup-engine.js';
 import { AuditLogService } from './services/audit-log.service.js';
 import { CaddyClient } from './lib/caddy.js';
@@ -70,6 +71,9 @@ async function main(): Promise<void> {
     engine: new DockerBackupEngine(docker, { network: config.DOCKER_GUI_NETWORK }),
   });
   const scheduler = new BackupSchedulerService(prisma, backups, new NodeCronScheduler());
+  const explorer = new DbExplorerService(prisma, cryptoBox, docker, {
+    network: config.DOCKER_GUI_NETWORK,
+  });
   const audit = new AuditLogService(prisma);
 
   const app = await buildApp({
@@ -95,6 +99,7 @@ async function main(): Promise<void> {
     databases,
     backups,
     scheduler,
+    explorer,
     configSnapshot,
     audit,
     jwtConfig,
@@ -110,6 +115,12 @@ async function main(): Promise<void> {
     // Route fired-task failures to the app logger, then register schedules.
     scheduler.setErrorLogger((ctx, msg) => app.log.error(ctx, msg));
     await scheduler.start().catch((err: unknown) => app.log.error({ err }, 'scheduler start failed'));
+
+    // Reap idle DB-explorer sidecars every 5 minutes.
+    const reaper = setInterval(() => {
+      void explorer.reapIdle().catch((err: unknown) => app.log.error({ err }, 'explorer reap failed'));
+    }, 5 * 60 * 1000);
+    reaper.unref();
   } catch (err) {
     app.log.error({ err }, 'Failed to start API');
     await disconnectPrisma();
