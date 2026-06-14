@@ -35,5 +35,16 @@ export const updateDatabaseConnectionSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 
+export const runQuerySchema = z.object({
+  sql: z.string().min(1).max(100_000),
+  readOnly: z.boolean().optional(),
+  // Upper bounds are enforced (clamped, not rejected) by clampOptions in
+  // lib/db-query.ts — the single source of truth for query limits. Keep the
+  // schema permissive on the ceiling so a too-large request is reduced, not 400'd.
+  maxRows: z.coerce.number().int().positive().optional(),
+  timeoutMs: z.coerce.number().int().positive().optional(),
+});
+
 export type CreateDatabaseConnectionBody = z.infer<typeof createDatabaseConnectionSchema>;
 export type UpdateDatabaseConnectionBody = z.infer<typeof updateDatabaseConnectionSchema>;
+export type RunQueryBody = z.infer<typeof runQuerySchema>;

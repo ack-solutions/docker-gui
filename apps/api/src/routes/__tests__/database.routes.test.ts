@@ -6,6 +6,38 @@ import {
   TEST_SETUP_SECRET,
   createUserAndLogin,
 } from '../../__tests__/test-helpers.js';
+import { AppError } from '../../lib/errors.js';
+import type { QueryConfig, QueryOptions, QueryResult } from '../../lib/db-query.js';
+
+/**
+ * Capturing fake SQL executor — records the config/sql/opts it was handed so
+ * we can assert the service decrypts the password, clamps options, and defaults
+ * read-only. Set `throwWith` to simulate a DB error. No real DB is touched.
+ */
+const queryCapture: {
+  config: QueryConfig | null;
+  sql: string | null;
+  opts: QueryOptions | null;
+  throwWith: AppError | null;
+} = { config: null, sql: null, opts: null, throwWith: null };
+
+const fakeExecutor = {
+  async run(config: QueryConfig, sql: string, opts: QueryOptions): Promise<QueryResult> {
+    queryCapture.config = config;
+    queryCapture.sql = sql;
+    queryCapture.opts = opts;
+    if (queryCapture.throwWith) throw queryCapture.throwWith;
+    return {
+      columns: ['id', 'name'],
+      rows: [{ id: 1, name: 'alice' }],
+      rowCount: 1,
+      truncated: false,
+      durationMs: 3,
+      command: 'SELECT',
+      affectedRows: null,
+    };
+  },
+};
 
 /**
  * Database GUI — discovery + connection profiles, end to end through the real
@@ -69,7 +101,7 @@ let viewerToken: string;
 beforeAll(async () => {
   env = await buildTestEnv({
     docker: dbDocker(),
-    databaseOptions: { tcpProbe: async () => {} }, // reachable by default
+    databaseOptions: { tcpProbe: async () => {}, queryExecutor: fakeExecutor }, // reachable by default
   });
   await env.app.inject({
     method: 'POST',
@@ -97,6 +129,10 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await env.prisma.databaseConnection.deleteMany();
+  queryCapture.config = null;
+  queryCapture.sql = null;
+  queryCapture.opts = null;
+  queryCapture.throwWith = null;
 });
 
 function auth(token: string) {
@@ -220,6 +256,120 @@ describe('connections', () => {
       method: 'POST', url: `/api/v1/databases/connections/${id}/verify`, headers: bearer(operatorToken),
     });
     expect(v.json().verified).toBe(true);
+  });
+});
+
+describe('query console', () => {
+  async function makeConn(extra: Record<string, unknown> = {}): Promise<string> {
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/databases/connections',
+      headers: auth(operatorToken),
+      payload: {
+        name: 'qpg', engine: 'postgres', host: 'app-postgres', username: 'postgres',
+        password: 'pw-secret', database: 'appdb', ...extra,
+      },
+    });
+    return res.json().id as string;
+  }
+
+  it('runs a query and returns columns + rows', async () => {
+    const id = await makeConn();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(operatorToken),
+      payload: { sql: 'SELECT id, name FROM users' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.columns).toEqual(['id', 'name']);
+    expect(body.rows[0].name).toBe('alice');
+    expect(queryCapture.sql).toBe('SELECT id, name FROM users');
+  });
+
+  it('decrypts the password + passes the right config to the executor', async () => {
+    const id = await makeConn();
+    await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(operatorToken),
+      payload: { sql: 'SELECT 1' },
+    });
+    expect(queryCapture.config?.engine).toBe('postgres');
+    expect(queryCapture.config?.host).toBe('app-postgres');
+    expect(queryCapture.config?.port).toBe(5432);
+    expect(queryCapture.config?.database).toBe('appdb');
+    // The plaintext password is decrypted for the driver (never sent to client).
+    expect(queryCapture.config?.password).toBe('pw-secret');
+  });
+
+  it('defaults to read-only and clamps maxRows server-side', async () => {
+    const id = await makeConn();
+    await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(operatorToken),
+      payload: { sql: 'SELECT 1', maxRows: 999999 },
+    });
+    expect(queryCapture.opts?.readOnly).toBe(true);
+    expect(queryCapture.opts?.maxRows).toBe(10000); // hard cap
+  });
+
+  it('passes readOnly:false through for write mode', async () => {
+    const id = await makeConn();
+    await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(operatorToken),
+      payload: { sql: 'UPDATE users SET name=1', readOnly: false },
+    });
+    expect(queryCapture.opts?.readOnly).toBe(false);
+  });
+
+  it('surfaces a DB error as 400 with the message', async () => {
+    const id = await makeConn();
+    queryCapture.throwWith = new AppError('database.query_failed', 'syntax error at or near "SELCT"', 400);
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(operatorToken),
+      payload: { sql: 'SELCT 1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('syntax error');
+  });
+
+  it('rejects empty SQL (400)', async () => {
+    const id = await makeConn();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(operatorToken),
+      payload: { sql: '   ' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 for an unknown connection', async () => {
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/does-not-exist/query`,
+      headers: auth(operatorToken),
+      payload: { sql: 'SELECT 1' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('viewer CANNOT run a query (403)', async () => {
+    const id = await makeConn();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${id}/query`,
+      headers: auth(viewerToken),
+      payload: { sql: 'SELECT 1' },
+    });
+    expect(res.statusCode).toBe(403);
   });
 });
 

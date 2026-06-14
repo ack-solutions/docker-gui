@@ -3,6 +3,13 @@ import type { PrismaClient } from '@prisma/client';
 import type Docker from 'dockerode';
 import { CryptoBox } from '../lib/crypto-box.js';
 import { DockerContainersService } from './docker-containers.service.js';
+import {
+  DriverQueryExecutor,
+  clampOptions,
+  type QueryExecutor,
+  type QueryOptions,
+  type QueryResult,
+} from '../lib/db-query.js';
 import { AppError, NotFoundError } from '../lib/errors.js';
 
 /** Format verify-step errors so lastError carries the AppError code. */
@@ -103,6 +110,8 @@ export interface DatabaseServiceOptions {
   tcpProbe?: TcpProbe;
   /** Probe timeout (ms). */
   probeTimeoutMs?: number;
+  /** Override the SQL executor (tests inject a fake — no real DB). */
+  queryExecutor?: QueryExecutor;
 }
 
 // Image-name heuristics for discovery. Matches the leading repo component so
@@ -129,6 +138,7 @@ export class DatabaseService {
   private readonly containers: DockerContainersService;
   private readonly probe: TcpProbe;
   private readonly probeTimeout: number;
+  private readonly executor: QueryExecutor;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -139,6 +149,7 @@ export class DatabaseService {
     this.containers = new DockerContainersService(docker);
     this.probe = options.tcpProbe ?? defaultTcpProbe;
     this.probeTimeout = options.probeTimeoutMs ?? 5000;
+    this.executor = options.queryExecutor ?? new DriverQueryExecutor();
   }
 
   // -------------------- Discovery --------------------
@@ -280,6 +291,35 @@ export class DatabaseService {
       data: { verified, lastVerifiedAt: verified ? new Date() : row.lastVerifiedAt, lastError },
     });
     return this.toSummary(updated);
+  }
+
+  // -------------------- Query console --------------------
+
+  /**
+   * Run a single SQL request against a saved connection. Gated to operator+ at
+   * the route. `readOnly` is a guardrail (best-effort, DB-enforced via a
+   * read-only transaction), not a hard boundary — see lib/db-query.ts.
+   */
+  async runQuery(
+    connectionId: string,
+    sql: string,
+    opts: Partial<QueryOptions>,
+  ): Promise<QueryResult> {
+    const row = await this.prisma.databaseConnection.findUnique({ where: { id: connectionId } });
+    if (!row) throw new NotFoundError('Database connection not found');
+    if (typeof sql !== 'string' || sql.trim().length === 0) {
+      throw new AppError('database.empty_sql', 'SQL statement is required', 400);
+    }
+    const config = {
+      engine: row.engine as DbEngine,
+      host: row.host,
+      port: row.port,
+      username: row.username,
+      ...(row.passwordCipher ? { password: this.cryptoBox.open(row.passwordCipher) } : {}),
+      ...(row.database ? { database: row.database } : {}),
+      ssl: row.ssl,
+    };
+    return this.executor.run(config, sql, clampOptions(opts));
   }
 
   // -------------------- internals --------------------

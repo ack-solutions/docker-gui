@@ -9,6 +9,7 @@ import type { DatabaseService } from '../services/database.service.js';
 import {
   createDatabaseConnectionSchema,
   updateDatabaseConnectionSchema,
+  runQuerySchema,
 } from '../schemas/database.schema.js';
 
 export interface DatabaseRoutesOptions {
@@ -95,6 +96,22 @@ export const databaseRoutes: FastifyPluginAsync<DatabaseRoutesOptions> = async (
     { preHandler: requireOperator },
     async (req) => {
       return opts.databases.verifyConnection(req.params.id);
+    },
+  );
+
+  // -------------------- Query console --------------------
+  // Running SQL — even read-only — can read any data the DB user can see, so
+  // it's operator+ only (never viewers).
+  app.post<{ Params: { id: string } }>(
+    '/databases/connections/:id/query',
+    { preHandler: requireOperator },
+    async (req) => {
+      const input = parseBody(req, runQuerySchema);
+      return opts.databases.runQuery(req.params.id, input.sql, {
+        ...(input.readOnly !== undefined ? { readOnly: input.readOnly } : {}),
+        ...(input.maxRows !== undefined ? { maxRows: input.maxRows } : {}),
+        ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+      });
     },
   );
 };
