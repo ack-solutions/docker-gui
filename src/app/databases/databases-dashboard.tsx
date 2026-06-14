@@ -34,7 +34,8 @@ import LinkIcon from "@mui/icons-material/AddLink";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import BackupIcon from "@mui/icons-material/Backup";
-import { FormControlLabel, Switch } from "@mui/material";
+import StorageIcon from "@mui/icons-material/Dns";
+import { CircularProgress, FormControlLabel, Switch } from "@mui/material";
 import { toast } from "sonner";
 import { AuthGuard, ErrorState, LoadingState, PageShell } from "@/components";
 import { ApiError, apiFetch, type PublicUser } from "@/lib/v2/auth-client";
@@ -227,6 +228,109 @@ interface Schedule {
   cron: string | null;
   s3ConnectionId: string | null;
   bucket: string | null;
+}
+
+interface ExplorerInfo {
+  connectionId: string;
+  kind: "pgweb" | "phpmyadmin";
+  status: "running" | "starting" | "stopped";
+  containerId?: string;
+  upstream?: string;
+}
+
+function ExplorerDialog({ conn, onClose }: { conn: DbConnection; onClose: () => void }) {
+  const [info, setInfo] = useState<ExplorerInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setInfo(await apiFetch<ExplorerInfo>(`/api/v1/databases/connections/${conn.id}/explorer`));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    }
+  }, [conn.id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const launch = useCallback(async () => {
+    setBusy(true);
+    try {
+      const i = await apiFetch<ExplorerInfo>(`/api/v1/databases/connections/${conn.id}/explorer`, { method: "POST" });
+      setInfo(i);
+      toast.success("Explorer launched");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [conn.id]);
+
+  const stop = useCallback(async () => {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/v1/databases/connections/${conn.id}/explorer`, { method: "DELETE" });
+      await load();
+      toast.success("Explorer stopped");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [conn.id, load]);
+
+  const running = info?.status === "running";
+  const tool = conn.engine === "postgres" ? "pgweb" : "phpMyAdmin";
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <StorageIcon fontSize="small" />
+          <span>DB explorer · {conn.name}</span>
+        </Stack>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Runs a <strong>{tool}</strong> browser explorer container bound to this database. It is
+          auto-stopped after 30 minutes idle.
+        </Typography>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Chip
+            size="small"
+            label={running ? "running" : "stopped"}
+            color={running ? "success" : "default"}
+            variant="outlined"
+          />
+          {running ? (
+            <Button color="warning" onClick={stop} disabled={busy}>
+              Stop
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              startIcon={busy ? <CircularProgress size={14} color="inherit" /> : <StorageIcon />}
+              onClick={launch}
+              disabled={busy}
+            >
+              Launch explorer
+            </Button>
+          )}
+        </Stack>
+        {running && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            The explorer is running at <code>{info?.upstream}</code> on the internal network.
+            In-browser access through the panel (authenticated reverse proxy) is the next update;
+            for now it is reachable to tools on the Docker network.
+          </Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
 function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => void }) {
@@ -534,6 +638,7 @@ function DatabasesInner({ user }: { user: PublicUser }) {
   const [busy, setBusy] = useState(false);
   const [queryConn, setQueryConn] = useState<DbConnection | null>(null);
   const [backupConn, setBackupConn] = useState<DbConnection | null>(null);
+  const [explorerConn, setExplorerConn] = useState<DbConnection | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -758,6 +863,11 @@ function DatabasesInner({ user }: { user: PublicUser }) {
                       Backups
                     </Button>
                   )}
+                  {canWrite && (
+                    <Button size="small" startIcon={<StorageIcon />} onClick={() => setExplorerConn(c)}>
+                      Explore
+                    </Button>
+                  )}
                   <Button size="small" onClick={() => verify(c)}>
                     Verify
                   </Button>
@@ -784,6 +894,7 @@ function DatabasesInner({ user }: { user: PublicUser }) {
 
       {queryConn && <QueryConsole conn={queryConn} onClose={() => setQueryConn(null)} />}
       {backupConn && <BackupsDialog conn={backupConn} onClose={() => setBackupConn(null)} />}
+      {explorerConn && <ExplorerDialog conn={explorerConn} onClose={() => setExplorerConn(null)} />}
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add database connection</DialogTitle>
