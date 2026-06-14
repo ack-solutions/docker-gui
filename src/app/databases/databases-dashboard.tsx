@@ -31,9 +31,161 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import LinkIcon from "@mui/icons-material/AddLink";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import TerminalIcon from "@mui/icons-material/Terminal";
+import {
+  FormControlLabel,
+  Switch
+} from "@mui/material";
 import { toast } from "sonner";
 import { AuthGuard, ErrorState, LoadingState, PageShell } from "@/components";
 import { ApiError, apiFetch, type PublicUser } from "@/lib/v2/auth-client";
+
+interface QueryResult {
+  columns: string[];
+  rows: Array<Record<string, unknown>>;
+  rowCount: number;
+  truncated: boolean;
+  durationMs: number;
+  command: string | null;
+  affectedRows: number | null;
+}
+
+function QueryConsole({ conn, onClose }: { conn: DbConnection; onClose: () => void }) {
+  const [sql, setSql] = useState("");
+  const [readOnly, setReadOnly] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<QueryResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = useCallback(async () => {
+    if (!sql.trim()) return;
+    setRunning(true);
+    setError(null);
+    try {
+      const res = await apiFetch<QueryResult>(`/api/v1/databases/connections/${conn.id}/query`, {
+        method: "POST",
+        body: JSON.stringify({ sql, readOnly })
+      });
+      setResult(res);
+    } catch (err) {
+      setResult(null);
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setRunning(false);
+    }
+  }, [sql, readOnly, conn.id]);
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="lg">
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <TerminalIcon fontSize="small" />
+          <span>
+            Query · {conn.name}{" "}
+            <Typography component="span" variant="caption" color="text.secondary">
+              ({conn.engine} · {conn.host}:{conn.port}
+              {conn.database ? ` · ${conn.database}` : ""})
+            </Typography>
+          </span>
+        </Stack>
+      </DialogTitle>
+      <DialogContent>
+        <TextField
+          value={sql}
+          onChange={(e) => setSql(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              run();
+            }
+          }}
+          placeholder="SELECT * FROM ... ;   (⌘/Ctrl+Enter to run)"
+          multiline
+          minRows={5}
+          maxRows={14}
+          fullWidth
+          slotProps={{ input: { sx: { fontFamily: "monospace", fontSize: 13 } } }}
+        />
+        <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 1.5 }}>
+          <Button
+            variant="contained"
+            startIcon={<PlayArrowIcon />}
+            onClick={run}
+            disabled={running || !sql.trim()}
+          >
+            {running ? "Running…" : "Run"}
+          </Button>
+          <FormControlLabel
+            control={<Switch checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} size="small" />}
+            label="Read-only"
+          />
+          {!readOnly && (
+            <Typography variant="caption" color="warning.main">
+              Write mode — statements can modify data.
+            </Typography>
+          )}
+        </Stack>
+
+        {error && (
+          <Alert severity="error" sx={{ mt: 2, fontFamily: "monospace", fontSize: 12 }}>
+            {error}
+          </Alert>
+        )}
+
+        {result && !error && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              {result.command ?? "OK"} ·{" "}
+              {result.columns.length > 0
+                ? `${result.rowCount} row${result.rowCount === 1 ? "" : "s"}`
+                : result.affectedRows !== null
+                  ? `${result.affectedRows} affected`
+                  : "no rows"}{" "}
+              · {result.durationMs} ms
+              {result.truncated ? " · truncated" : ""}
+            </Typography>
+            {result.columns.length > 0 && (
+              <Box sx={{ mt: 1, maxHeight: 360, overflow: "auto", border: 1, borderColor: "divider", borderRadius: 1 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      {result.columns.map((c) => (
+                        <TableCell key={c} sx={{ fontWeight: 700 }}>
+                          {c}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {result.rows.map((row, i) => (
+                      <TableRow key={i} hover>
+                        {result.columns.map((c) => (
+                          <TableCell key={c} sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {formatCell(row[c])}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function formatCell(v: unknown): string {
+  if (v === null || v === undefined) return "∅";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
 
 type Engine = "postgres" | "mysql" | "mariadb";
 
@@ -92,6 +244,7 @@ function DatabasesInner({ user }: { user: PublicUser }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
+  const [queryConn, setQueryConn] = useState<DbConnection | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -306,6 +459,11 @@ function DatabasesInner({ user }: { user: PublicUser }) {
                   )}
                 </TableCell>
                 <TableCell align="right">
+                  {canWrite && (
+                    <Button size="small" startIcon={<TerminalIcon />} onClick={() => setQueryConn(c)}>
+                      Query
+                    </Button>
+                  )}
                   <Button size="small" onClick={() => verify(c)}>
                     Verify
                   </Button>
@@ -324,9 +482,12 @@ function DatabasesInner({ user }: { user: PublicUser }) {
       )}
 
       <Alert severity="info" sx={{ mt: 3 }}>
-        Verification currently checks network reachability (host:port). Credential validation, a
-        SQL query console, and one-click backups to S3 are coming in the next update.
+        Verification checks network reachability (host:port). Use <strong>Query</strong> to run SQL
+        (read-only by default — create a read-only DB user for safe browsing). One-click backups to
+        S3 are coming next.
       </Alert>
+
+      {queryConn && <QueryConsole conn={queryConn} onClose={() => setQueryConn(null)} />}
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add database connection</DialogTitle>
