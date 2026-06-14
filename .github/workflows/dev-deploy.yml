@@ -3,7 +3,7 @@ name: 'Deploy to Development'
 on:
   push:
     branches:
-      - develop
+      - main
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
@@ -20,7 +20,7 @@ jobs:
       - name: Build and Deploy.
         run: |
           cd /var/www/html/docker-gui
-          git stash && git checkout develop && git pull
+          git stash && git fetch origin && git checkout main && git pull
           export NVM_DIR=~/.nvm
           source ~/.nvm/nvm.sh
           PATH="/usr/local/go/bin/:$PATH"
