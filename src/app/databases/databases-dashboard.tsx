@@ -33,10 +33,8 @@ import ErrorIcon from "@mui/icons-material/Error";
 import LinkIcon from "@mui/icons-material/AddLink";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import TerminalIcon from "@mui/icons-material/Terminal";
-import {
-  FormControlLabel,
-  Switch
-} from "@mui/material";
+import BackupIcon from "@mui/icons-material/Backup";
+import { FormControlLabel, Switch } from "@mui/material";
 import { toast } from "sonner";
 import { AuthGuard, ErrorState, LoadingState, PageShell } from "@/components";
 import { ApiError, apiFetch, type PublicUser } from "@/lib/v2/auth-client";
@@ -187,6 +185,188 @@ function formatCell(v: unknown): string {
   return String(v);
 }
 
+interface BackupJob {
+  id: string;
+  status: "pending" | "running" | "success" | "failed";
+  trigger: string;
+  bucket: string;
+  objectKey: string;
+  sizeBytes: number | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+interface S3Conn {
+  id: string;
+  name: string;
+}
+
+function fmtSize(n: number | null): string {
+  if (n === null) return "—";
+  if (n < 1024) return `${n} B`;
+  const u = ["KB", "MB", "GB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(1)} ${u[i]}`;
+}
+
+const STATUS_COLOR: Record<BackupJob["status"], "default" | "info" | "success" | "error"> = {
+  pending: "default",
+  running: "info",
+  success: "success",
+  failed: "error"
+};
+
+function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => void }) {
+  const [s3conns, setS3conns] = useState<S3Conn[]>([]);
+  const [jobs, setJobs] = useState<BackupJob[] | null>(null);
+  const [s3Id, setS3Id] = useState("");
+  const [bucket, setBucket] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadJobs = useCallback(async () => {
+    try {
+      const list = await apiFetch<BackupJob[]>(`/api/v1/databases/connections/${conn.id}/backups`);
+      setJobs(list);
+    } catch {
+      setJobs([]);
+    }
+  }, [conn.id]);
+
+  useEffect(() => {
+    apiFetch<S3Conn[]>("/api/v1/storage/connections")
+      .then((list) => {
+        setS3conns(list);
+        if (list[0]) setS3Id(list[0].id);
+      })
+      .catch(() => setS3conns([]));
+    loadJobs();
+  }, [loadJobs]);
+
+  // Poll while any job is running.
+  useEffect(() => {
+    if (!jobs?.some((j) => j.status === "running" || j.status === "pending")) return;
+    const t = setInterval(loadJobs, 1500);
+    return () => clearInterval(t);
+  }, [jobs, loadJobs]);
+
+  const run = useCallback(async () => {
+    if (!s3Id || !bucket.trim()) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/api/v1/databases/connections/${conn.id}/backups`, {
+        method: "POST",
+        body: JSON.stringify({ s3ConnectionId: s3Id, bucket: bucket.trim() })
+      });
+      toast.success("Backup started");
+      await loadJobs();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [s3Id, bucket, conn.id, loadJobs]);
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <BackupIcon fontSize="small" />
+          <span>Backups · {conn.name}</span>
+        </Stack>
+      </DialogTitle>
+      <DialogContent>
+        {s3conns.length === 0 ? (
+          <Alert severity="warning">
+            No storage connections. Add one under <a href="/storage">Storage</a> to back up to S3/MinIO.
+          </Alert>
+        ) : (
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-start">
+            <TextField
+              select
+              label="Destination (S3)"
+              value={s3Id}
+              onChange={(e) => setS3Id(e.target.value)}
+              size="small"
+              sx={{ minWidth: 200 }}
+            >
+              {s3conns.map((c) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Bucket"
+              value={bucket}
+              onChange={(e) => setBucket(e.target.value)}
+              size="small"
+              placeholder="db-backups"
+            />
+            <Button
+              variant="contained"
+              startIcon={<BackupIcon />}
+              onClick={run}
+              disabled={busy || !s3Id || !bucket.trim()}
+              sx={{ mt: 0.5 }}
+            >
+              Back up now
+            </Button>
+          </Stack>
+        )}
+
+        <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+          History
+        </Typography>
+        {jobs === null ? (
+          <Typography variant="caption">Loading…</Typography>
+        ) : jobs.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No backups yet.
+          </Typography>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>When</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Size</TableCell>
+                <TableCell>Object key</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {jobs.map((j) => (
+                <TableRow key={j.id} hover>
+                  <TableCell>{new Date(j.createdAt).toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Tooltip title={j.error ?? ""}>
+                      <Chip size="small" label={j.status} color={STATUS_COLOR[j.status]} variant="outlined" />
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>{fmtSize(j.sizeBytes)}</TableCell>
+                  <TableCell>
+                    <code style={{ fontSize: 11 }}>
+                      {j.bucket}/{j.objectKey}
+                    </code>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 type Engine = "postgres" | "mysql" | "mariadb";
 
 interface Discovered {
@@ -245,6 +425,7 @@ function DatabasesInner({ user }: { user: PublicUser }) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [queryConn, setQueryConn] = useState<DbConnection | null>(null);
+  const [backupConn, setBackupConn] = useState<DbConnection | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -464,6 +645,11 @@ function DatabasesInner({ user }: { user: PublicUser }) {
                       Query
                     </Button>
                   )}
+                  {canWrite && (
+                    <Button size="small" startIcon={<BackupIcon />} onClick={() => setBackupConn(c)}>
+                      Backups
+                    </Button>
+                  )}
                   <Button size="small" onClick={() => verify(c)}>
                     Verify
                   </Button>
@@ -483,11 +669,13 @@ function DatabasesInner({ user }: { user: PublicUser }) {
 
       <Alert severity="info" sx={{ mt: 3 }}>
         Verification checks network reachability (host:port). Use <strong>Query</strong> to run SQL
-        (read-only by default — create a read-only DB user for safe browsing). One-click backups to
-        S3 are coming next.
+        (read-only by default — create a read-only DB user for safe browsing) and{" "}
+        <strong>Backups</strong> to dump a database to S3/MinIO. Restore and scheduled backups are
+        coming next.
       </Alert>
 
       {queryConn && <QueryConsole conn={queryConn} onClose={() => setQueryConn(null)} />}
+      {backupConn && <BackupsDialog conn={backupConn} onClose={() => setBackupConn(null)} />}
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add database connection</DialogTitle>

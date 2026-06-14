@@ -27,6 +27,10 @@ import {
   DatabaseService,
   type DatabaseServiceOptions,
 } from '../services/database.service.js';
+import {
+  BackupService,
+  type BackupServiceOptions,
+} from '../services/backup.service.js';
 import { AuditLogService } from '../services/audit-log.service.js';
 import { CaddyClient } from '../lib/caddy.js';
 import { CryptoBox } from '../lib/crypto-box.js';
@@ -58,6 +62,7 @@ export interface BuildTestEnvOptions {
   storageOptions?: StorageServiceOptions;
   registryOptions?: RegistryServiceOptions;
   databaseOptions?: DatabaseServiceOptions;
+  backupOptions?: BackupServiceOptions;
 }
 
 export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
@@ -194,6 +199,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     docker,
     opts.databaseOptions ?? { tcpProbe: async () => {} },
   );
+  const backups = new BackupService(prisma, cryptoBox, storage, opts.backupOptions ?? {});
   const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
@@ -219,6 +225,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     storage,
     registry,
     databases,
+    backups,
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,

@@ -392,6 +392,48 @@ export class StorageService {
     }
   }
 
+  /**
+   * Server-side object upload (used by backups). The body is sent in one
+   * request, so this is suited to objects up to a few GB; very large dumps
+   * would want multipart streaming (a future enhancement).
+   */
+  async putObject(
+    connectionId: string,
+    bucket: string,
+    key: string,
+    body: Buffer | Uint8Array,
+    opts: { contentType?: string } = {},
+  ): Promise<void> {
+    const client = await this.clientFor(connectionId);
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ...(opts.contentType ? { ContentType: opts.contentType } : {}),
+        }),
+      );
+    } catch (err) {
+      throw mapS3Error(err);
+    }
+  }
+
+  /** Server-side object fetch into memory (used by restore). */
+  async getObjectBytes(connectionId: string, bucket: string, key: string): Promise<Buffer> {
+    const client = await this.clientFor(connectionId);
+    try {
+      const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const body = out.Body as { transformToByteArray?: () => Promise<Uint8Array> } | undefined;
+      if (!body?.transformToByteArray) {
+        throw new AppError('storage.read_failed', 'Object body could not be read', 502);
+      }
+      return Buffer.from(await body.transformToByteArray());
+    } catch (err) {
+      throw mapS3Error(err);
+    }
+  }
+
   // -------------------- Bucket policy --------------------
 
   /** Returns null if no policy is set (rather than throwing 404). */

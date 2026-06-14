@@ -35,6 +35,11 @@ export const updateDatabaseConnectionSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 
+export const startBackupSchema = z.object({
+  s3ConnectionId: z.string().min(1).max(64),
+  bucket: z.string().min(1).max(63),
+});
+
 export const runQuerySchema = z.object({
   sql: z.string().min(1).max(100_000),
   readOnly: z.boolean().optional(),
