@@ -1,0 +1,41 @@
+name: Release
+
+# Cut a release by pushing a tag:
+#   git tag v0.2.0 && git push origin v0.2.0
+# This publishes a GitHub Release for that tag. install.sh / `docker-gui update`
+# resolve the newest release tag, so a fresh tag is immediately picked up as
+# the latest version to install/update to.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*' # pre-releases, e.g. v0.2.0-rc.1
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for auto-generated notes
+
+      - name: Create / update the release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          # Mark -rc / -beta / -alpha tags as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            Install or update to this version:
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sudo bash
+            # already installed:
+            sudo docker-gui update          # → latest released tag
+            sudo docker-gui update --version ${{ github.ref_name }}
+            ```

@@ -41,9 +41,11 @@ Backup:
   restore <path>            Restore a backup tarball into the data volume
 
 Maintenance:
-  update [--version v]      Pull/rebuild latest version. --version optional (default: main)
+  update [--version v]      Update to the latest released tag (default), a specific
+                            --version <tag>, or --channel main for bleeding edge.
+                            Snapshots data first so 'rollback' can undo it.
+  rollback                  Restore the most recent pre-update snapshot (data + version)
   doctor [--feature x]      Run health diagnostics
-  rollback                  Restore the previous version (if update kept a snapshot)
 
 Removal:
   uninstall [--keep-data]   Stop and remove (use --purge to wipe data too)
@@ -169,29 +171,104 @@ cmd_restore() {
   echo "==> Restore complete."
 }
 
+REPO="${DOCKER_GUI_REPO:-ack-solutions/docker-gui}"
+SNAPSHOT_DIR="$INSTALL_DIR/snapshots"
+
+# Resolve the newest published release tag, or empty if none.
+resolve_latest_tag() {
+  curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+    | grep -E '"tag_name":' | head -1 \
+    | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true
+}
+
+# Snapshot the data volume + record the installed version, before an update.
+snapshot_before_update() {
+  local ts; ts="$(date +%Y%m%d-%H%M%S)"
+  local dir="$SNAPSHOT_DIR/$ts"
+  mkdir -p "$dir"
+  echo "==> Snapshotting data volume → $dir/data.tar.gz"
+  docker run --rm \
+    -v docker-gui_app-data:/data:ro \
+    -v "$dir:/backup" \
+    alpine tar czf /backup/data.tar.gz -C /data . || { echo "Snapshot failed" >&2; return 1; }
+  # Record the currently-installed source version for rollback.
+  if [[ -f "$INSTALL_DIR/source/package.json" ]]; then
+    grep -m1 '"version"' "$INSTALL_DIR/source/package.json" | cut -d'"' -f4 > "$dir/VERSION" || true
+  fi
+  # Keep only the last 3 snapshots.
+  ls -1dt "$SNAPSHOT_DIR"/*/ 2>/dev/null | tail -n +4 | xargs -r rm -rf
+  echo "$dir"
+}
+
 cmd_update() {
   require_install
   require_root "$@"
-  local version="${DOCKER_GUI_VERSION:-main}"
+  local version="" channel="tag"
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --version) version="$2"; shift 2;;
+      --version) version="$2"; channel="pinned"; shift 2;;
+      --channel) channel="$2"; shift 2;;
       *) echo "Unknown option: $1" >&2; exit 1;;
     esac
   done
-  echo "==> Updating to: $version"
-  DOCKER_GUI_VERSION="$version" \
-  DOCKER_GUI_DIR="$INSTALL_DIR" \
-    bash -c '
-      set -e
-      installer="$DOCKER_GUI_DIR/source/scripts/install.sh"
-      if [[ -x "$installer" ]]; then
-        bash "$installer"
-      else
-        # Fallback to fetching the installer fresh
-        curl -fsSL "${DOCKER_GUI_INSTALLER_URL:-https://get.docker-gui.io/install.sh}" | bash
+
+  # Resolve target version: explicit --version wins; --channel main = bleeding
+  # edge; otherwise the latest published release tag (falling back to main).
+  if [[ -z "$version" ]]; then
+    if [[ "$channel" == "main" ]]; then
+      version="main"
+    else
+      version="$(resolve_latest_tag)"
+      if [[ -z "$version" ]]; then
+        echo "No published release found — using 'main'. Pin with --version <tag>." >&2
+        version="main"
       fi
-    '
+    fi
+  fi
+  echo "==> Updating to: $version"
+
+  # Safety net: snapshot before we touch anything.
+  snapshot_before_update >/dev/null || { echo "Aborting update (snapshot failed)." >&2; exit 1; }
+
+  if DOCKER_GUI_VERSION="$version" DOCKER_GUI_DIR="$INSTALL_DIR" \
+      bash -c '
+        set -e
+        installer="$DOCKER_GUI_DIR/source/scripts/install.sh"
+        if [[ -x "$installer" ]]; then bash "$installer"; else
+          curl -fsSL "${DOCKER_GUI_INSTALLER_URL:-https://raw.githubusercontent.com/'"$REPO"'/main/scripts/install.sh}" | bash
+        fi
+      '; then
+    echo "==> Update to $version complete. Roll back with: docker-gui rollback"
+  else
+    echo "✗ Update failed. Your data snapshot is safe in $SNAPSHOT_DIR." >&2
+    echo "  Restore it with: docker-gui rollback" >&2
+    exit 1
+  fi
+}
+
+cmd_rollback() {
+  require_install
+  require_root "$@"
+  local latest
+  latest="$(ls -1dt "$SNAPSHOT_DIR"/*/ 2>/dev/null | head -1 || true)"
+  [[ -n "$latest" && -f "$latest/data.tar.gz" ]] || {
+    echo "No snapshot found in $SNAPSHOT_DIR — nothing to roll back to." >&2; exit 1; }
+  local ver=""; [[ -f "$latest/VERSION" ]] && ver="$(cat "$latest/VERSION")"
+  echo "==> Rolling back data from $latest${ver:+ (version $ver)}"
+  echo "    This REPLACES the current database with the snapshot."
+  read -r -p "Continue? [y/N] " ans
+  [[ "$ans" =~ ^[yY] ]] || { echo "Aborted."; exit 1; }
+  cd "$INSTALL_DIR" && $COMPOSE down
+  docker run --rm \
+    -v docker-gui_app-data:/data \
+    -v "$latest:/backup:ro" \
+    alpine sh -c 'rm -rf /data/* /data/.* 2>/dev/null; tar xzf /backup/data.tar.gz -C /data'
+  # Re-fetch the recorded source version so code matches the restored data.
+  if [[ -n "$ver" ]]; then
+    DOCKER_GUI_VERSION="$ver" DOCKER_GUI_DIR="$INSTALL_DIR" bash "$INSTALL_DIR/source/scripts/install.sh" || true
+  fi
+  cd "$INSTALL_DIR" && $COMPOSE up -d
+  echo "==> Rollback complete."
 }
 
 cmd_doctor() {
@@ -233,6 +310,7 @@ case "${1:-}" in
   backup)            shift; cmd_backup "$@" ;;
   restore)           shift; cmd_restore "$@" ;;
   update|upgrade)    shift; cmd_update "$@" ;;
+  rollback)          shift; cmd_rollback "$@" ;;
   doctor)            shift; cmd_doctor "$@" ;;
   uninstall)         shift; cmd_uninstall "$@" ;;
   version|--version) shift; cmd_version "$@" ;;
