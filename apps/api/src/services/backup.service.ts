@@ -64,6 +64,16 @@ export class BackupService {
     }
     const conn = await this.prisma.databaseConnection.findUnique({ where: { id: input.connectionId } });
     if (!conn) throw new NotFoundError('Database connection not found');
+    // Don't pile up concurrent backups of the same connection. A scheduled
+    // fire that overlaps an in-flight run is skipped (returns the running job);
+    // a manual trigger is rejected so the operator knows.
+    const running = await this.prisma.backupJob.findFirst({
+      where: { connectionId: conn.id, status: 'running' },
+    });
+    if (running) {
+      if (input.trigger === 'scheduled') return this.toSummary(running);
+      throw new AppError('backup.in_progress', 'A backup for this connection is already running', 409);
+    }
     // Validate the S3 destination exists up front for a clean error.
     await this.storage.getConnection(input.s3ConnectionId);
 
@@ -123,6 +133,48 @@ export class BackupService {
         .update({ where: { id: jobId }, data: { status: 'failed', finishedAt: new Date(), error: message.slice(0, 2000) } })
         .catch(() => undefined);
     }
+  }
+
+  /**
+   * Restore a successful backup into a target connection (defaults to the one
+   * it came from). Runs synchronously — the caller waits for the result.
+   * DESTRUCTIVE: this applies the dump onto the target database.
+   */
+  async restoreBackup(
+    jobId: string,
+    targetConnectionId?: string,
+  ): Promise<{ ok: true; restoredTo: string }> {
+    if (!this.engine) {
+      throw new AppError('backup.not_available', 'Backup engine is not configured', 503);
+    }
+    const job = await this.prisma.backupJob.findUnique({ where: { id: jobId } });
+    if (!job) throw new NotFoundError('Backup job not found');
+    if (job.status !== 'success') {
+      throw new AppError('backup.not_restorable', 'Only a successful backup can be restored', 400);
+    }
+    const targetId = targetConnectionId ?? job.connectionId;
+    const target = await this.prisma.databaseConnection.findUnique({ where: { id: targetId } });
+    if (!target) throw new NotFoundError('Target database connection not found');
+    if (target.engine !== job.engine) {
+      throw new AppError(
+        'backup.engine_mismatch',
+        `Backup engine (${job.engine}) does not match the target (${target.engine})`,
+        400,
+      );
+    }
+
+    const data = await this.storage.getObjectBytes(job.s3ConnectionId, job.bucket, job.objectKey);
+    const config: QueryConfig = {
+      engine: target.engine as DbEngine,
+      host: target.host,
+      port: target.port,
+      username: target.username,
+      ...(target.passwordCipher ? { password: this.cryptoBox.open(target.passwordCipher) } : {}),
+      ...(target.database ? { database: target.database } : {}),
+      ssl: target.ssl,
+    };
+    await this.engine.restore(config, data);
+    return { ok: true, restoredTo: target.name };
   }
 
   async listJobs(connectionId?: string): Promise<BackupJobSummary[]> {

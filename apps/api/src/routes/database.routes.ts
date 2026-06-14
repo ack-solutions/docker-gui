@@ -6,14 +6,18 @@ import {
   type AuthMiddlewareDeps,
 } from '../middleware/auth.middleware.js';
 import type { DatabaseService } from '../services/database.service.js';
+import type { BackupSchedulerService } from '../services/backup-scheduler.service.js';
 import {
   createDatabaseConnectionSchema,
   updateDatabaseConnectionSchema,
   runQuerySchema,
+  setScheduleSchema,
 } from '../schemas/database.schema.js';
+import { AppError } from '../lib/errors.js';
 
 export interface DatabaseRoutesOptions {
   databases: DatabaseService;
+  scheduler: BackupSchedulerService;
   authMiddleware: AuthMiddlewareDeps;
 }
 
@@ -87,6 +91,8 @@ export const databaseRoutes: FastifyPluginAsync<DatabaseRoutesOptions> = async (
     { preHandler: requireOperator },
     async (req, reply) => {
       await opts.databases.deleteConnection(req.params.id);
+      // Drop any registered cron task so a deleted connection stops firing.
+      await opts.scheduler.sync(req.params.id);
       return reply.status(204).send();
     },
   );
@@ -96,6 +102,32 @@ export const databaseRoutes: FastifyPluginAsync<DatabaseRoutesOptions> = async (
     { preHandler: requireOperator },
     async (req) => {
       return opts.databases.verifyConnection(req.params.id);
+    },
+  );
+
+  // -------------------- Backup schedule --------------------
+
+  app.get<{ Params: { id: string } }>('/databases/connections/:id/schedule', async (req) => {
+    return opts.databases.getSchedule(req.params.id);
+  });
+
+  app.put<{ Params: { id: string } }>(
+    '/databases/connections/:id/schedule',
+    { preHandler: requireOperator },
+    async (req) => {
+      const input = parseBody(req, setScheduleSchema);
+      if (input.enabled && input.cron && !opts.scheduler.isValidCron(input.cron)) {
+        throw new AppError('database.invalid_cron', 'Invalid cron expression', 400);
+      }
+      await opts.databases.setSchedule(req.params.id, {
+        enabled: input.enabled,
+        ...(input.cron !== undefined ? { cron: input.cron } : {}),
+        ...(input.s3ConnectionId !== undefined ? { s3ConnectionId: input.s3ConnectionId } : {}),
+        ...(input.bucket !== undefined ? { bucket: input.bucket } : {}),
+      });
+      // Register/replace/remove the cron job to match the new state.
+      await opts.scheduler.sync(req.params.id);
+      return opts.databases.getSchedule(req.params.id);
     },
   );
 

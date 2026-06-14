@@ -30,6 +30,7 @@ import type { StorageService } from './services/storage.service.js';
 import type { RegistryService } from './services/registry.service.js';
 import type { DatabaseService } from './services/database.service.js';
 import type { BackupService } from './services/backup.service.js';
+import type { BackupSchedulerService } from './services/backup-scheduler.service.js';
 import {
   type AuditLogService,
   buildRecord,
@@ -57,6 +58,7 @@ export interface BuildAppOptions {
   registry: RegistryService;
   databases: DatabaseService;
   backups: BackupService;
+  scheduler: BackupSchedulerService;
   configSnapshot: ConfigSnapshot;
   audit: AuditLogService;
   jwtConfig: JwtConfig;
@@ -211,6 +213,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(databaseRoutes, {
         databases: opts.databases,
+        scheduler: opts.scheduler,
         authMiddleware,
       });
       await api.register(backupRoutes, {

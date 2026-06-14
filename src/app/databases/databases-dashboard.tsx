@@ -222,12 +222,21 @@ const STATUS_COLOR: Record<BackupJob["status"], "default" | "info" | "success" |
   failed: "error"
 };
 
+interface Schedule {
+  enabled: boolean;
+  cron: string | null;
+  s3ConnectionId: string | null;
+  bucket: string | null;
+}
+
 function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => void }) {
   const [s3conns, setS3conns] = useState<S3Conn[]>([]);
   const [jobs, setJobs] = useState<BackupJob[] | null>(null);
   const [s3Id, setS3Id] = useState("");
   const [bucket, setBucket] = useState("");
   const [busy, setBusy] = useState(false);
+  const [schedEnabled, setSchedEnabled] = useState(false);
+  const [cron, setCron] = useState("0 3 * * *");
 
   const loadJobs = useCallback(async () => {
     try {
@@ -245,8 +254,38 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
         if (list[0]) setS3Id(list[0].id);
       })
       .catch(() => setS3conns([]));
+    apiFetch<Schedule>(`/api/v1/databases/connections/${conn.id}/schedule`)
+      .then((s) => {
+        setSchedEnabled(s.enabled);
+        if (s.cron) setCron(s.cron);
+        if (s.s3ConnectionId) setS3Id(s.s3ConnectionId);
+        if (s.bucket) setBucket(s.bucket);
+      })
+      .catch(() => undefined);
     loadJobs();
-  }, [loadJobs]);
+  }, [loadJobs, conn.id]);
+
+  const saveSchedule = useCallback(
+    async (enabled: boolean) => {
+      setBusy(true);
+      try {
+        const payload = enabled
+          ? { enabled: true, cron, s3ConnectionId: s3Id, bucket: bucket.trim() }
+          : { enabled: false };
+        const s = await apiFetch<Schedule>(`/api/v1/databases/connections/${conn.id}/schedule`, {
+          method: "PUT",
+          body: JSON.stringify(payload)
+        });
+        setSchedEnabled(s.enabled);
+        toast.success(enabled ? "Schedule saved" : "Schedule disabled");
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [cron, s3Id, bucket, conn.id]
+  );
 
   // Poll while any job is running.
   useEffect(() => {
@@ -271,6 +310,30 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
       setBusy(false);
     }
   }, [s3Id, bucket, conn.id, loadJobs]);
+
+  const restore = useCallback(
+    async (job: BackupJob) => {
+      if (
+        !confirm(
+          `Restore this backup into "${conn.name}"?\n\nThis OVERWRITES data in the target database and cannot be undone.`
+        )
+      )
+        return;
+      setBusy(true);
+      try {
+        await apiFetch(`/api/v1/databases/backups/${job.id}/restore`, {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+        toast.success("Restore complete");
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [conn.name]
+  );
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
@@ -320,6 +383,38 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
           </Stack>
         )}
 
+        {s3conns.length > 0 && (
+          <Box sx={{ mt: 2, p: 1.5, border: 1, borderColor: "divider", borderRadius: 1 }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={schedEnabled}
+                    onChange={(e) => saveSchedule(e.target.checked)}
+                    size="small"
+                    disabled={busy}
+                  />
+                }
+                label="Scheduled backups"
+              />
+              <TextField
+                label="Cron"
+                value={cron}
+                onChange={(e) => setCron(e.target.value)}
+                size="small"
+                sx={{ width: 160 }}
+                helperText="min hr dom mon dow"
+              />
+              <Button size="small" onClick={() => saveSchedule(true)} disabled={busy || !cron.trim() || !bucket.trim()}>
+                Save schedule
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                Uses the destination + bucket above. e.g. <code>0 3 * * *</code> = daily 3am.
+              </Typography>
+            </Stack>
+          </Box>
+        )}
+
         <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
           History
         </Typography>
@@ -337,6 +432,7 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
                 <TableCell>Status</TableCell>
                 <TableCell>Size</TableCell>
                 <TableCell>Object key</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -353,6 +449,18 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
                     <code style={{ fontSize: 11 }}>
                       {j.bucket}/{j.objectKey}
                     </code>
+                  </TableCell>
+                  <TableCell align="right">
+                    {j.status === "success" && (
+                      <Button
+                        size="small"
+                        color="warning"
+                        onClick={() => restore(j)}
+                        disabled={busy}
+                      >
+                        Restore
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -670,8 +778,8 @@ function DatabasesInner({ user }: { user: PublicUser }) {
       <Alert severity="info" sx={{ mt: 3 }}>
         Verification checks network reachability (host:port). Use <strong>Query</strong> to run SQL
         (read-only by default — create a read-only DB user for safe browsing) and{" "}
-        <strong>Backups</strong> to dump a database to S3/MinIO. Restore and scheduled backups are
-        coming next.
+        <strong>Backups</strong> to dump a database to S3/MinIO, restore it, or schedule recurring
+        backups. A browser-based DB explorer (pgweb/phpMyAdmin) is coming next.
       </Alert>
 
       {queryConn && <QueryConsole conn={queryConn} onClose={() => setQueryConn(null)} />}

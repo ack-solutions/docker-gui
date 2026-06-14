@@ -31,7 +31,33 @@ import {
   BackupService,
   type BackupServiceOptions,
 } from '../services/backup.service.js';
+import {
+  BackupSchedulerService,
+  type CronScheduler,
+} from '../services/backup-scheduler.service.js';
 import { AuditLogService } from '../services/audit-log.service.js';
+
+/**
+ * Fake cron scheduler for tests: records registrations and lets a test fire a
+ * scheduled task on demand (no real timers). Cron validation accepts the
+ * common 5/6-field shape so schedule-CRUD tests work without node-cron.
+ */
+export class FakeCronScheduler implements CronScheduler {
+  readonly tasks = new Map<string, () => void>();
+  schedule(id: string, _cronExpr: string, task: () => void): void {
+    this.tasks.set(id, task);
+  }
+  unschedule(id: string): void {
+    this.tasks.delete(id);
+  }
+  validate(cronExpr: string): boolean {
+    return /^(\S+\s+){4,5}\S+$/.test(cronExpr.trim());
+  }
+  /** Fire a registered task (simulates the cron firing). */
+  fire(id: string): void {
+    this.tasks.get(id)?.();
+  }
+}
 import { CaddyClient } from '../lib/caddy.js';
 import { CryptoBox } from '../lib/crypto-box.js';
 import { hashPassword } from '../lib/password.js';
@@ -52,6 +78,8 @@ export interface TestEnv {
   app: FastifyInstance;
   prisma: PrismaClient;
   audit: AuditLogService;
+  /** Fake cron — inspect `.tasks` / call `.fire(connectionId)` in tests. */
+  cron: FakeCronScheduler;
   cleanup: () => Promise<void>;
 }
 
@@ -200,6 +228,8 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     opts.databaseOptions ?? { tcpProbe: async () => {} },
   );
   const backups = new BackupService(prisma, cryptoBox, storage, opts.backupOptions ?? {});
+  const cron = new FakeCronScheduler();
+  const scheduler = new BackupSchedulerService(prisma, backups, cron);
   const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
@@ -226,6 +256,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     registry,
     databases,
     backups,
+    scheduler,
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,
@@ -236,6 +267,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     app,
     prisma,
     audit,
+    cron,
     async cleanup() {
       await app.close();
       await prisma.$disconnect();

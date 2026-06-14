@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { ListBucketsCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
+import {
+  ListBucketsCommand,
+  PutObjectCommand,
+  GetObjectCommand,
+  type S3Client,
+} from '@aws-sdk/client-s3';
 import type { TestEnv } from '../../__tests__/test-helpers.js';
 import {
   buildTestEnv,
@@ -9,6 +14,7 @@ import {
 } from '../../__tests__/test-helpers.js';
 import type { BackupEngine } from '../../lib/backup-engine.js';
 import type { QueryConfig } from '../../lib/db-query.js';
+import { AppError } from '../../lib/errors.js';
 
 /**
  * Backup lifecycle end to end. No mocks for our code: real Fastify + real
@@ -19,6 +25,8 @@ import type { QueryConfig } from '../../lib/db-query.js';
 
 // Captured PutObject calls so we can assert the dump was uploaded correctly.
 const putCalls: Array<{ Bucket?: string; Key?: string; bodyLen: number }> = [];
+// In-memory object store so restore (GetObject) gets back what backup stored.
+const objectStore = new Map<string, Buffer>();
 
 function fakeS3(): S3Client {
   return {
@@ -31,19 +39,41 @@ function fakeS3(): S3Client {
           ...(command.input.Key !== undefined ? { Key: command.input.Key } : {}),
           bodyLen: body ? body.length : 0,
         });
+        if (body) objectStore.set(`${command.input.Bucket}/${command.input.Key}`, Buffer.from(body));
         return Promise.resolve({});
+      }
+      if (command instanceof GetObjectCommand) {
+        const bytes = objectStore.get(`${command.input.Bucket}/${command.input.Key}`);
+        if (!bytes) {
+          return Promise.reject(Object.assign(new Error('NoSuchKey'), { name: 'NoSuchKey', $metadata: { httpStatusCode: 404 } }));
+        }
+        return Promise.resolve({ Body: { transformToByteArray: async () => new Uint8Array(bytes) } });
       }
       return Promise.resolve({});
     },
   } as unknown as S3Client;
 }
 
-const engineState = { fail: false, lastConfig: null as QueryConfig | null };
+const engineState = {
+  fail: false,
+  lastConfig: null as QueryConfig | null,
+  restoreFail: false,
+  restoredWith: null as { config: QueryConfig; data: Buffer } | null,
+  blockDump: null as Promise<void> | null,
+};
 const fakeEngine: BackupEngine = {
   async dump(config: QueryConfig) {
     engineState.lastConfig = config;
+    if (engineState.blockDump) await engineState.blockDump;
     if (engineState.fail) throw new Error('pg_dump: connection refused');
     return { data: Buffer.from('-- SQL dump\nSELECT 1;\n'), filename: 'appdb.sql' };
+  },
+  async restore(config: QueryConfig, data: Buffer) {
+    engineState.restoredWith = { config, data };
+    // Mirror the real DockerBackupEngine, which wraps restore failures as a 502 AppError.
+    if (engineState.restoreFail) {
+      throw new AppError('backup.restore_failed', 'Restore failed (exit 1): psql: relation already exists', 502);
+    }
   },
 };
 
@@ -87,9 +117,26 @@ beforeEach(async () => {
   await env.prisma.databaseConnection.deleteMany();
   await env.prisma.s3Connection.deleteMany();
   putCalls.length = 0;
+  objectStore.clear();
   engineState.fail = false;
   engineState.lastConfig = null;
+  engineState.restoreFail = false;
+  engineState.restoredWith = null;
+  engineState.blockDump = null;
 });
+
+/** Run a backup to completion and return the finished job row. */
+async function runBackupToSuccess(dbId: string, s3Id: string) {
+  const res = await env.app.inject({
+    method: 'POST', url: `/api/v1/databases/connections/${dbId}/backups`,
+    headers: auth(operatorToken), payload: { s3ConnectionId: s3Id, bucket: 'db-backups' },
+  });
+  const jobId = res.json().id as string;
+  return waitFor(async () => {
+    const j = await env.prisma.backupJob.findUnique({ where: { id: jobId } });
+    return j && (j.status === 'success' || j.status === 'failed') ? j : null;
+  });
+}
 
 async function seed(): Promise<{ dbId: string; s3Id: string }> {
   const db = await env.app.inject({
@@ -178,6 +225,222 @@ describe('backup lifecycle', () => {
       payload: { s3ConnectionId: s3Id, bucket: 'db-backups' },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a second manual backup while one is in flight (409)', async () => {
+    const { dbId, s3Id } = await seed();
+    // Block the first dump so its job stays `running`.
+    let release!: () => void;
+    engineState.blockDump = new Promise<void>((r) => {
+      release = r;
+    });
+    const first = await env.app.inject({
+      method: 'POST', url: `/api/v1/databases/connections/${dbId}/backups`,
+      headers: auth(operatorToken), payload: { s3ConnectionId: s3Id, bucket: 'b' },
+    });
+    expect(first.statusCode).toBe(202);
+    // Second manual trigger while the first is still running → 409.
+    const second = await env.app.inject({
+      method: 'POST', url: `/api/v1/databases/connections/${dbId}/backups`,
+      headers: auth(operatorToken), payload: { s3ConnectionId: s3Id, bucket: 'b' },
+    });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error.code).toBe('backup.in_progress');
+    // Let the first finish.
+    release();
+    await waitFor(async () => {
+      const j = await env.prisma.backupJob.findUnique({ where: { id: first.json().id } });
+      return j && j.status === 'success' ? j : null;
+    });
+  });
+});
+
+describe('restore', () => {
+  it('restores a successful backup: downloads from S3, feeds the engine', async () => {
+    const { dbId, s3Id } = await seed();
+    const job = await runBackupToSuccess(dbId, s3Id);
+    expect(job!.status).toBe('success');
+
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/backups/${job!.id}/restore`,
+      headers: auth(operatorToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+    expect(res.json().restoredTo).toBe('appdb');
+    // The engine got the exact bytes that were backed up, plus the decrypted pw.
+    expect(engineState.restoredWith?.data.toString()).toBe('-- SQL dump\nSELECT 1;\n');
+    expect(engineState.restoredWith?.config.password).toBe('dbpw');
+  });
+
+  it('surfaces a restore failure as 502', async () => {
+    const { dbId, s3Id } = await seed();
+    const job = await runBackupToSuccess(dbId, s3Id);
+    engineState.restoreFail = true;
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/backups/${job!.id}/restore`,
+      headers: auth(operatorToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error.message).toContain('already exists');
+  });
+
+  it('refuses to restore a failed backup (400)', async () => {
+    const { dbId, s3Id } = await seed();
+    engineState.fail = true;
+    const job = await runBackupToSuccess(dbId, s3Id);
+    expect(job!.status).toBe('failed');
+    engineState.fail = false;
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/backups/${job!.id}/restore`,
+      headers: auth(operatorToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects an engine mismatch between backup and target (400)', async () => {
+    const { dbId, s3Id } = await seed();
+    const job = await runBackupToSuccess(dbId, s3Id);
+    // Create a mysql target and try to restore a postgres dump into it.
+    const my = await env.app.inject({
+      method: 'POST', url: '/api/v1/databases/connections', headers: auth(operatorToken),
+      payload: { name: 'mysql-target', engine: 'mysql', host: 'app-mysql', username: 'root', password: 'x' },
+    });
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/backups/${job!.id}/restore`,
+      headers: auth(operatorToken),
+      payload: { targetConnectionId: my.json().id },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('backup.engine_mismatch');
+  });
+
+  it('viewer CANNOT restore (403)', async () => {
+    const { dbId, s3Id } = await seed();
+    const job = await runBackupToSuccess(dbId, s3Id);
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/backups/${job!.id}/restore`,
+      headers: auth(viewerToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('scheduled backups', () => {
+  it('enabling a schedule registers a cron task; disabling removes it', async () => {
+    const { dbId, s3Id } = await seed();
+    const enable = await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: true, cron: '0 3 * * *', s3ConnectionId: s3Id, bucket: 'nightly' },
+    });
+    expect(enable.statusCode).toBe(200);
+    expect(enable.json().enabled).toBe(true);
+    expect(env.cron.tasks.has(dbId)).toBe(true);
+
+    const disable = await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: false },
+    });
+    expect(disable.statusCode).toBe(200);
+    expect(disable.json().enabled).toBe(false);
+    expect(env.cron.tasks.has(dbId)).toBe(false);
+  });
+
+  it('enabling without cron/dest is rejected (400)', async () => {
+    const { dbId } = await seed();
+    const res = await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: true },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects enabling a schedule against a non-existent S3 connection (400)', async () => {
+    const { dbId } = await seed();
+    const res = await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: true, cron: '0 3 * * *', s3ConnectionId: 'ghost', bucket: 'b' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('database.s3_not_found');
+  });
+
+  it('rejects an invalid cron expression (400)', async () => {
+    const { dbId, s3Id } = await seed();
+    const res = await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: true, cron: 'not-a-cron', s3ConnectionId: s3Id, bucket: 'b' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('firing the cron runs a scheduled backup', async () => {
+    const { dbId, s3Id } = await seed();
+    await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: true, cron: '0 3 * * *', s3ConnectionId: s3Id, bucket: 'nightly' },
+    });
+    // Simulate the cron firing.
+    env.cron.fire(dbId);
+    const job = await waitFor(async () => {
+      const j = await env.prisma.backupJob.findFirst({
+        where: { connectionId: dbId, trigger: 'scheduled' },
+      });
+      return j && (j.status === 'success' || j.status === 'failed') ? j : null;
+    });
+    expect(job!.status).toBe('success');
+    expect(job!.trigger).toBe('scheduled');
+    expect(job!.bucket).toBe('nightly');
+  });
+
+  it('deleting a scheduled connection removes its cron task (no zombie)', async () => {
+    const { dbId, s3Id } = await seed();
+    await env.app.inject({
+      method: 'PUT',
+      url: `/api/v1/databases/connections/${dbId}/schedule`,
+      headers: auth(operatorToken),
+      payload: { enabled: true, cron: '0 3 * * *', s3ConnectionId: s3Id, bucket: 'nightly' },
+    });
+    expect(env.cron.tasks.has(dbId)).toBe(true);
+    const del = await env.app.inject({
+      method: 'DELETE', url: `/api/v1/databases/connections/${dbId}`, headers: bearer(operatorToken),
+    });
+    expect(del.statusCode).toBe(204);
+    expect(env.cron.tasks.has(dbId)).toBe(false);
+  });
+
+  it('viewer can read but not set the schedule', async () => {
+    const { dbId, s3Id } = await seed();
+    const read = await env.app.inject({
+      method: 'GET', url: `/api/v1/databases/connections/${dbId}/schedule`, headers: bearer(viewerToken),
+    });
+    expect(read.statusCode).toBe(200);
+    const write = await env.app.inject({
+      method: 'PUT', url: `/api/v1/databases/connections/${dbId}/schedule`, headers: auth(viewerToken),
+      payload: { enabled: true, cron: '0 3 * * *', s3ConnectionId: s3Id, bucket: 'b' },
+    });
+    expect(write.statusCode).toBe(403);
   });
 });
 

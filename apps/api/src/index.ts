@@ -16,6 +16,7 @@ import { StorageService } from './services/storage.service.js';
 import { RegistryService } from './services/registry.service.js';
 import { DatabaseService } from './services/database.service.js';
 import { BackupService } from './services/backup.service.js';
+import { BackupSchedulerService, NodeCronScheduler } from './services/backup-scheduler.service.js';
 import { DockerBackupEngine } from './lib/backup-engine.js';
 import { AuditLogService } from './services/audit-log.service.js';
 import { CaddyClient } from './lib/caddy.js';
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
   const backups = new BackupService(prisma, cryptoBox, storage, {
     engine: new DockerBackupEngine(docker, { network: config.DOCKER_GUI_NETWORK }),
   });
+  const scheduler = new BackupSchedulerService(prisma, backups, new NodeCronScheduler());
   const audit = new AuditLogService(prisma);
 
   const app = await buildApp({
@@ -92,6 +94,7 @@ async function main(): Promise<void> {
     registry,
     databases,
     backups,
+    scheduler,
     configSnapshot,
     audit,
     jwtConfig,
@@ -104,6 +107,9 @@ async function main(): Promise<void> {
       { host: config.API_HOST, port: config.API_PORT, env: config.NODE_ENV },
       'API listening',
     );
+    // Route fired-task failures to the app logger, then register schedules.
+    scheduler.setErrorLogger((ctx, msg) => app.log.error(ctx, msg));
+    await scheduler.start().catch((err: unknown) => app.log.error({ err }, 'scheduler start failed'));
   } catch (err) {
     app.log.error({ err }, 'Failed to start API');
     await disconnectPrisma();

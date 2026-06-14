@@ -293,6 +293,56 @@ export class DatabaseService {
     return this.toSummary(updated);
   }
 
+  // -------------------- Backup schedule --------------------
+
+  async getSchedule(id: string): Promise<{
+    enabled: boolean;
+    cron: string | null;
+    s3ConnectionId: string | null;
+    bucket: string | null;
+  }> {
+    const row = await this.prisma.databaseConnection.findUnique({ where: { id } });
+    if (!row) throw new NotFoundError('Database connection not found');
+    return {
+      enabled: row.backupEnabled,
+      cron: row.backupCron,
+      s3ConnectionId: row.backupS3ConnectionId,
+      bucket: row.backupBucket,
+    };
+  }
+
+  async setSchedule(
+    id: string,
+    input: { enabled: boolean; cron?: string; s3ConnectionId?: string; bucket?: string },
+  ): Promise<void> {
+    const row = await this.prisma.databaseConnection.findUnique({ where: { id } });
+    if (!row) throw new NotFoundError('Database connection not found');
+    if (input.enabled && (!input.cron || !input.s3ConnectionId || !input.bucket)) {
+      throw new AppError(
+        'database.schedule_incomplete',
+        'Enabling a schedule requires a cron expression, S3 connection, and bucket',
+        400,
+      );
+    }
+    // Don't let a schedule be enabled against a non-existent S3 destination —
+    // it would only surface as a silent failure at fire time.
+    if (input.enabled && input.s3ConnectionId) {
+      const s3 = await this.prisma.s3Connection.findUnique({ where: { id: input.s3ConnectionId } });
+      if (!s3) {
+        throw new AppError('database.s3_not_found', 'The chosen S3 connection does not exist', 400);
+      }
+    }
+    await this.prisma.databaseConnection.update({
+      where: { id },
+      data: {
+        backupEnabled: input.enabled,
+        backupCron: input.cron ?? null,
+        backupS3ConnectionId: input.s3ConnectionId ?? null,
+        backupBucket: input.bucket ?? null,
+      },
+    });
+  }
+
   // -------------------- Query console --------------------
 
   /**

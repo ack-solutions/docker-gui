@@ -164,6 +164,12 @@ model DatabaseConnection {
   verified       Boolean   @default(false)
   lastVerifiedAt DateTime?
   lastError      String?
+  // Scheduled-backup config (slice 3 scheduling). Inactive unless enabled +
+  // a cron expression + destination are set.
+  backupEnabled        Boolean @default(false)
+  backupCron           String?
+  backupS3ConnectionId String?
+  backupBucket         String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

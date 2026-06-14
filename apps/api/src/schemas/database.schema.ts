@@ -40,6 +40,18 @@ export const startBackupSchema = z.object({
   bucket: z.string().min(1).max(63),
 });
 
+export const restoreBackupSchema = z.object({
+  // Optional target connection; defaults to the backup's own connection.
+  targetConnectionId: z.string().min(1).max(64).optional(),
+});
+
+export const setScheduleSchema = z.object({
+  enabled: z.boolean(),
+  cron: z.string().min(1).max(120).optional(),
+  s3ConnectionId: z.string().min(1).max(64).optional(),
+  bucket: z.string().min(1).max(63).optional(),
+});
+
 export const runQuerySchema = z.object({
   sql: z.string().min(1).max(100_000),
   readOnly: z.boolean().optional(),

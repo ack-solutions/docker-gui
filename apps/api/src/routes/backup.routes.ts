@@ -6,7 +6,7 @@ import {
   type AuthMiddlewareDeps,
 } from '../middleware/auth.middleware.js';
 import type { BackupService } from '../services/backup.service.js';
-import { startBackupSchema } from '../schemas/database.schema.js';
+import { startBackupSchema, restoreBackupSchema } from '../schemas/database.schema.js';
 
 export interface BackupRoutesOptions {
   backups: BackupService;
@@ -57,4 +57,17 @@ export const backupRoutes: FastifyPluginAsync<BackupRoutesOptions> = async (app,
   app.get<{ Params: { jobId: string } }>('/databases/backups/:jobId', async (req) => {
     return opts.backups.getJob(req.params.jobId);
   });
+
+  // Restore a successful backup (destructive) — operator+.
+  app.post<{ Params: { jobId: string } }>(
+    '/databases/backups/:jobId/restore',
+    { preHandler: requireOperator },
+    async (req) => {
+      const input = parseBody(req, restoreBackupSchema);
+      return opts.backups.restoreBackup(
+        req.params.jobId,
+        input.targetConnectionId,
+      );
+    },
+  );
 };
