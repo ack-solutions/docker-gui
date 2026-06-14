@@ -14,7 +14,7 @@ diagnose it when something breaks. One doc, top to bottom.
 On your Linux server, paste this one command and press Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh | sudo bash
 ```
 
 That's it. No URL editing, no choosing a method. The installer takes
@@ -116,7 +116,7 @@ restores them.
 Same one command — re-run it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh | sudo bash
 ```
 
 Or, if you have the CLI installed:
@@ -211,7 +211,7 @@ Prometheus, Healthchecks.io, or a cron job.
 Override defaults via env vars on the install command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh \
   | sudo DOCKER_GUI_WEB_PORT=8080 DOCKER_GUI_DIR=/srv/docker-gui bash
 ```
 
@@ -295,7 +295,7 @@ reach (`file:///media/usb/docker-gui.tar.gz` works).
 ### Inspect before running
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh -o install.sh
 less install.sh                  # read it
 sudo bash install.sh             # then run
 ```
@@ -336,7 +336,7 @@ override `DOCKER_GUI_TARBALL_URL` with a mirror.
 Either stop the other service, or pick a different port on install:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh \
   | sudo DOCKER_GUI_WEB_PORT=8080 bash
 ```
 

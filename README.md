@@ -17,7 +17,7 @@ On your Linux server (Ubuntu 22.04+, Debian 11+, RHEL 9+ — fresh or
 existing), paste this and press Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh | sudo bash
 ```
 
 That's it. The installer takes 3–5 minutes and:

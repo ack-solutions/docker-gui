@@ -27,7 +27,7 @@ WEB_PORT="${DOCKER_GUI_WEB_PORT:-3000}"
 LOCAL="${DOCKER_GUI_LOCAL:-0}"
 
 # VERSION is resolved later. Empty = auto-detect: latest GitHub release
-# if one exists, otherwise the `develop` branch.
+# if one exists, otherwise the `main` branch.
 VERSION="${DOCKER_GUI_VERSION:-}"
 TARBALL_URL_OVERRIDE="${DOCKER_GUI_TARBALL_URL:-}"
 TARBALL_URL=""
@@ -123,7 +123,7 @@ if ss -tnlp 2>/dev/null | awk '{print $4}' | grep -q ":${WEB_PORT}\$"; then
     err "Port $WEB_PORT is already in use."
     err ""
     err "Pick another with DOCKER_GUI_WEB_PORT, e.g.:"
-    err "  curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/develop/scripts/install.sh \\"
+    err "  curl -fsSL https://raw.githubusercontent.com/ack-solutions/docker-gui/main/scripts/install.sh \\"
     err "    | sudo DOCKER_GUI_WEB_PORT=3001 bash"
     err ""
     err "Or stop whatever is on :$WEB_PORT and re-run."
@@ -150,8 +150,8 @@ if [[ "$LOCAL" != "1" && -z "$TARBALL_URL_OVERRIDE" ]]; then
       VERSION="$LATEST_TAG"
       ok "Latest release: $VERSION"
     else
-      VERSION="develop"
-      warn "No GitHub releases yet — falling back to the develop branch"
+      VERSION="main"
+      warn "No GitHub releases yet — falling back to the main branch"
     fi
   else
     ok "Using requested version: $VERSION"
