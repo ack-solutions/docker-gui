@@ -39,6 +39,7 @@ import {
   DbExplorerService,
   type DbExplorerServiceOptions,
 } from '../services/db-explorer.service.js';
+import { AlertService, type AlertServiceOptions } from '../services/alert.service.js';
 import { AuditLogService } from '../services/audit-log.service.js';
 
 /**
@@ -84,6 +85,7 @@ export interface TestEnv {
   audit: AuditLogService;
   /** Fake cron — inspect `.tasks` / call `.fire(connectionId)` in tests. */
   cron: FakeCronScheduler;
+  alerts: AlertService;
   cleanup: () => Promise<void>;
 }
 
@@ -96,6 +98,7 @@ export interface BuildTestEnvOptions {
   databaseOptions?: DatabaseServiceOptions;
   backupOptions?: BackupServiceOptions;
   explorerOptions?: Partial<DbExplorerServiceOptions>;
+  alertOptions?: AlertServiceOptions;
 }
 
 export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
@@ -239,6 +242,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     network: 'docker-gui_dgui',
     ...(opts.explorerOptions ?? {}),
   });
+  const alerts = new AlertService(prisma, opts.alertOptions ?? {});
   const audit = new AuditLogService(prisma);
   const configSnapshot = loadConfigSnapshot({
     env: {
@@ -267,6 +271,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     backups,
     scheduler,
     explorer,
+    alerts,
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,
@@ -278,6 +283,7 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     prisma,
     audit,
     cron,
+    alerts,
     async cleanup() {
       await app.close();
       await prisma.$disconnect();

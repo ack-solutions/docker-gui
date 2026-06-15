@@ -15,6 +15,7 @@ import { databaseRoutes } from './routes/database.routes.js';
 import { backupRoutes } from './routes/backup.routes.js';
 import { explorerRoutes } from './routes/explorer.routes.js';
 import { dbProxyRoutes } from './routes/db-proxy.routes.js';
+import { alertRoutes } from './routes/alert.routes.js';
 import { configRoutes } from './routes/config.routes.js';
 import { auditRoutes } from './routes/audit.routes.js';
 import type { ConfigSnapshot } from './config/index.js';
@@ -34,6 +35,7 @@ import type { DatabaseService } from './services/database.service.js';
 import type { BackupService } from './services/backup.service.js';
 import type { BackupSchedulerService } from './services/backup-scheduler.service.js';
 import type { DbExplorerService } from './services/db-explorer.service.js';
+import type { AlertService } from './services/alert.service.js';
 import {
   type AuditLogService,
   buildRecord,
@@ -63,6 +65,7 @@ export interface BuildAppOptions {
   backups: BackupService;
   scheduler: BackupSchedulerService;
   explorer: DbExplorerService;
+  alerts: AlertService;
   configSnapshot: ConfigSnapshot;
   audit: AuditLogService;
   jwtConfig: JwtConfig;
@@ -229,6 +232,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await api.register(databaseRoutes, {
         databases: opts.databases,
         scheduler: opts.scheduler,
+        authMiddleware,
+      });
+      await api.register(alertRoutes, {
+        alerts: opts.alerts,
         authMiddleware,
       });
       await api.register(backupRoutes, {

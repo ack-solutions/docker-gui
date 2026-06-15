@@ -199,6 +199,48 @@ model BackupJob {
   @@map("backup_jobs")
 }
 
+model AlertRule {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  // Metric key, e.g. "system.memory.percent", "system.cpu.percent",
+  // "container.down" (count of non-running managed containers).
+  metric          String
+  operator        String // gt | lt | gte | lte | eq
+  threshold       Float
+  // Condition must hold this long before firing (debounce).
+  forSeconds      Int       @default(0)
+  // Minimum gap between repeated fires of the same rule.
+  cooldownSeconds Int       @default(300)
+  // Delivery: a webhook URL (Slack/Discord/generic). Email is a follow-up.
+  webhookUrl      String?
+  enabled         Boolean   @default(true)
+  lastFiredAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  events AlertEvent[]
+
+  @@map("alert_rules")
+}
+
+model AlertEvent {
+  id        String   @id @default(uuid())
+  ruleId    String
+  ruleName  String // denormalized so history survives rule deletion
+  metric    String
+  value     Float
+  status    String // firing | resolved
+  message   String
+  delivered Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  rule AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([createdAt])
+  @@map("alert_events")
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?

@@ -18,6 +18,8 @@ import { DatabaseService } from './services/database.service.js';
 import { BackupService } from './services/backup.service.js';
 import { BackupSchedulerService, NodeCronScheduler } from './services/backup-scheduler.service.js';
 import { DbExplorerService } from './services/db-explorer.service.js';
+import { AlertService, WebhookAlertSender } from './services/alert.service.js';
+import { getCpuUsagePercent, getMemoryMetrics } from './services/system-metrics.service.js';
 import { DockerBackupEngine } from './lib/backup-engine.js';
 import { AuditLogService } from './services/audit-log.service.js';
 import { CaddyClient } from './lib/caddy.js';
@@ -74,6 +76,7 @@ async function main(): Promise<void> {
   const explorer = new DbExplorerService(prisma, cryptoBox, docker, {
     network: config.DOCKER_GUI_NETWORK,
   });
+  const alerts = new AlertService(prisma, { sender: new WebhookAlertSender() });
   const audit = new AuditLogService(prisma);
 
   const app = await buildApp({
@@ -100,6 +103,7 @@ async function main(): Promise<void> {
     backups,
     scheduler,
     explorer,
+    alerts,
     configSnapshot,
     audit,
     jwtConfig,
@@ -121,6 +125,22 @@ async function main(): Promise<void> {
       void explorer.reapIdle().catch((err: unknown) => app.log.error({ err }, 'explorer reap failed'));
     }, 5 * 60 * 1000);
     reaper.unref();
+
+    // Evaluate alert rules against a fresh metric snapshot every 60s.
+    const alertTimer = setInterval(() => {
+      void (async () => {
+        try {
+          const [cpu, mem] = [await getCpuUsagePercent(), getMemoryMetrics()];
+          await alerts.evaluate({
+            'system.cpu.percent': cpu,
+            'system.memory.percent': mem.usagePercent,
+          });
+        } catch (err) {
+          app.log.error({ err }, 'alert evaluation failed');
+        }
+      })();
+    }, 60 * 1000);
+    alertTimer.unref();
   } catch (err) {
     app.log.error({ err }, 'Failed to start API');
     await disconnectPrisma();
