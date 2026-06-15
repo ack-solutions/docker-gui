@@ -123,12 +123,13 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
 
   // POST /setup/bootstrap — only available when no users exist; requires SETUP_SECRET
   app.post('/setup/bootstrap', async (req, reply) => {
-    const provided = req.headers['x-setup-secret'];
-    if (typeof provided !== 'string' || provided !== opts.setupSecret) {
-      return reply.status(403).send({
-        error: { code: 'setup.invalid_secret', message: 'Invalid setup secret' },
-      });
-    }
+    // Check initialization BEFORE the secret. Once an admin exists this route
+    // is permanently closed (409) — and, importantly, the login page probes
+    // this endpoint to decide between the "create first admin" and "sign in"
+    // views: it relies on getting 409 (already_initialized) here. If we checked
+    // the secret first, a probe (which has no real secret) would always get
+    // 403, leaving the page stuck on "create admin" so existing users could
+    // never sign in.
     const existing = await opts.users.countAll();
     if (existing > 0) {
       return reply.status(409).send({
@@ -136,6 +137,12 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, opt
           code: 'setup.already_initialized',
           message: 'An admin user already exists. Use the regular login flow.',
         },
+      });
+    }
+    const provided = req.headers['x-setup-secret'];
+    if (typeof provided !== 'string' || provided !== opts.setupSecret) {
+      return reply.status(403).send({
+        error: { code: 'setup.invalid_secret', message: 'Invalid setup secret' },
       });
     }
     const body = await parseBody(req, bootstrapSchema);

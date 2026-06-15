@@ -1,9 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
-import { ThemeProvider, CssBaseline } from "@mui/material";
-import { Toaster } from "sonner";
-import NextTopLoader from "nextjs-toploader";
-import { theme } from "@/components/theme";
+import { Providers } from "./providers";
 import "./globals.css";
 
 // Admin UI is fully dynamic — auth state and live data, never static.
@@ -29,14 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AppRouterCacheProvider options={{ key: "mui" }}>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <NextTopLoader color={theme.palette.primary.main} showSpinner={false} height={2} />
-            {children}
-            <Toaster richColors position="top-right" />
-          </ThemeProvider>
-        </AppRouterCacheProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

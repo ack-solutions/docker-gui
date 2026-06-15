@@ -68,6 +68,10 @@ services:
     build:
       context: ./source
       dockerfile: docker/Dockerfile.web
+      args:
+        # Next bakes the /api proxy target at BUILD time (runtime env is
+        # ignored), so it must be a build arg. The api is always `api:4000`.
+        API_PROXY_TARGET: http://api:4000
     image: docker-gui-web:local
     container_name: docker-gui-web
     restart: unless-stopped

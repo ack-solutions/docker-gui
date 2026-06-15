@@ -1,0 +1,68 @@
+# Local "try it" stack — runs the SAME api + web images the installer builds,
+# but from the repo root (no /opt install). For seeing the GUI + smoke-testing
+# the full container stack on your machine.
+#
+#   bash scripts/run-local.sh         # build + start + create admin + print URL
+#   docker compose -f docker-compose.local.yml logs -f
+#   docker compose -f docker-compose.local.yml down -v
+#
+# This mirrors a fresh Linux-server install: the api manages feature containers
+# via the Docker socket, exactly as on a real server.
+
+name: docker-gui-local
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: docker-gui-api:local
+    container_name: docker-gui-local-api
+    # Run as root locally so the api can read the Docker socket (so the
+    # Containers/Images/Features pages work). Production uses a dedicated user.
+    user: "0:0"
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      JWT_SECRET: "localtry-jwt-secret-not-for-production-0123456789abcdef"
+      SETUP_SECRET: "localtry-setup-secret-0123456789abcdef"
+      DATABASE_URL: file:/data/app.db
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      CORS_ORIGINS: "http://localhost:3000"
+      LOG_PRETTY: "true"
+      DOCKER_GUI_NETWORK: docker-gui-local_dgui
+    volumes:
+      - app-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "4000"
+    networks:
+      - dgui
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        # Baked into the build — Next resolves the /api proxy at build time.
+        API_PROXY_TARGET: "http://api:4000"
+    image: docker-gui-web:local
+    container_name: docker-gui-local-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PROXY_TARGET: "http://api:4000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - dgui
+
+volumes:
+  app-data:
+
+networks:
+  dgui:
+    driver: bridge

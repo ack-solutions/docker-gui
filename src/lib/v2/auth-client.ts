@@ -155,7 +155,14 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOptions 
     throw new ApiError(res.status, code, message, err?.error?.details);
   }
 
-  return (body as { data: T })?.data as T;
+  // Success envelopes are inconsistent across the API: most routes wrap in
+  // `{ data: ... }`, but several (storage, registry, databases, alerts,
+  // features) return the value directly. Unwrap `{ data }` when present,
+  // otherwise return the body as-is, so every page gets its payload.
+  if (body && typeof body === "object" && "data" in (body as Record<string, unknown>)) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
 }
 
 export async function login(email: string, password: string): Promise<{ user: PublicUser; tokens: StoredTokens }> {

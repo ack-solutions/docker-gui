@@ -56,6 +56,18 @@ describe('POST /api/v1/setup/bootstrap', () => {
     expect(res.json().error.code).toBe('setup.already_initialized');
   });
 
+  it('returns 409 (not 403) for a WRONG secret once an admin exists — the login page probes this to switch to sign-in', async () => {
+    await bootstrap();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/setup/bootstrap',
+      headers: { 'x-setup-secret': '__probe__', 'content-type': 'application/json' },
+      payload: { email: 'x@y.co', password: '12345678', name: 'x' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('setup.already_initialized');
+  });
+
   it('validates input', async () => {
     const res = await env.app.inject({
       method: 'POST',

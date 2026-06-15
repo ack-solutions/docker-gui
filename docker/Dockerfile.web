@@ -27,6 +27,14 @@ COPY src ./src
 
 # Disable telemetry to keep build deterministic
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# IMPORTANT: Next.js resolves next.config rewrites at BUILD time and bakes the
+# destination into the build output (routes-manifest.json) — a runtime
+# API_PROXY_TARGET env is IGNORED for the `/api/v1/*` proxy. So it must be set
+# at build time. In the compose stack the api is always reachable as
+# `http://api:4000`; override with --build-arg API_PROXY_TARGET=... if needed.
+ARG API_PROXY_TARGET=http://api:4000
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
 RUN yarn build
 
 #####################

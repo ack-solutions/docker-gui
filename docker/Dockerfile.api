@@ -11,7 +11,9 @@ WORKDIR /build
 RUN apk add --no-cache libc6-compat openssl
 
 COPY apps/api/package.json apps/api/yarn.lock ./
-RUN yarn install --frozen-lockfile --no-progress
+# --ignore-scripts: the `postinstall: prisma generate` script needs the Prisma
+# schema, which isn't in this stage. The build stage generates it explicitly.
+RUN yarn install --frozen-lockfile --no-progress --ignore-scripts
 
 ###################
 # Stage 2 — build #
@@ -27,16 +29,19 @@ COPY apps/api/prisma ./prisma
 COPY apps/api/src ./src
 COPY apps/api/scripts ./scripts
 
-# prisma generate (postinstall already ran during deps; re-run to be safe)
+# Generate the Prisma client now that the schema is present, before tsc needs
+# its types.
 RUN npx prisma generate
 RUN yarn build
 
-# We keep `tsx` in the runtime image so the operational admin scripts
-# (admin-create / admin-reset / admin-list) can run from TS source. They
-# are tiny one-shots; the cost of pulling tsx in runtime is fine.
-# Prune dev deps for the runtime layer (tsx is in devDeps; re-add it).
-RUN yarn install --frozen-lockfile --production --no-progress && \
-    yarn add tsx@^4.20.6 --no-progress
+# Prune to production deps for the runtime layer, then re-add the tools the
+# runtime needs and regenerate the client into the pruned node_modules:
+#  - tsx: runs the admin one-shot scripts (admin-create/reset/list) from TS
+#  - prisma (CLI): the runtime CMD runs `prisma migrate deploy` on boot
+#    (prisma is a devDependency, so production prune removes it otherwise)
+RUN yarn install --frozen-lockfile --production --no-progress --ignore-scripts && \
+    yarn add tsx@^4.20.6 prisma@^6.1.0 --no-progress --ignore-scripts && \
+    npx prisma generate
 
 #####################
 # Stage 3 — runtime #
