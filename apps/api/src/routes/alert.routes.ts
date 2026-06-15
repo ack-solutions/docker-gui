@@ -9,6 +9,8 @@ import type { AlertService } from '../services/alert.service.js';
 
 export interface AlertRoutesOptions {
   alerts: AlertService;
+  /** Lists selectable metric keys (system + per-disk + per-container). */
+  metricCatalog: () => Promise<Array<{ value: string; label: string }>>;
   authMiddleware: AuthMiddlewareDeps;
 }
 
@@ -57,6 +59,9 @@ export const alertRoutes: FastifyPluginAsync<AlertRoutesOptions> = async (app, o
 
   app.get('/alerts/rules', async () => opts.alerts.listRules());
   app.get('/alerts/events', async () => opts.alerts.listEvents());
+  // Metric keys a rule can target right now (CPU/mem, each disk, each running
+  // container). Drives the rule dialog's dropdown so users don't guess keys.
+  app.get('/alerts/metrics', async () => opts.metricCatalog());
 
   app.post('/alerts/rules', { preHandler: requireAdmin }, async (req, reply) => {
     const b = parseBody(req, createRuleSchema);

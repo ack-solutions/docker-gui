@@ -66,6 +66,8 @@ export interface BuildAppOptions {
   scheduler: BackupSchedulerService;
   explorer: DbExplorerService;
   alerts: AlertService;
+  /** Lists the metric keys a user can build an alert rule on (cheap; no stats). */
+  metricCatalog: () => Promise<Array<{ value: string; label: string }>>;
   configSnapshot: ConfigSnapshot;
   audit: AuditLogService;
   jwtConfig: JwtConfig;
@@ -236,6 +238,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(alertRoutes, {
         alerts: opts.alerts,
+        metricCatalog: opts.metricCatalog,
         authMiddleware,
       });
       await api.register(backupRoutes, {

@@ -749,7 +749,7 @@ function DatabasesInner({ user }: { user: PublicUser }) {
   return (
     <PageShell
       title="Databases"
-      subtitle="Discover database containers and save connection profiles. Query console and backups are coming next."
+      subtitle="Discover database containers, save connection profiles, run SQL, browse with pgweb/phpMyAdmin, and back up to S3."
       user={user}
       actions={
         <Stack direction="row" spacing={1}>
@@ -889,9 +889,10 @@ function DatabasesInner({ user }: { user: PublicUser }) {
 
       <Alert severity="info" sx={{ mt: 3 }}>
         Verification checks network reachability (host:port). Use <strong>Query</strong> to run SQL
-        (read-only by default — create a read-only DB user for safe browsing) and{" "}
+        (read-only by default — create a read-only DB user for safe browsing), <strong>Explore</strong>{" "}
+        to open a browser-based UI (pgweb for Postgres, phpMyAdmin for MySQL/MariaDB), and{" "}
         <strong>Backups</strong> to dump a database to S3/MinIO, restore it, or schedule recurring
-        backups. A browser-based DB explorer (pgweb/phpMyAdmin) is coming next.
+        backups.
       </Alert>
 
       {queryConn && <QueryConsole conn={queryConn} onClose={() => setQueryConn(null)} />}

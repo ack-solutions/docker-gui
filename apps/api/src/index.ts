@@ -20,7 +20,9 @@ import { BackupService } from './services/backup.service.js';
 import { BackupSchedulerService, NodeCronScheduler } from './services/backup-scheduler.service.js';
 import { DbExplorerService } from './services/db-explorer.service.js';
 import { AlertService, WebhookAlertSender } from './services/alert.service.js';
-import { getCpuUsagePercent, getMemoryMetrics } from './services/system-metrics.service.js';
+import { getCpuUsagePercent, getMemoryMetrics, getDiskMetrics } from './services/system-metrics.service.js';
+import { assembleSnapshot, buildMetricCatalog } from './services/metric-snapshot.js';
+import type { MetricSnapshot } from './services/alert.service.js';
 import { DockerBackupEngine } from './lib/backup-engine.js';
 import { AuditLogService } from './services/audit-log.service.js';
 import { CaddyClient } from './lib/caddy.js';
@@ -78,6 +80,31 @@ async function main(): Promise<void> {
     network: config.DOCKER_GUI_NETWORK,
   });
   const alerts = new AlertService(prisma, { sender: new WebhookAlertSender() });
+
+  // Disk paths the alert evaluator watches — kept in step with the health page.
+  const metricDiskPaths = ['/'];
+  // Full metric reading (incl. per-container Docker stats) for rule evaluation.
+  const sampleMetrics = async (): Promise<MetricSnapshot> => {
+    const [cpuPercent, disks, containerStats] = await Promise.all([
+      getCpuUsagePercent(),
+      getDiskMetrics(metricDiskPaths),
+      containers.sampleStats(),
+    ]);
+    return assembleSnapshot({
+      cpuPercent,
+      memoryPercent: getMemoryMetrics().usagePercent,
+      disks,
+      containers: containerStats,
+    });
+  };
+  // Cheap catalog of selectable metric keys (no stats call) for the rule dialog.
+  const metricCatalog = async () => {
+    const [disks, containerNames] = await Promise.all([
+      getDiskMetrics(metricDiskPaths),
+      containers.runningNames(),
+    ]);
+    return buildMetricCatalog({ diskPaths: disks.map((d) => d.path), containerNames });
+  };
   const audit = new AuditLogService(prisma);
 
   const app = await buildApp({
@@ -105,6 +132,7 @@ async function main(): Promise<void> {
     scheduler,
     explorer,
     alerts,
+    metricCatalog,
     configSnapshot,
     audit,
     jwtConfig,
@@ -131,11 +159,7 @@ async function main(): Promise<void> {
     const alertTimer = setInterval(() => {
       void (async () => {
         try {
-          const [cpu, mem] = [await getCpuUsagePercent(), getMemoryMetrics()];
-          await alerts.evaluate({
-            'system.cpu.percent': cpu,
-            'system.memory.percent': mem.usagePercent,
-          });
+          await alerts.evaluate(await sampleMetrics());
         } catch (err) {
           app.log.error({ err }, 'alert evaluation failed');
         }

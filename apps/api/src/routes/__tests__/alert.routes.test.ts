@@ -32,6 +32,12 @@ function bearer(t: string) {
 beforeAll(async () => {
   env = await buildTestEnv({
     alertOptions: { sender: fakeSender, clock: () => now },
+    metricCatalog: async () => [
+      { value: 'system.cpu.percent', label: 'CPU %' },
+      { value: 'system.memory.percent', label: 'Memory %' },
+      { value: 'system.disk./.percent', label: 'Disk / · usage %' },
+      { value: 'container.web.cpu.percent', label: 'Container web · CPU %' },
+    ],
   });
   await env.app.inject({
     method: 'POST', url: '/api/v1/setup/bootstrap',
@@ -173,5 +179,24 @@ describe('evaluation engine', () => {
 
   it('requires auth', async () => {
     expect((await env.app.inject({ method: 'GET', url: '/api/v1/alerts/rules' })).statusCode).toBe(401);
+  });
+
+  describe('GET /alerts/metrics', () => {
+    it('lists selectable metric keys (system, disk, per-container) for any authed user', async () => {
+      const res = await env.app.inject({
+        method: 'GET',
+        url: '/api/v1/alerts/metrics',
+        headers: bearer(viewerToken),
+      });
+      expect(res.statusCode).toBe(200);
+      const cat = res.json() as Array<{ value: string; label: string }>;
+      expect(cat.map((c) => c.value)).toContain('system.disk./.percent');
+      expect(cat.map((c) => c.value)).toContain('container.web.cpu.percent');
+      expect(cat.find((c) => c.value === 'system.cpu.percent')?.label).toBe('CPU %');
+    });
+
+    it('requires auth', async () => {
+      expect((await env.app.inject({ method: 'GET', url: '/api/v1/alerts/metrics' })).statusCode).toBe(401);
+    });
   });
 });

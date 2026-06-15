@@ -1,6 +1,12 @@
 import type Docker from 'dockerode';
+import type { ContainerStats } from 'dockerode';
 import { AppError, NotFoundError } from '../lib/errors.js';
 import type { ContainerState, ContainerSummary } from '../schemas/container.schema.js';
+import {
+  computeContainerCpuPercent,
+  computeContainerMemoryPercent,
+  type ContainerStatSample,
+} from './metric-snapshot.js';
 
 const DOCKERODE_STATE_MAP: Record<string, ContainerState> = {
   created: 'created',
@@ -55,6 +61,62 @@ export class DockerContainersService {
     } catch (err) {
       throw mapDockerError(err);
     }
+  }
+
+  /** Names (no leading slash) of currently-running containers. Cheap — one
+   *  listContainers call, no per-container stats. Used to build the alert
+   *  metric catalog. Returns [] if the daemon is unreachable. */
+  async runningNames(): Promise<string[]> {
+    try {
+      const raw = (await this.docker.listContainers({ all: false })) as DockerodeContainerInfo[];
+      return raw.map((info) => (info.Names?.[0] ?? info.Id).replace(/^\//, ''));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Sample CPU/memory for every running container, for the alert evaluator.
+   * Uses a non-streaming stats read (the daemon computes the delta against the
+   * previous sample, so precpu_stats is valid). Per-container failures and a
+   * per-call timeout are swallowed so one bad container can't stall the loop or
+   * skew metrics. Returns [] if the daemon is unreachable.
+   */
+  async sampleStats(
+    opts: { timeoutMs?: number; concurrency?: number } = {},
+  ): Promise<ContainerStatSample[]> {
+    let raw: DockerodeContainerInfo[];
+    try {
+      raw = (await this.docker.listContainers({ all: false })) as DockerodeContainerInfo[];
+    } catch {
+      return [];
+    }
+    const timeoutMs = opts.timeoutMs ?? 4000;
+    const concurrency = Math.max(1, opts.concurrency ?? 5);
+    const out: ContainerStatSample[] = [];
+    for (let i = 0; i < raw.length; i += concurrency) {
+      const batch = raw.slice(i, i + concurrency);
+      const settled = await Promise.all(
+        batch.map(async (info) => {
+          const name = (info.Names?.[0] ?? info.Id).replace(/^\//, '');
+          try {
+            const stats = (await withTimeout(
+              this.docker.getContainer(info.Id).stats({ stream: false }),
+              timeoutMs,
+            )) as ContainerStats;
+            return {
+              name,
+              cpuPercent: computeContainerCpuPercent(stats),
+              memoryPercent: computeContainerMemoryPercent(stats),
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const s of settled) if (s) out.push(s);
+    }
+    return out;
   }
 
   async start(id: string): Promise<void> {
@@ -266,6 +328,20 @@ function isStatusError(err: unknown, code: number): boolean {
     'statusCode' in err &&
     (err as { statusCode: unknown }).statusCode === code
   );
+}
+
+/** Reject if a promise doesn't settle within `ms`. The Docker stats read can
+ *  hang on a wedged container; this caps the per-container cost. */
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('stats timed out')), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function mapDockerError(err: unknown): AppError {

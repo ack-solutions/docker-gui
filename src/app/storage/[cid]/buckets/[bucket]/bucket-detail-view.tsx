@@ -165,6 +165,7 @@ function BucketDetailInner({
   const [listError, setListError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Permissions tab
   const [policy, setPolicy] = useState<string>("");
@@ -184,18 +185,36 @@ function BucketDetailInner({
     }
   }, [connectionId]);
 
-  const loadObjects = useCallback(async () => {
-    setListError(null);
-    try {
-      const params = new URLSearchParams({ prefix });
-      const res = await apiFetch<ListObjectsResult>(
-        `/api/v1/storage/${connectionId}/buckets/${encodeURIComponent(bucket)}/objects?${params}`
-      );
-      setList(res);
-    } catch (err) {
-      setListError(err instanceof ApiError ? err.message : String(err));
-    }
-  }, [connectionId, bucket, prefix]);
+  // Pass a continuation token to append the next page; omit it to (re)load the
+  // first page. Accumulated objects/prefixes live in `list`, while isTruncated /
+  // nextContinuationToken always reflect the most recent page.
+  const loadObjects = useCallback(
+    async (continuationToken?: string) => {
+      if (continuationToken) setLoadingMore(true);
+      else setListError(null);
+      try {
+        const params = new URLSearchParams({ prefix });
+        if (continuationToken) params.set("continuationToken", continuationToken);
+        const res = await apiFetch<ListObjectsResult>(
+          `/api/v1/storage/${connectionId}/buckets/${encodeURIComponent(bucket)}/objects?${params}`
+        );
+        setList((prev) =>
+          continuationToken && prev
+            ? {
+                ...res,
+                prefixes: Array.from(new Set([...prev.prefixes, ...res.prefixes])),
+                objects: [...prev.objects, ...res.objects]
+              }
+            : res
+        );
+      } catch (err) {
+        setListError(err instanceof ApiError ? err.message : String(err));
+      } finally {
+        setLoadingMore(false);
+      }
+    },
+    [connectionId, bucket, prefix]
+  );
 
   const loadPolicy = useCallback(async () => {
     setPolicyError(null);
@@ -369,7 +388,7 @@ function BucketDetailInner({
           <>
             <Button
               startIcon={<RefreshIcon />}
-              onClick={loadObjects}
+              onClick={() => loadObjects()}
               variant="outlined"
               size="small"
             >
@@ -531,9 +550,19 @@ function BucketDetailInner({
           </Paper>
 
           {list?.isTruncated && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              More than {list.keyCount} objects in this prefix — pagination is coming soon.
-            </Alert>
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 2 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={loadingMore || !list.nextContinuationToken}
+                onClick={() => loadObjects(list.nextContinuationToken ?? undefined)}
+              >
+                {loadingMore ? "Loading…" : "Load more"}
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                {list.objects.length} loaded · more available
+              </Typography>
+            </Stack>
           )}
         </Box>
       )}

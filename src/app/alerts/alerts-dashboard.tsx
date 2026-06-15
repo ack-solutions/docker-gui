@@ -56,7 +56,14 @@ interface Event {
   createdAt: string;
 }
 
-const METRICS = [
+interface MetricOption {
+  value: string;
+  label: string;
+}
+
+// Shown until the live catalog (which adds per-disk + per-container metrics)
+// loads, and as a fallback if the endpoint is unreachable.
+const FALLBACK_METRICS: MetricOption[] = [
   { value: "system.cpu.percent", label: "CPU %" },
   { value: "system.memory.percent", label: "Memory %" }
 ];
@@ -81,15 +88,18 @@ function AlertsInner({ user }: { user: PublicUser }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [busy, setBusy] = useState(false);
+  const [metricOptions, setMetricOptions] = useState<MetricOption[]>(FALLBACK_METRICS);
 
   const load = useCallback(async () => {
     try {
-      const [r, e] = await Promise.all([
+      const [r, e, m] = await Promise.all([
         apiFetch<Rule[]>("/api/v1/alerts/rules"),
-        apiFetch<Event[]>("/api/v1/alerts/events").catch(() => [])
+        apiFetch<Event[]>("/api/v1/alerts/events").catch(() => []),
+        apiFetch<MetricOption[]>("/api/v1/alerts/metrics").catch(() => [])
       ]);
       setRules(r);
       setEvents(e);
+      if (m.length > 0) setMetricOptions(m);
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : String(err));
@@ -290,8 +300,12 @@ function AlertsInner({ user }: { user: PublicUser }) {
               onChange={(e) => setForm((f) => ({ ...f, metric: e.target.value }))}
               size="small"
               fullWidth
+              helperText="System CPU/memory, each disk, and every running container."
             >
-              {METRICS.map((m) => (
+              {(metricOptions.some((m) => m.value === form.metric)
+                ? metricOptions
+                : [{ value: form.metric, label: form.metric }, ...metricOptions]
+              ).map((m) => (
                 <MenuItem key={m.value} value={m.value}>
                   {m.label}
                 </MenuItem>
@@ -358,8 +372,8 @@ function AlertsInner({ user }: { user: PublicUser }) {
 
       <Box sx={{ mt: 3 }}>
         <Alert severity="info">
-          Rules are evaluated every 60 seconds against live system metrics. Email delivery and
-          per-container / disk metrics are coming next.
+          Rules are evaluated every 60 seconds against live metrics — system CPU/memory, disk
+          usage, and per-container CPU/memory. Email delivery is coming next.
         </Alert>
       </Box>
     </PageShell>

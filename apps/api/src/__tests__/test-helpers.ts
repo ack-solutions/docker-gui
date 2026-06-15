@@ -9,6 +9,7 @@ import { buildApp } from '../app.js';
 import { UserService } from '../services/user.service.js';
 import { AuthService } from '../services/auth.service.js';
 import { DockerContainersService } from '../services/docker-containers.service.js';
+import { buildMetricCatalog } from '../services/metric-snapshot.js';
 import { DockerImagesService } from '../services/docker-images.service.js';
 import { DockerVolumesService } from '../services/docker-volumes.service.js';
 import { DockerNetworksService } from '../services/docker-networks.service.js';
@@ -99,6 +100,7 @@ export interface BuildTestEnvOptions {
   backupOptions?: BackupServiceOptions;
   explorerOptions?: Partial<DbExplorerServiceOptions>;
   alertOptions?: AlertServiceOptions;
+  metricCatalog?: () => Promise<Array<{ value: string; label: string }>>;
 }
 
 export type TestRole = 'owner' | 'admin' | 'operator' | 'viewer';
@@ -272,6 +274,13 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     scheduler,
     explorer,
     alerts,
+    metricCatalog:
+      opts.metricCatalog ??
+      (async () =>
+        buildMetricCatalog({
+          diskPaths: ['/'],
+          containerNames: await containers.runningNames(),
+        })),
     configSnapshot,
     audit,
     jwtConfig: TEST_JWT_CONFIG,
