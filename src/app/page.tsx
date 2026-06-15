@@ -8,7 +8,7 @@ import { LoadingState } from "@/components";
 export default function HomePage() {
   const router = useRouter();
   useEffect(() => {
-    router.replace(isAuthenticated() ? "/containers" : "/login");
+    router.replace(isAuthenticated() ? "/dashboard" : "/login");
   }, [router]);
   return <LoadingState message="Redirecting…" />;
 }
