@@ -14,6 +14,7 @@ import { registryRoutes } from './routes/registry.routes.js';
 import { databaseRoutes } from './routes/database.routes.js';
 import { backupRoutes } from './routes/backup.routes.js';
 import { explorerRoutes } from './routes/explorer.routes.js';
+import { dbProxyRoutes } from './routes/db-proxy.routes.js';
 import { configRoutes } from './routes/config.routes.js';
 import { auditRoutes } from './routes/audit.routes.js';
 import type { ConfigSnapshot } from './config/index.js';
@@ -173,6 +174,17 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     },
   };
 
+  // DB-explorer reverse proxy — registered at the ROOT (no /api/v1 prefix, no
+  // Bearer auth). It authenticates with its own connection-scoped token +
+  // path-scoped cookie, because browser asset requests can't carry a header.
+  await app.register(dbProxyRoutes, {
+    secret: opts.jwtConfig.secret,
+    getUpstream: async (connectionId: string) => {
+      const info = await opts.explorer.status(connectionId).catch(() => null);
+      return info && info.status === 'running' && info.upstream ? info.upstream : null;
+    },
+  });
+
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { deps: opts.healthDeps });
@@ -225,6 +237,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(explorerRoutes, {
         explorer: opts.explorer,
+        secret: opts.jwtConfig.secret,
         authMiddleware,
       });
       await api.register(configRoutes, {

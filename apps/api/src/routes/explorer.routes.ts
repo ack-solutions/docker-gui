@@ -5,9 +5,12 @@ import {
   type AuthMiddlewareDeps,
 } from '../middleware/auth.middleware.js';
 import type { DbExplorerService } from '../services/db-explorer.service.js';
+import { signExplorerToken } from '../lib/explorer-token.js';
 
 export interface ExplorerRoutesOptions {
   explorer: DbExplorerService;
+  /** Secret used to mint the explorer access token (the proxy verifies it). */
+  secret: string;
   authMiddleware: AuthMiddlewareDeps;
 }
 
@@ -30,7 +33,11 @@ export const explorerRoutes: FastifyPluginAsync<ExplorerRoutesOptions> = async (
     { preHandler: requireOperator },
     async (req, reply) => {
       const info = await opts.explorer.open(req.params.id);
-      return reply.status(202).send(info);
+      // Mint a connection-scoped access URL the browser opens to reach the
+      // sidecar through the panel proxy (it bootstraps a session cookie).
+      const token = signExplorerToken(req.params.id, opts.secret);
+      const accessUrl = `/db-proxy/${req.params.id}/?__dgxt=${encodeURIComponent(token)}`;
+      return reply.status(202).send({ ...info, accessUrl });
     },
   );
 

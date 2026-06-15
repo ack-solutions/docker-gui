@@ -30,11 +30,21 @@ export interface ExplorerInfo {
   lastAccessedAt?: string;
 }
 
+interface BuildCtx {
+  target: SidecarTarget;
+  /** Path the panel proxy serves this sidecar under: /db-proxy/<id>/ */
+  prefix: string;
+  /** Full external base URL for the sidecar, when the panel public URL is known. */
+  absoluteUri: string | undefined;
+}
+
 interface ExplorerDef {
   kind: 'pgweb' | 'phpmyadmin';
   image: string;
   port: number;
-  buildEnv: (c: SidecarTarget) => string[];
+  buildEnv: (ctx: BuildCtx) => string[];
+  /** Extra container Cmd (e.g. pgweb's --prefix). */
+  buildCmd?: (ctx: BuildCtx) => string[];
 }
 
 interface SidecarTarget {
@@ -50,40 +60,43 @@ const LABEL_MANAGED = 'docker-gui.managed-by';
 const LABEL_FEATURE = 'docker-gui.feature';
 const LABEL_CONN = 'docker-gui.db-connection';
 
-const DEFS: Record<DbEngine, ExplorerDef> = {
-  postgres: {
+function pgweb(): ExplorerDef {
+  return {
     kind: 'pgweb',
     image: 'sosedoff/pgweb:latest',
     port: 8081,
-    buildEnv: (c) => [
+    buildEnv: ({ target: c }) => [
       `DATABASE_URL=postgres://${encodeURIComponent(c.username)}:${encodeURIComponent(
         c.password,
       )}@${c.host}:${c.port}/${encodeURIComponent(c.database)}?sslmode=disable`,
       'PGWEB_DATABASE_SSLMODE=disable',
     ],
-  },
-  mysql: {
+    // Serve under the proxy prefix so pgweb's own asset links resolve through
+    // the panel. (The exact flag may need tuning against the pgweb image.)
+    buildCmd: ({ prefix }) => ['--bind=0.0.0.0', '--listen=8081', `--prefix=${prefix.replace(/\/$/, '')}`],
+  };
+}
+
+function phpmyadmin(): ExplorerDef {
+  return {
     kind: 'phpmyadmin',
     image: 'phpmyadmin:latest',
     port: 80,
-    buildEnv: (c) => [
+    buildEnv: ({ target: c, absoluteUri }) => [
       `PMA_HOST=${c.host}`,
       `PMA_PORT=${c.port}`,
       `PMA_USER=${c.username}`,
       `PMA_PASSWORD=${c.password}`,
+      // Needed so phpMyAdmin generates correct links behind the reverse proxy.
+      ...(absoluteUri ? [`PMA_ABSOLUTE_URI=${absoluteUri}`] : []),
     ],
-  },
-  mariadb: {
-    kind: 'phpmyadmin',
-    image: 'phpmyadmin:latest',
-    port: 80,
-    buildEnv: (c) => [
-      `PMA_HOST=${c.host}`,
-      `PMA_PORT=${c.port}`,
-      `PMA_USER=${c.username}`,
-      `PMA_PASSWORD=${c.password}`,
-    ],
-  },
+  };
+}
+
+const DEFS: Record<DbEngine, ExplorerDef> = {
+  postgres: pgweb(),
+  mysql: phpmyadmin(),
+  mariadb: phpmyadmin(),
 };
 
 export interface DbExplorerServiceOptions {
@@ -92,6 +105,9 @@ export interface DbExplorerServiceOptions {
   idleTtlMs?: number;
   /** Clock seam for deterministic idle-reap tests. */
   clock?: () => number;
+  /** Panel public base URL (no trailing slash), used to set phpMyAdmin's
+   *  PMA_ABSOLUTE_URI so its links resolve behind the proxy. Optional. */
+  publicUrl?: string;
 }
 
 export class DbExplorerService {
@@ -139,13 +155,21 @@ export class DbExplorerService {
       password: conn.passwordCipher ? this.cryptoBox.open(conn.passwordCipher) : '',
       database: conn.database ?? (conn.engine === 'postgres' ? 'postgres' : ''),
     };
+    const prefix = `/db-proxy/${connectionId}/`;
+    const ctx: BuildCtx = {
+      target,
+      prefix,
+      absoluteUri: this.opts.publicUrl ? `${this.opts.publicUrl.replace(/\/$/, '')}${prefix}` : undefined,
+    };
+    const cmd = def.buildCmd?.(ctx);
 
     let container;
     try {
       container = await this.docker.createContainer({
         name,
         Image: def.image,
-        Env: def.buildEnv(target),
+        Env: def.buildEnv(ctx),
+        ...(cmd ? { Cmd: cmd } : {}),
         Labels: {
           [LABEL_MANAGED]: 'db-explorer-service',
           [LABEL_FEATURE]: 'db-explorer',

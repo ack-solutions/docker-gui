@@ -236,6 +236,7 @@ interface ExplorerInfo {
   status: "running" | "starting" | "stopped";
   containerId?: string;
   upstream?: string;
+  accessUrl?: string;
 }
 
 function ExplorerDialog({ conn, onClose }: { conn: DbConnection; onClose: () => void }) {
@@ -254,12 +255,15 @@ function ExplorerDialog({ conn, onClose }: { conn: DbConnection; onClose: () => 
     load();
   }, [load]);
 
-  const launch = useCallback(async () => {
+  // Launch (or reuse) the sidecar and open it in a new tab via the panel proxy.
+  // POST always returns a fresh access URL (it bootstraps a session cookie).
+  const openExplorer = useCallback(async () => {
     setBusy(true);
     try {
       const i = await apiFetch<ExplorerInfo>(`/api/v1/databases/connections/${conn.id}/explorer`, { method: "POST" });
       setInfo(i);
-      toast.success("Explorer launched");
+      if (i.accessUrl) window.open(i.accessUrl, "_blank", "noopener");
+      toast.success("Explorer ready");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -303,26 +307,24 @@ function ExplorerDialog({ conn, onClose }: { conn: DbConnection; onClose: () => 
             color={running ? "success" : "default"}
             variant="outlined"
           />
-          {running ? (
+          <Button
+            variant="contained"
+            startIcon={busy ? <CircularProgress size={14} color="inherit" /> : <StorageIcon />}
+            onClick={openExplorer}
+            disabled={busy}
+          >
+            {running ? "Open explorer" : "Launch & open"}
+          </Button>
+          {running && (
             <Button color="warning" onClick={stop} disabled={busy}>
               Stop
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              startIcon={busy ? <CircularProgress size={14} color="inherit" /> : <StorageIcon />}
-              onClick={launch}
-              disabled={busy}
-            >
-              Launch explorer
             </Button>
           )}
         </Stack>
         {running && (
           <Alert severity="info" sx={{ mt: 2 }}>
-            The explorer is running at <code>{info?.upstream}</code> on the internal network.
-            In-browser access through the panel (authenticated reverse proxy) is the next update;
-            for now it is reachable to tools on the Docker network.
+            Opens in a new tab through the panel&apos;s authenticated proxy (<code>{info?.upstream}</code>).
+            If assets don&apos;t load, the sidecar may need its path-prefix tuned for your setup.
           </Alert>
         )}
       </DialogContent>
