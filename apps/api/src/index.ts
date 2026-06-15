@@ -1,4 +1,5 @@
 import { loadConfig, loadConfigSnapshot, parseCorsOrigins } from './config.js';
+import { readAppVersion } from './lib/app-version.js';
 import { buildLoggerOptions } from './lib/logger.js';
 import { createDockerClient } from './lib/docker.js';
 import { getPrisma, disconnectPrisma } from './lib/db.js';
@@ -85,7 +86,7 @@ async function main(): Promise<void> {
     healthDeps: {
       docker,
       prisma,
-      appVersion: process.env['npm_package_version'] ?? '0.1.0',
+      appVersion: readAppVersion(),
       startedAt,
     },
     auth,
