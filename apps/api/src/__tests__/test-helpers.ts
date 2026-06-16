@@ -14,6 +14,8 @@ import { DockerImagesService } from '../services/docker-images.service.js';
 import { DockerVolumesService } from '../services/docker-volumes.service.js';
 import { DockerNetworksService } from '../services/docker-networks.service.js';
 import { SitesService } from '../services/sites.service.js';
+import { DeployTokenService } from '../services/deploy-token.service.js';
+import { DeployService } from '../services/deploy.service.js';
 import { DnsService, type DnsServiceOptions } from '../services/dns.service.js';
 import { FeaturesService } from '../services/features.service.js';
 import {
@@ -221,6 +223,8 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   const networks = new DockerNetworksService(docker);
   const caddy = opts.caddy === undefined ? null : opts.caddy;
   const sites = new SitesService(prisma, caddy);
+  const deployTokens = new DeployTokenService(prisma);
+  const deploy = new DeployService(prisma, docker);
   const cryptoBox = new CryptoBox(TEST_JWT_CONFIG.secret);
   const dns = new DnsService(prisma, cryptoBox, opts.dnsOptions ?? {});
   const features = new FeaturesService(docker, {
@@ -265,6 +269,8 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
     volumes,
     networks,
     sites,
+    deploy,
+    deployTokens,
     dns,
     features,
     storage,

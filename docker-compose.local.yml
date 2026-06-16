@@ -80,6 +80,7 @@ services:
       - ./docker/caddy/initial.json:/etc/caddy/initial.json:ro
       - caddy-data:/data
       - caddy-config:/config
+      - caddy-www:/srv
     ports:
       - "18080:80"
       - "18443:443"
@@ -90,6 +91,7 @@ volumes:
   app-data:
   caddy-data:
   caddy-config:
+  caddy-www:
 
 networks:
   dgui:

@@ -92,6 +92,9 @@ volumes:
   # cycles. They're created on demand by the api when Sites is enabled.
   caddy-data:
   caddy-config:
+  # Static-site web roots, file-served by Caddy. The api streams deploys into
+  # the Caddy container (never mounts this itself).
+  caddy-www:
 
 networks:
   dgui:

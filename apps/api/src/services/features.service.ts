@@ -71,7 +71,7 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
       'Caddy v2 fronts public traffic on :80 and :443. Required for Sites — point a domain at this server, fill the form, and Caddy issues a Lets Encrypt cert in seconds.',
     ports: [80, 443],
     containerName: 'docker-gui-caddy',
-    volumes: [`${PROJECT}_caddy-data`, `${PROJECT}_caddy-config`],
+    volumes: [`${PROJECT}_caddy-data`, `${PROJECT}_caddy-config`, `${PROJECT}_caddy-www`],
     configHref: '/sites',
     build: ({ network, hostInstallDir }) => ({
       name: 'docker-gui-caddy',
@@ -101,6 +101,8 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
           `${hostInstallDir}/caddy/initial.json:/etc/caddy/initial.json:ro`,
           `${PROJECT}_caddy-data:/data`,
           `${PROJECT}_caddy-config:/config`,
+          // Static-site web roots the api streams deploys into.
+          `${PROJECT}_caddy-www:/srv`,
         ],
         NetworkMode: network,
       },

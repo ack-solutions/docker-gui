@@ -6,6 +6,7 @@ import { authRoutes } from './routes/auth.routes.js';
 import { usersRoutes } from './routes/users.routes.js';
 import { dockerRoutes } from './routes/docker.routes.js';
 import { sitesRoutes } from './routes/sites.routes.js';
+import { deployRoutes } from './routes/deploy.routes.js';
 import { dnsRoutes } from './routes/dns.routes.js';
 import { wsRoutes } from './routes/ws.routes.js';
 import { featuresRoutes } from './routes/features.routes.js';
@@ -27,6 +28,8 @@ import type { DockerImagesService } from './services/docker-images.service.js';
 import type { DockerVolumesService } from './services/docker-volumes.service.js';
 import type { DockerNetworksService } from './services/docker-networks.service.js';
 import type { SitesService } from './services/sites.service.js';
+import type { DeployService } from './services/deploy.service.js';
+import type { DeployTokenService } from './services/deploy-token.service.js';
 import type { DnsService } from './services/dns.service.js';
 import type { FeaturesService } from './services/features.service.js';
 import type { StorageService } from './services/storage.service.js';
@@ -57,6 +60,8 @@ export interface BuildAppOptions {
   volumes: DockerVolumesService;
   networks: DockerNetworksService;
   sites: SitesService;
+  deploy: DeployService;
+  deployTokens: DeployTokenService;
   dns: DnsService;
   features: FeaturesService;
   storage: StorageService;
@@ -213,7 +218,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       });
       await api.register(sitesRoutes, {
         sites: opts.sites,
+        tokens: opts.deployTokens,
         authMiddleware,
+      });
+      // Deploy endpoint lives in its OWN scope (no JWT requireAuth hook) —
+      // it authenticates per-site deploy tokens instead.
+      await api.register(deployRoutes, {
+        deploy: opts.deploy,
+        tokens: opts.deployTokens,
       });
       await api.register(dnsRoutes, {
         dns: opts.dns,

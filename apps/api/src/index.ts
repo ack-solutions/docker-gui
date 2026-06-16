@@ -7,6 +7,8 @@ import { buildApp } from './app.js';
 import { AuthService } from './services/auth.service.js';
 import { UserService } from './services/user.service.js';
 import { DockerContainersService } from './services/docker-containers.service.js';
+import { DeployTokenService } from './services/deploy-token.service.js';
+import { DeployService } from './services/deploy.service.js';
 import { DockerImagesService } from './services/docker-images.service.js';
 import { DockerVolumesService } from './services/docker-volumes.service.js';
 import { DockerNetworksService } from './services/docker-networks.service.js';
@@ -61,6 +63,8 @@ async function main(): Promise<void> {
       ? { defaultLetsEncryptEmail: config.CADDY_DEFAULT_LE_EMAIL }
       : {},
   });
+  const deployTokens = new DeployTokenService(prisma);
+  const deploy = new DeployService(prisma, docker);
   const cryptoBox = new CryptoBox(config.JWT_SECRET);
   const publicIp = new PublicIpService();
   const dns = new DnsService(prisma, cryptoBox, {
@@ -127,6 +131,8 @@ async function main(): Promise<void> {
     volumes,
     networks,
     sites,
+    deploy,
+    deployTokens,
     dns,
     features,
     storage,
