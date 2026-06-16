@@ -63,9 +63,12 @@ async function main(): Promise<void> {
       ? { defaultLetsEncryptEmail: config.CADDY_DEFAULT_LE_EMAIL }
       : {},
   });
-  const deployTokens = new DeployTokenService(prisma);
-  const deploy = new DeployService(prisma, docker);
   const cryptoBox = new CryptoBox(config.JWT_SECRET);
+  const deployTokens = new DeployTokenService(prisma);
+  const deploy = new DeployService(prisma, docker, {
+    network: config.DOCKER_GUI_NETWORK,
+    cryptoBox,
+  });
   const publicIp = new PublicIpService();
   const dns = new DnsService(prisma, cryptoBox, {
     ...(config.SYSTEM_PUBLIC_IP ? { publicIp: config.SYSTEM_PUBLIC_IP } : {}),
