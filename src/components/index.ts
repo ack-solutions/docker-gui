@@ -40,5 +40,11 @@ export type { Column, DataTableProps } from "./data-table";
 export { PageShell } from "./page-shell";
 export type { PageShellProps, NavItem } from "./page-shell";
 
+export { SplitPanel } from "./split-panel";
+export type { SplitPanelProps } from "./split-panel";
+
+export { LogStreamPanel } from "./log-stream-panel";
+export type { LogStreamPanelProps } from "./log-stream-panel";
+
 export { AuthGuard } from "./auth-guard";
 export type { AuthGuardProps } from "./auth-guard";

@@ -104,6 +104,20 @@ async function refreshAccessToken(): Promise<StoredTokens | null> {
   }
 }
 
+/**
+ * Return tokens that are safe to use right now, refreshing first if the access
+ * token is expired or within `skewMs` of expiring. Unlike `apiFetch`, the
+ * WebSocket path can't retry on a 401 — it must open with a valid token — so
+ * the log-stream hook calls this before building the ws URL.
+ */
+export async function ensureFreshToken(skewMs = 30_000): Promise<StoredTokens | null> {
+  const stored = getTokens();
+  if (!stored) return null;
+  const expiresAt = Date.parse(stored.accessExpiresAt);
+  if (Number.isFinite(expiresAt) && expiresAt - Date.now() > skewMs) return stored;
+  return refreshAccessToken();
+}
+
 export interface ApiFetchOptions extends Omit<RequestInit, "headers"> {
   headers?: Record<string, string>;
   /** Skip auth attachment (for /auth/login etc.) */

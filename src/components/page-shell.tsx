@@ -55,6 +55,9 @@ export interface PageShellProps {
   navItems?: NavItem[];
   hideChrome?: boolean;
   maxWidth?: "sm" | "md" | "lg" | "xl" | false;
+  /** AWS-style docked panel (e.g. a resizable log drawer) rendered below the
+   *  scrollable content. Reflows content rather than overlaying it. */
+  splitPanel?: ReactNode;
   children: ReactNode;
 }
 
@@ -129,6 +132,7 @@ export function PageShell({
   actions,
   hideChrome = false,
   maxWidth = "xl",
+  splitPanel,
   children
 }: PageShellProps): JSX.Element {
   const router = useRouter();
@@ -273,7 +277,7 @@ export function PageShell({
   }
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
       {/* Desktop permanent drawer */}
       <Drawer
         variant="permanent"
@@ -303,7 +307,7 @@ export function PageShell({
       </Drawer>
 
       {/* Main column */}
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, height: "100%", display: "flex", flexDirection: "column" }}>
         {/* Top bar */}
         <Box
           component="header"
@@ -350,10 +354,23 @@ export function PageShell({
           </Toolbar>
         </Box>
 
-        {/* Content */}
-        <Box sx={{ flex: 1, px: { xs: 2, sm: 3, md: 4 }, py: { xs: 2.5, md: 3.5 } }}>
+        {/* Content — the scroll container (header pins above, panel docks below) */}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflowY: "auto",
+            px: { xs: 2, sm: 3, md: 4 },
+            py: { xs: 2.5, md: 3.5 }
+          }}
+        >
           <Box sx={{ maxWidth: maxWidth === false ? "100%" : 1320, mx: "auto" }}>{children}</Box>
         </Box>
+
+        {/* Optional AWS-style docked panel: a flex sibling AFTER the content, so
+            it reflows/shrinks the scroll area rather than overlaying it. */}
+        {splitPanel}
       </Box>
     </Box>
   );

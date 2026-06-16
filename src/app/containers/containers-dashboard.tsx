@@ -6,8 +6,11 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   IconButton,
+  MenuItem,
   Stack,
+  TextField,
   Tooltip,
   Typography
 } from "@mui/material";
@@ -17,7 +20,6 @@ import StopIcon from "@mui/icons-material/Stop";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
-import OndemandVideoIcon from "@mui/icons-material/OndemandVideo";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import { toast } from "sonner";
 import {
@@ -28,8 +30,9 @@ import {
   ErrorState,
   formatPorts,
   LoadingState,
+  LogStreamPanel,
   PageShell,
-  SectionCard,
+  SplitPanel,
   StatusChip,
   type StatusKind
 } from "@/components";
@@ -44,9 +47,21 @@ interface ContainerSummary {
   status: string;
   createdAt: string;
   ports: Array<{ privatePort: number; publicPort?: number; type: string; ip?: string }>;
+  labels?: Record<string, string>;
 }
 
+type GroupMode = "none" | "project" | "image" | "state";
+
 const REFRESH_MS = 5000;
+const GROUP_BY_KEY = "dgui.v2.containers.groupBy";
+const COMPOSE_PROJECT_LABEL = "com.docker.compose.project";
+
+const GROUP_OPTIONS: Array<{ value: GroupMode; label: string }> = [
+  { value: "none", label: "None" },
+  { value: "project", label: "Compose project" },
+  { value: "image", label: "Image" },
+  { value: "state", label: "State" }
+];
 
 function ContainersInner({ user }: { user: PublicUser }) {
   const router = useRouter();
@@ -54,7 +69,22 @@ function ContainersInner({ user }: { user: PublicUser }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [logsView, setLogsView] = useState<{ id: string; text: string } | null>(null);
+  const [groupBy, setGroupBy] = useState<GroupMode>("none");
+  // Docked log drawer target (independent of the 5s poll, so it never flickers).
+  const [logTarget, setLogTarget] = useState<{ id: string; name: string } | null>(null);
+  const [logsCollapsed, setLogsCollapsed] = useState(false);
+
+  // Restore persisted group-by after mount (avoids SSR/client mismatch).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(GROUP_BY_KEY) as GroupMode | null;
+    if (saved && GROUP_OPTIONS.some((o) => o.value === saved)) setGroupBy(saved);
+  }, []);
+
+  const changeGroupBy = useCallback((mode: GroupMode) => {
+    setGroupBy(mode);
+    if (typeof window !== "undefined") window.localStorage.setItem(GROUP_BY_KEY, mode);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +114,8 @@ function ContainersInner({ user }: { user: PublicUser }) {
         const force = c.state === "running";
         await apiFetch(`/api/v1/docker/containers/${c.id}?force=${force}`, { method: "DELETE" });
         toast.success(`Removed ${c.names[0] ?? c.shortId}`);
+        // If we were tailing this container, close the drawer.
+        if (logTarget?.id === c.id) setLogTarget(null);
       } else {
         await apiFetch(`/api/v1/docker/containers/${c.id}/${kind}`, { method: "POST" });
         toast.success(`${kind[0]?.toUpperCase()}${kind.slice(1)}ed ${c.names[0] ?? c.shortId}`);
@@ -98,19 +130,9 @@ function ContainersInner({ user }: { user: PublicUser }) {
     }
   }
 
-  async function viewLogs(c: ContainerSummary) {
-    setBusyId(c.id);
-    setActionError(null);
-    try {
-      const data = await apiFetch<{ id: string; tail: number; text: string }>(
-        `/api/v1/docker/containers/${c.id}/logs?tail=200`
-      );
-      setLogsView({ id: c.shortId, text: data.text || "(no log output)" });
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      setBusyId(null);
-    }
+  function openLogs(c: ContainerSummary) {
+    setLogTarget({ id: c.id, name: c.names[0] ?? c.shortId });
+    setLogsCollapsed(false);
   }
 
   const counts = useMemo(() => {
@@ -122,13 +144,21 @@ function ContainersInner({ user }: { user: PublicUser }) {
     return c;
   }, [rows]);
 
+  const groupResolver = useMemo<((r: ContainerSummary) => string) | undefined>(() => {
+    switch (groupBy) {
+      case "project":
+        return (r) => r.labels?.[COMPOSE_PROJECT_LABEL] ?? "(standalone)";
+      case "image":
+        return (r) => r.image;
+      case "state":
+        return (r) => r.state;
+      default:
+        return undefined;
+    }
+  }, [groupBy]);
+
   const columns: Column<ContainerSummary>[] = [
-    {
-      key: "state",
-      header: "State",
-      width: 120,
-      render: (r) => <StatusChip status={r.state} />
-    },
+    { key: "state", header: "State", width: 120, render: (r) => <StatusChip status={r.state} /> },
     {
       key: "name",
       header: "Name",
@@ -152,11 +182,7 @@ function ContainersInner({ user }: { user: PublicUser }) {
         </Typography>
       )
     },
-    {
-      key: "status",
-      header: "Status",
-      render: (r) => <Typography variant="body2">{r.status}</Typography>
-    },
+    { key: "status", header: "Status", render: (r) => <Typography variant="body2">{r.status}</Typography> },
     {
       key: "ports",
       header: "Ports",
@@ -173,21 +199,15 @@ function ContainersInner({ user }: { user: PublicUser }) {
     const running = c.state === "running";
     return (
       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-        <Tooltip title="Logs (last 200 lines)">
-          <span>
-            <IconButton size="small" onClick={() => viewLogs(c)} disabled={busy}>
-              <ArticleOutlinedIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Live logs (follow)">
+        <Tooltip title="Logs">
           <span>
             <IconButton
               size="small"
-              onClick={() => router.push(`/containers/${c.id}/logs`)}
+              onClick={() => openLogs(c)}
               disabled={busy}
+              color={logTarget?.id === c.id ? "primary" : "default"}
             >
-              <OndemandVideoIcon fontSize="small" />
+              <ArticleOutlinedIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
@@ -205,12 +225,7 @@ function ContainersInner({ user }: { user: PublicUser }) {
         {!running && (
           <Tooltip title="Start">
             <span>
-              <IconButton
-                size="small"
-                onClick={() => action(c, "start")}
-                disabled={busy}
-                color="success"
-              >
+              <IconButton size="small" onClick={() => action(c, "start")} disabled={busy} color="success">
                 <PlayArrowIcon fontSize="small" />
               </IconButton>
             </span>
@@ -234,16 +249,23 @@ function ContainersInner({ user }: { user: PublicUser }) {
         </Tooltip>
         <Tooltip title="Remove">
           <span>
-            <IconButton
-              size="small"
-              onClick={() => action(c, "remove")}
-              disabled={busy}
-              color="error"
-            >
+            <IconButton size="small" onClick={() => action(c, "remove")} disabled={busy} color="error">
               <DeleteOutlineIcon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>
+      </Stack>
+    );
+  }
+
+  function renderGroupHeader(key: string, groupRows: ContainerSummary[]) {
+    const running = groupRows.filter((c) => c.state === "running").length;
+    return (
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          {key}
+        </Typography>
+        <Chip size="small" color="success" variant="outlined" label={`${running} running`} />
       </Stack>
     );
   }
@@ -261,24 +283,59 @@ function ContainersInner({ user }: { user: PublicUser }) {
   if (rows === null && loadError) {
     return (
       <PageShell title="Containers" user={user}>
-        <ErrorState
-          title="Cannot list containers"
-          message={loadError}
-          onRetry={load}
-        />
+        <ErrorState title="Cannot list containers" message={loadError} onRetry={load} />
       </PageShell>
     );
   }
+
+  const logDrawer = logTarget ? (
+    <SplitPanel
+      storageKey="containers-logs"
+      header={`Logs · ${logTarget.name}`}
+      ariaLabel="Resize logs panel"
+      collapsed={logsCollapsed}
+      onCollapsedChange={setLogsCollapsed}
+      onClose={() => {
+        setLogTarget(null);
+        setLogsCollapsed(false);
+      }}
+      headerActions={
+        <Tooltip title="Open full-page live logs">
+          <IconButton size="small" onClick={() => router.push(`/containers/${logTarget.id}/logs`)}>
+            <ArticleOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      }
+      panel={<LogStreamPanel containerId={logTarget.id} enabled={!logsCollapsed} />}
+    />
+  ) : undefined;
 
   return (
     <PageShell
       title="Containers"
       subtitle={`${counts.total} total · ${counts.running} running · ${counts.stopped} stopped`}
       user={user}
+      splitPanel={logDrawer}
       actions={
-        <Button startIcon={<RefreshIcon />} onClick={load} variant="outlined" size="small">
-          Refresh
-        </Button>
+        <>
+          <TextField
+            select
+            size="small"
+            label="Group by"
+            value={groupBy}
+            onChange={(e) => changeGroupBy(e.target.value as GroupMode)}
+            sx={{ minWidth: 150 }}
+          >
+            {GROUP_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button startIcon={<RefreshIcon />} onClick={load} variant="outlined" size="small">
+            Refresh
+          </Button>
+        </>
       }
     >
       {loadError && (
@@ -297,6 +354,7 @@ function ContainersInner({ user }: { user: PublicUser }) {
         rows={rows ?? []}
         rowKey={(r) => r.id}
         rowActions={rowActions}
+        {...(groupResolver ? { groupBy: groupResolver, renderGroupHeader } : {})}
         empty={
           <EmptyState
             title="No containers"
@@ -308,35 +366,6 @@ function ContainersInner({ user }: { user: PublicUser }) {
           />
         }
       />
-
-      {logsView && (
-        <Box sx={{ mt: 3 }}>
-          <SectionCard
-            title={`Logs · ${logsView.id} · last 200 lines`}
-            action={
-              <Button size="small" onClick={() => setLogsView(null)}>
-                Close
-              </Button>
-            }
-            dense
-          >
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                p: 1.5,
-                bgcolor: "action.hover",
-                borderRadius: 1,
-                overflowX: "auto",
-                fontSize: 12,
-                maxHeight: 400
-              }}
-            >
-              {logsView.text}
-            </Box>
-          </SectionCard>
-        </Box>
-      )}
     </PageShell>
   );
 }
