@@ -3,6 +3,8 @@ import type Docker from 'dockerode';
 import type { PrismaClient } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors.js';
 import type { CryptoBox } from '../lib/crypto-box.js';
+import { isPublicIpv4 } from './public-ip.service.js';
+import type { DnsRecordInput } from '../lib/dns/types.js';
 
 /**
  * Optional add-on capabilities (reverse proxy, object storage, …) that the
@@ -250,6 +252,54 @@ export interface FeaturesServiceOptions {
   /** Used to auto-register the "Local MinIO" S3 connection on enable. */
   prisma?: PrismaClient;
   cryptoBox?: CryptoBox;
+  /** This server's public IPv4 — drives the email prerequisites checklist. */
+  getPublicIp?: () => string | undefined;
+}
+
+/** One auto-determined prerequisite for hosting email. */
+export interface EmailChecklistItem {
+  label: string;
+  met: boolean;
+  detail: string;
+}
+
+/** Prerequisites report for the (deliberately gated) on-prem email feature. */
+export interface EmailPreconditions {
+  /** All auto-checkable hard requirements are satisfied. */
+  ready: boolean;
+  domain: string | null;
+  /** This server's detected public IPv4, or null. */
+  publicIp: string | null;
+  /** Hard blockers (no public IP, no domain). */
+  blockers: string[];
+  /** Auto-determined prerequisites. */
+  checklist: EmailChecklistItem[];
+  /** Steps the operator must verify themselves (can't be auto-checked). */
+  manualSteps: string[];
+  /** DNS records to create (DKIM is a placeholder until first start). */
+  dnsRecords: DnsRecordInput[];
+  dkimNote: string;
+  /** Honest explanation of why this isn't one-click. */
+  why: string;
+}
+
+/** Host ports a mail server must own (and which clouds/ISPs often block). */
+const EMAIL_PORTS = [25, 465, 587, 143, 993];
+
+/** The MX/SPF/DMARC records (plus a DKIM placeholder) a mail domain needs. */
+function buildEmailDnsRecords(domain: string): DnsRecordInput[] {
+  const mailHost = `mail.${domain}`;
+  return [
+    // Mail exchanger → this server's mail host.
+    { type: 'MX', name: '@', value: mailHost, priority: 10, ttl: 3600 },
+    // The mail host's A record is created when you set up the Site / DNS for it.
+    // SPF: only this server's MX may send for the domain.
+    { type: 'TXT', name: '@', value: 'v=spf1 mx -all', ttl: 3600 },
+    // DMARC: quarantine failures, mailto report address on the same domain.
+    { type: 'TXT', name: '_dmarc', value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain}`, ttl: 3600 },
+    // DKIM placeholder — replace <generated> after the server creates the key.
+    { type: 'TXT', name: 'mail._domainkey', value: 'v=DKIM1; k=rsa; p=<generated-after-first-start>', ttl: 3600 },
+  ];
 }
 
 const MINIO_CONNECTION_NAME = 'Local MinIO';
@@ -271,6 +321,63 @@ export class FeaturesService {
   /** Single feature, including transient errors from the last enable/disable. */
   async get(key: FeatureKey): Promise<FeatureView> {
     return this.toView(this.mustFind(key));
+  }
+
+  /**
+   * Prerequisites for hosting on-prem email. On a single box behind NAT this is
+   * NOT a one-click feature: it needs a static public IP, open inbound ports
+   * (esp. :25, which most clouds/ISPs block), valid reverse DNS (PTR), a real
+   * domain, and MX/SPF/DKIM/DMARC records. Rather than ship a mail server that
+   * silently can't deliver, we surface exactly what's required. Pure function:
+   * only reads the injected public-IP seam.
+   */
+  emailPreconditions(domain: string | null): EmailPreconditions {
+    const rawIp = this.opts.getPublicIp?.();
+    const publicIp = rawIp && isPublicIpv4(rawIp) ? rawIp : null;
+    const dom = domain && domain.trim().length > 0 ? domain.trim().toLowerCase() : null;
+
+    const blockers: string[] = [];
+    if (!publicIp) {
+      blockers.push('No public IPv4 detected — a mail server needs a static, routable public IP.');
+    }
+    if (!dom) {
+      blockers.push('No domain supplied — provide the domain you will send/receive mail for.');
+    }
+
+    const checklist: EmailChecklistItem[] = [
+      {
+        label: 'Static public IPv4',
+        met: !!publicIp,
+        detail: publicIp ?? 'not detected (set SYSTEM_PUBLIC_IP or run on a box with a public IP)',
+      },
+      {
+        label: 'Mail domain provided',
+        met: !!dom,
+        detail: dom ?? 'pass ?domain=example.com',
+      },
+    ];
+
+    const manualSteps = [
+      `Open inbound ports ${EMAIL_PORTS.join(', ')} to this server. Port 25 is blocked by most clouds and residential ISPs — confirm yours allows it.`,
+      `Set reverse DNS (PTR) for ${publicIp ?? 'your public IP'} to mail.${dom ?? 'example.com'} at your hosting/IP provider — this cannot be set via Cloudflare/Route 53.`,
+      'After the mail server first starts it generates a DKIM key — add the DKIM TXT record then (shown below as a placeholder until then).',
+    ];
+
+    const dnsRecords = dom ? buildEmailDnsRecords(dom) : [];
+
+    return {
+      ready: blockers.length === 0,
+      domain: dom,
+      publicIp,
+      blockers,
+      checklist,
+      manualSteps,
+      dnsRecords,
+      dkimNote:
+        'DKIM: the public key only exists after the mail server runs once. Generate it then and publish a TXT record at mail._domainkey — the row below is a placeholder.',
+      why:
+        'Running your own mail server on a single box is operationally heavy and often impossible behind NAT or on hosts that block port 25. docker-gui surfaces the exact prerequisites instead of launching a server that silently fails to deliver.',
+    };
   }
 
   /**

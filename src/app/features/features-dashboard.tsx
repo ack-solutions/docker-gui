@@ -11,9 +11,22 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
   Typography
 } from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import LanguageIcon from "@mui/icons-material/Language";
 import StorageIcon from "@mui/icons-material/Storage";
@@ -87,11 +100,32 @@ const STATUS_LABEL: Record<FeatureStatus, string> = {
   "coming-soon": "Coming soon"
 };
 
+interface DnsRecordPreview {
+  type: string;
+  name: string;
+  value: string;
+  priority?: number;
+  ttl?: number;
+}
+
+interface EmailPreconditions {
+  ready: boolean;
+  domain: string | null;
+  publicIp: string | null;
+  blockers: string[];
+  checklist: { label: string; met: boolean; detail: string }[];
+  manualSteps: string[];
+  dnsRecords: DnsRecordPreview[];
+  dkimNote: string;
+  why: string;
+}
+
 function FeaturesInner({ user }: { user: PublicUser }) {
   const router = useRouter();
   const [features, setFeatures] = useState<Feature[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<FeatureKey | null>(null);
+  const [emailPrereqOpen, setEmailPrereqOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -222,6 +256,11 @@ function FeaturesInner({ user }: { user: PublicUser }) {
                     Configure
                   </Button>
                 )}
+                {f.key === "email" && (
+                  <Button size="small" variant="outlined" onClick={() => setEmailPrereqOpen(true)}>
+                    Prerequisites
+                  </Button>
+                )}
                 {f.comingSoon ? (
                   <Button size="small" variant="outlined" disabled>
                     Coming soon
@@ -259,7 +298,135 @@ function FeaturesInner({ user }: { user: PublicUser }) {
         Disabling preserves the data volume — re-enabling restores state. The
         host ports listed under each feature are reserved while it is running.
       </Alert>
+
+      {emailPrereqOpen && <EmailPrereqDialog onClose={() => setEmailPrereqOpen(false)} />}
     </PageShell>
+  );
+}
+
+function EmailPrereqDialog({ onClose }: { onClose: () => void }) {
+  const [domain, setDomain] = useState("");
+  const [data, setData] = useState<EmailPreconditions | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const check = useCallback(async (dom: string) => {
+    setLoading(true);
+    try {
+      const q = dom.trim() ? `?domain=${encodeURIComponent(dom.trim())}` : "";
+      setData(await apiFetch<EmailPreconditions>(`/api/v1/features/email/preconditions${q}`));
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void check("");
+  }, [check]);
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>On-premise email — prerequisites</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {data?.why && <Alert severity="warning">{data.why}</Alert>}
+
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <TextField
+              label="Your mail domain"
+              placeholder="example.com"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              size="small"
+              fullWidth
+              helperText="Shows the exact MX / SPF / DMARC / DKIM records you'll need."
+            />
+            <Button variant="outlined" onClick={() => check(domain)} disabled={loading} sx={{ mt: 0.5 }}>
+              {loading ? "Checking…" : "Check"}
+            </Button>
+          </Stack>
+
+          {data && (
+            <>
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Auto-checked
+                </Typography>
+                <Stack spacing={0.5}>
+                  {data.checklist.map((c) => (
+                    <Stack key={c.label} direction="row" spacing={1} alignItems="center">
+                      {c.met ? (
+                        <CheckCircleIcon color="success" fontSize="small" />
+                      ) : (
+                        <RadioButtonUncheckedIcon color="disabled" fontSize="small" />
+                      )}
+                      <Typography variant="body2" sx={{ minWidth: 160 }}>
+                        {c.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {c.detail}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
+
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  You must verify these yourself
+                </Typography>
+                <Stack component="ul" spacing={0.5} sx={{ pl: 2, m: 0 }}>
+                  {data.manualSteps.map((s, i) => (
+                    <Typography key={i} component="li" variant="body2" color="text.secondary">
+                      {s}
+                    </Typography>
+                  ))}
+                </Stack>
+              </Box>
+
+              {data.dnsRecords.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    DNS records
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Type</TableCell>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Value</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {data.dnsRecords.map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell>
+                            <Chip size="small" label={r.type} variant="outlined" />
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace" }}>{r.name}</TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
+                            {r.priority != null ? `${r.priority} ` : ""}
+                            {r.value}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <Divider sx={{ my: 1.5 }} />
+                  <Typography variant="caption" color="text.secondary">
+                    {data.dkimNote}
+                  </Typography>
+                </Box>
+              )}
+            </>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

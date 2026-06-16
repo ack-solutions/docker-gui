@@ -127,6 +127,56 @@ describe('FeaturesService.list', () => {
   });
 });
 
+describe('FeaturesService.emailPreconditions', () => {
+  function svcWithIp(ip: string | undefined): FeaturesService {
+    return new FeaturesService(makeDocker() as unknown as Docker, {
+      network: 'docker-gui_dgui',
+      hostInstallDir: '/opt/docker-gui',
+      getPublicIp: () => ip,
+    });
+  }
+
+  it('is ready with a public IP + domain and emits MX/SPF/DMARC/DKIM records', () => {
+    const pre = svcWithIp('203.0.113.10').emailPreconditions('Example.com');
+    expect(pre.ready).toBe(true);
+    expect(pre.blockers).toEqual([]);
+    expect(pre.publicIp).toBe('203.0.113.10');
+    expect(pre.domain).toBe('example.com'); // normalized
+
+    const mx = pre.dnsRecords.find((r) => r.type === 'MX');
+    expect(mx).toMatchObject({ name: '@', value: 'mail.example.com', priority: 10 });
+    const spf = pre.dnsRecords.find((r) => r.type === 'TXT' && r.value.includes('spf1'));
+    expect(spf?.value).toBe('v=spf1 mx -all');
+    const dmarc = pre.dnsRecords.find((r) => r.name === '_dmarc');
+    expect(dmarc?.value).toContain('v=DMARC1');
+    const dkim = pre.dnsRecords.find((r) => r.name === 'mail._domainkey');
+    expect(dkim?.value).toContain('<generated');
+    // Manual steps always flag port 25 + PTR, which we cannot auto-verify.
+    expect(pre.manualSteps.join(' ')).toMatch(/25/);
+    expect(pre.manualSteps.join(' ')).toMatch(/PTR|reverse DNS/i);
+  });
+
+  it('blocks (not ready) when no public IP is detected', () => {
+    const pre = svcWithIp(undefined).emailPreconditions('example.com');
+    expect(pre.ready).toBe(false);
+    expect(pre.publicIp).toBeNull();
+    expect(pre.blockers.join(' ')).toMatch(/public IP/i);
+    expect(pre.checklist.find((c) => c.label === 'Static public IPv4')?.met).toBe(false);
+  });
+
+  it('treats a private/invalid IP as no public IP', () => {
+    expect(svcWithIp('192.168.1.5').emailPreconditions('example.com').publicIp).toBeNull();
+    expect(svcWithIp('not-an-ip').emailPreconditions('example.com').publicIp).toBeNull();
+  });
+
+  it('blocks and emits no DNS records without a domain', () => {
+    const pre = svcWithIp('203.0.113.10').emailPreconditions(null);
+    expect(pre.ready).toBe(false);
+    expect(pre.dnsRecords).toEqual([]);
+    expect(pre.blockers.join(' ')).toMatch(/domain/i);
+  });
+});
+
 describe('FeaturesService.get', () => {
   it('throws NotFoundError for an unknown feature', async () => {
     const docker = makeDocker();

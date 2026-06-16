@@ -93,6 +93,7 @@ async function main(): Promise<void> {
     hostInstallDir: config.DOCKER_GUI_INSTALL_DIR,
     prisma,
     cryptoBox,
+    getPublicIp: () => publicIp.current().ipv4 ?? undefined,
   });
   const storage = new StorageService(prisma, cryptoBox);
   const registry = new RegistryService(prisma, cryptoBox);
