@@ -61,6 +61,12 @@ export const sitesRoutes: FastifyPluginAsync<SitesRoutesOptions> = async (app, o
     return reply.send({ data: await opts.sites.get(id) });
   });
 
+  // Live TLS / serving status — read-only, best-effort (any authenticated role).
+  app.get('/sites/:id/cert-status', async (req, reply) => {
+    const { id } = parse(req, idParamSchema, 'params');
+    return reply.send({ data: await opts.sites.certStatus(id) });
+  });
+
   app.post('/sites', { preHandler: requireOperator }, async (req, reply) => {
     const body = parse(req, createSiteSchema, 'body');
     return reply.status(201).send({ data: await opts.sites.create(body) });

@@ -128,7 +128,7 @@ export function render(sites: readonly Site[], opts: RendererOptions = {}): Cadd
   return config;
 }
 
-function collectHosts(site: Site): string[] {
+export function collectHosts(site: Site): string[] {
   const aliases = parseJsonArray(site.aliasDomains);
   const all = [site.primaryDomain, ...aliases]
     .map((d) => d.trim())

@@ -1,7 +1,8 @@
 import type { PrismaClient, Site } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors.js';
 import { CaddyClient, CaddyError } from '../lib/caddy.js';
-import { render, type RendererOptions } from './caddy-renderer.js';
+import { render, collectHosts, type RendererOptions } from './caddy-renderer.js';
+import type { CertProbeResult } from '../lib/site-probe.js';
 import {
   createSiteSchema,
   updateSiteSchema,
@@ -12,8 +13,30 @@ import {
   type ApplyResult,
 } from '../schemas/site.schema.js';
 
+/** Live TLS / serving status for one site (computed, never persisted). */
+export interface SiteCertStatus {
+  siteId: string;
+  /** The site's domain appears in the running Caddy config. */
+  configured: boolean;
+  /** A-record resolves to this server's public IP (undefined when unknown). */
+  dnsOk?: boolean;
+  certStatus: 'active' | 'pending' | 'error';
+  /** An HTTPS HEAD to the domain succeeded. */
+  servedOk: boolean;
+  httpStatus?: number;
+  /** Short, fixed-vocabulary explanation (never echoes response bodies). */
+  reason?: string;
+  lastCheckedAt: string;
+}
+
 export interface SitesServiceOptions {
   rendererDefaults?: RendererOptions;
+  /** SSRF-guarded HTTPS prober for a site's own domain (injected). */
+  certProbe?: (domain: string) => Promise<CertProbeResult>;
+  /** DoH A-record resolver, for the dnsOk hint (injected). */
+  resolveA?: (name: string) => Promise<string[]>;
+  /** This server's current public IPv4 (for the dnsOk comparison). */
+  getPublicIp?: () => string | undefined;
 }
 
 export class SitesService {
@@ -34,6 +57,79 @@ export class SitesService {
   async caddyStatus(): Promise<{ configured: boolean; reachable: boolean }> {
     if (!this.caddy) return { configured: false, reachable: false };
     return { configured: true, reachable: await this.caddy.ping() };
+  }
+
+  /**
+   * Best-effort live TLS / serving status for one site. Caddy's admin API has
+   * no per-domain ACME endpoint, so "active" is INFERRED from (a) the domain
+   * being in the running config and (b) a successful HTTPS HEAD to it. Always
+   * returns (never throws past NotFound) so the UI can render a chip.
+   */
+  async certStatus(id: string): Promise<SiteCertStatus> {
+    const site = await this.db.site.findUnique({ where: { id } });
+    if (!site) throw new NotFoundError('Site not found');
+    const lastCheckedAt = new Date().toISOString();
+
+    // (1) configured — the domain is in the live Caddy config.
+    let configured = false;
+    if (this.caddy) {
+      try {
+        const cfg = await this.caddy.getConfig();
+        const live = liveHosts(cfg);
+        configured = collectHosts(site).some((h) => live.has(h));
+      } catch {
+        configured = false;
+      }
+    }
+
+    // (2) dnsOk — A record points at this server (best-effort hint).
+    let dnsOk: boolean | undefined;
+    const myIp = this.opts.getPublicIp?.();
+    if (myIp && this.opts.resolveA) {
+      try {
+        const ips = await this.opts.resolveA(site.primaryDomain);
+        if (ips.length > 0) dnsOk = ips.includes(myIp);
+      } catch {
+        dnsOk = undefined;
+      }
+    }
+
+    const base = { siteId: id, configured, servedOk: false, lastCheckedAt };
+    const withDns = dnsOk === undefined ? base : { ...base, dnsOk };
+
+    // HTTP-only sites have no cert to verify.
+    if (!site.enableHttps) {
+      return { ...withDns, certStatus: 'active', reason: 'HTTP only' };
+    }
+    // Not in the live config → nothing is being served for it yet.
+    if (!configured) {
+      return { ...withDns, certStatus: 'error', reason: 'Not in the live Caddy config — apply changes' };
+    }
+    // No prober wired (or unavailable): we know it's configured but can't confirm serving.
+    if (!this.opts.certProbe) {
+      return { ...withDns, certStatus: 'pending', reason: 'Serving status not verified' };
+    }
+    // (3) probe HTTPS — SSRF-guarded, targets only the site's own domain.
+    try {
+      const res = await this.opts.certProbe(site.primaryDomain);
+      if (res.ok) {
+        return { ...withDns, certStatus: 'active', servedOk: true, httpStatus: res.status };
+      }
+      return {
+        ...withDns,
+        certStatus: 'pending',
+        httpStatus: res.status,
+        reason: 'Reachable but not serving normally yet',
+      };
+    } catch {
+      // TLS error / unreachable / hairpin NAT — treat as pending, not a hard
+      // error, since the API container may not reach its own public domain.
+      return {
+        ...withDns,
+        certStatus: 'pending',
+        reason: 'Could not verify HTTPS from the server (issuing, or self-reach blocked)',
+      };
+    }
   }
 
   async list(): Promise<SiteSummary[]> {
@@ -200,6 +296,29 @@ export function toSummary(s: Site): SiteSummary {
     createdAt: s.createdAt.toISOString(),
     updatedAt: s.updatedAt.toISOString(),
   };
+}
+
+/** Collect every host matched by any route in a (loosely-typed) Caddy config. */
+function liveHosts(config: unknown): Set<string> {
+  const hosts = new Set<string>();
+  const servers = (config as { apps?: { http?: { servers?: Record<string, unknown> } } })?.apps
+    ?.http?.servers;
+  if (!servers || typeof servers !== 'object') return hosts;
+  for (const server of Object.values(servers)) {
+    const routes = (server as { routes?: unknown[] })?.routes;
+    if (!Array.isArray(routes)) continue;
+    for (const route of routes) {
+      const matches = (route as { match?: unknown[] })?.match;
+      if (!Array.isArray(matches)) continue;
+      for (const m of matches) {
+        const hostList = (m as { host?: unknown })?.host;
+        if (Array.isArray(hostList)) {
+          for (const h of hostList) if (typeof h === 'string') hosts.add(h);
+        }
+      }
+    }
+  }
+  return hosts;
 }
 
 function parseAliases(raw: string | null | undefined): string[] {

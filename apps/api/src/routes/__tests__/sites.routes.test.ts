@@ -173,6 +173,43 @@ describe('PATCH /api/v1/sites/:id', () => {
   });
 });
 
+describe('GET /api/v1/sites/:id/cert-status', () => {
+  const authH = (t: string) => ({ authorization: `Bearer ${t}`, 'content-type': 'application/json' });
+
+  it('requires auth', async () => {
+    const res = await env.app.inject({ method: 'GET', url: '/api/v1/sites/x/cert-status' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('404s for an unknown site', async () => {
+    const token = await getToken();
+    const res = await env.app.inject({
+      method: 'GET', url: '/api/v1/sites/nope/cert-status', headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns a best-effort status shape for a created site', async () => {
+    const token = await getToken();
+    const created = await env.app.inject({
+      method: 'POST', url: '/api/v1/sites', headers: authH(token),
+      payload: { primaryDomain: 'cert.example.com', upstreamUrl: 'web:80' },
+    });
+    const id = created.json().data.id;
+    const res = await env.app.inject({
+      method: 'GET', url: `/api/v1/sites/${id}/cert-status`, headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.siteId).toBe(id);
+    expect(typeof data.configured).toBe('boolean');
+    expect(['active', 'pending', 'error']).toContain(data.certStatus);
+    expect(data.lastCheckedAt).toBeTruthy();
+    // The fake Caddy getConfig() returns {} so this site isn't "live" → not served.
+    expect(data.configured).toBe(false);
+  });
+});
+
 describe('container env vars', () => {
   const auth = (t: string) => ({ authorization: `Bearer ${t}`, 'content-type': 'application/json' });
 

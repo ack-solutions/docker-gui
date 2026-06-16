@@ -30,6 +30,7 @@ import {
 } from './services/alert.service.js';
 import { getCpuUsagePercent, getMemoryMetrics, getDiskMetrics } from './services/system-metrics.service.js';
 import { PublicIpService } from './services/public-ip.service.js';
+import { createHttpsProbe, createDohResolveA } from './lib/site-probe.js';
 import { assembleSnapshot, buildMetricCatalog } from './services/metric-snapshot.js';
 import type { MetricSnapshot } from './services/alert.service.js';
 import { DockerBackupEngine } from './lib/backup-engine.js';
@@ -64,10 +65,16 @@ async function main(): Promise<void> {
   const caddy = config.CADDY_ADMIN_URL
     ? new CaddyClient({ adminUrl: config.CADDY_ADMIN_URL })
     : null;
+  const publicIp = new PublicIpService();
+  const dohResolveA = createDohResolveA();
   const sites = new SitesService(prisma, caddy, {
     rendererDefaults: config.CADDY_DEFAULT_LE_EMAIL
       ? { defaultLetsEncryptEmail: config.CADDY_DEFAULT_LE_EMAIL }
       : {},
+    // SSRF-guarded HTTPS prober + DoH resolver for live cert/serving status.
+    certProbe: createHttpsProbe({ resolveA: dohResolveA }),
+    resolveA: dohResolveA,
+    getPublicIp: () => publicIp.current().ipv4 ?? undefined,
   });
   const cryptoBox = new CryptoBox(config.JWT_SECRET);
   const deployTokens = new DeployTokenService(prisma);
@@ -75,7 +82,6 @@ async function main(): Promise<void> {
     network: config.DOCKER_GUI_NETWORK,
     cryptoBox,
   });
-  const publicIp = new PublicIpService();
   const dns = new DnsService(prisma, cryptoBox, {
     ...(config.SYSTEM_PUBLIC_IP ? { publicIp: config.SYSTEM_PUBLIC_IP } : {}),
     ...(config.SYSTEM_PUBLIC_IP6 ? { publicIp6: config.SYSTEM_PUBLIC_IP6 } : {}),

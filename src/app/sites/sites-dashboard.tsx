@@ -84,6 +84,17 @@ interface SiteForm {
   notes: string;
 }
 
+interface SiteCertStatusLite {
+  siteId: string;
+  configured: boolean;
+  dnsOk?: boolean;
+  certStatus: "active" | "pending" | "error";
+  servedOk: boolean;
+  httpStatus?: number;
+  reason?: string;
+  lastCheckedAt: string;
+}
+
 interface DnsProviderLite {
   id: string;
   name: string;
@@ -175,6 +186,22 @@ function SitesInner({ user }: { user: PublicUser }) {
   const [dnsLookupError, setDnsLookupError] = useState<string | null>(null);
   const [dnsLooking, setDnsLooking] = useState(false);
   const [dnsApplying, setDnsApplying] = useState(false);
+  const [certStatuses, setCertStatuses] = useState<Record<string, SiteCertStatusLite>>({});
+
+  // Live TLS/serving status per site — fetched after the list loads, in
+  // parallel and best-effort (a slow/failing probe never blocks the table).
+  const loadCertStatuses = useCallback(async (sites: SiteSummary[]) => {
+    await Promise.all(
+      sites.map(async (s) => {
+        try {
+          const cs = await apiFetch<SiteCertStatusLite>(`/api/v1/sites/${s.id}/cert-status`);
+          setCertStatuses((prev) => ({ ...prev, [s.id]: cs }));
+        } catch {
+          // leave unknown — the chip falls back to the static indicator
+        }
+      })
+    );
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -186,10 +213,11 @@ function SitesInner({ user }: { user: PublicUser }) {
       setCaddyConfigured(status.caddyConfigured);
       setCaddyReachable(status.caddyReachable ?? null);
       setLoadError(null);
+      void loadCertStatuses(list);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : String(err));
     }
-  }, []);
+  }, [loadCertStatuses]);
 
   useEffect(() => {
     load();
@@ -448,20 +476,48 @@ function SitesInner({ user }: { user: PublicUser }) {
     {
       key: "tls",
       header: "TLS",
-      width: 100,
-      render: (r) =>
-        r.enableHttps ? (
-          <StatusChip
-            status="ok"
-            label={r.forceHttps ? "Force" : "On"}
-            variant="outlined"
-            withIcon={false}
-          />
-        ) : (
-          <Typography variant="caption" color="text.secondary">
-            HTTP only
-          </Typography>
-        )
+      width: 120,
+      render: (r) => {
+        if (!r.enableHttps) {
+          return (
+            <Typography variant="caption" color="text.secondary">
+              HTTP only
+            </Typography>
+          );
+        }
+        const cs = certStatuses[r.id];
+        if (!cs) {
+          // Status not loaded yet — show the configured intent.
+          return (
+            <StatusChip
+              status="unknown"
+              label={r.forceHttps ? "Force" : "On"}
+              variant="outlined"
+              withIcon={false}
+            />
+          );
+        }
+        const map = {
+          active: { status: "ok" as const, label: "HTTPS live" },
+          pending: { status: "degraded" as const, label: "Issuing…" },
+          error: { status: "down" as const, label: "No cert" }
+        }[cs.certStatus];
+        const tip = [
+          cs.reason,
+          `configured: ${cs.configured ? "yes" : "no"}`,
+          cs.dnsOk === undefined ? null : `DNS points here: ${cs.dnsOk ? "yes" : "no"}`,
+          `checked ${formatRelativeTime(cs.lastCheckedAt)}`
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <Tooltip title={tip}>
+            <span>
+              <StatusChip status={map.status} label={map.label} variant="outlined" withIcon={false} />
+            </span>
+          </Tooltip>
+        );
+      }
     },
     {
       key: "status",
