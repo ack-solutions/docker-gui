@@ -21,6 +21,7 @@ import { BackupSchedulerService, NodeCronScheduler } from './services/backup-sch
 import { DbExplorerService } from './services/db-explorer.service.js';
 import { AlertService, WebhookAlertSender } from './services/alert.service.js';
 import { getCpuUsagePercent, getMemoryMetrics, getDiskMetrics } from './services/system-metrics.service.js';
+import { PublicIpService } from './services/public-ip.service.js';
 import { assembleSnapshot, buildMetricCatalog } from './services/metric-snapshot.js';
 import type { MetricSnapshot } from './services/alert.service.js';
 import { DockerBackupEngine } from './lib/backup-engine.js';
@@ -61,9 +62,12 @@ async function main(): Promise<void> {
       : {},
   });
   const cryptoBox = new CryptoBox(config.JWT_SECRET);
+  const publicIp = new PublicIpService();
   const dns = new DnsService(prisma, cryptoBox, {
     ...(config.SYSTEM_PUBLIC_IP ? { publicIp: config.SYSTEM_PUBLIC_IP } : {}),
     ...(config.SYSTEM_PUBLIC_IP6 ? { publicIp6: config.SYSTEM_PUBLIC_IP6 } : {}),
+    // Live auto-detected IP wins over the static config value.
+    getPublicIp: () => ({ ipv4: publicIp.current().ipv4 }),
   });
   const features = new FeaturesService(docker, {
     network: config.DOCKER_GUI_NETWORK,
@@ -166,6 +170,28 @@ async function main(): Promise<void> {
       })();
     }, 60 * 1000);
     alertTimer.unref();
+
+    // Detect the server's public IP on boot, then re-check periodically so DNS
+    // recommendations track it and we can react when it changes (DDNS resync
+    // for managed providers lands with the Route 53 work).
+    void publicIp
+      .refresh()
+      .then((r) => app.log.info({ ip: r.current }, 'public IP detected'))
+      .catch((err: unknown) => app.log.warn({ err }, 'public IP detection failed'));
+    const publicIpTimer = setInterval(() => {
+      void publicIp
+        .refresh()
+        .then((r) => {
+          if (r.changed) {
+            app.log.warn(
+              { previous: r.previous, current: r.current },
+              'server public IP changed — managed DNS records may need resync',
+            );
+          }
+        })
+        .catch((err: unknown) => app.log.warn({ err }, 'public IP refresh failed'));
+    }, 20 * 60 * 1000);
+    publicIpTimer.unref();
   } catch (err) {
     app.log.error({ err }, 'Failed to start API');
     await disconnectPrisma();

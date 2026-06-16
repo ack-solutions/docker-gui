@@ -29,6 +29,12 @@ export interface DnsServiceOptions {
    */
   publicIp?: string;
   publicIp6?: string;
+  /**
+   * Live public-IP resolver (auto-detected), preferred over the static
+   * `publicIp` when it returns a value. Lets recommendations track a changing
+   * server IP without a restart.
+   */
+  getPublicIp?: () => { ipv4?: string | null; ipv6?: string | null };
   /** Override DoH base for tests. Default: Cloudflare. */
   dohBaseUrl?: string;
   fetchImpl?: typeof fetch;
@@ -206,20 +212,24 @@ export class DnsService {
   recommendedFor(zoneName: string, domain: string): RecommendedRecords {
     const isApex = domain.toLowerCase() === zoneName.toLowerCase();
     const records: DnsRecordInput[] = [];
-    if (this.opts.publicIp) {
+    // Prefer the live auto-detected IP; fall back to the static config value.
+    const live = this.opts.getPublicIp?.();
+    const ipv4 = live?.ipv4 ?? this.opts.publicIp;
+    const ipv6 = live?.ipv6 ?? this.opts.publicIp6;
+    if (ipv4) {
       records.push({
         type: 'A',
         name: domain,
-        value: this.opts.publicIp,
+        value: ipv4,
         ttl: 1, // Cloudflare "automatic"
         proxied: false,
       });
     }
-    if (this.opts.publicIp6) {
+    if (ipv6) {
       records.push({
         type: 'AAAA',
         name: domain,
-        value: this.opts.publicIp6,
+        value: ipv6,
         ttl: 1,
         proxied: false,
       });
