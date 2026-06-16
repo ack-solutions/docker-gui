@@ -36,6 +36,7 @@ export type ConfigGroup =
   | 'dns'
   | 'storage'
   | 'features'
+  | 'alerts'
   | 'system';
 
 /** Where a config value can be set. Higher index = higher precedence. */
@@ -492,6 +493,105 @@ export const CONFIG_REGISTRY = [
       'Public IPv6 address of this server (drives AAAA recommendations). Optional — skip if your VPS is v4-only.',
     examples: ['2001:db8::1'],
     introducedIn: '0.1.0',
+  }),
+
+  // ─── alerts (SMTP email delivery) ─────────────────────────────────────
+  defineKey<string | undefined>({
+    key: 'alerts.smtp.host',
+    envName: 'ALERT_SMTP_HOST',
+    yamlPath: 'alerts.smtp.host',
+    type: 'string',
+    default: undefined,
+    required: false,
+    secret: false,
+    uiEditable: true,
+    requiresRestart: true,
+    group: 'alerts',
+    label: 'SMTP host',
+    description:
+      'SMTP server hostname for email alert delivery. Leave blank to disable email alerts (webhook delivery still works).',
+    examples: ['smtp.sendgrid.net', 'smtp.gmail.com'],
+    introducedIn: '0.2.0',
+  }),
+  defineKey<number>({
+    key: 'alerts.smtp.port',
+    envName: 'ALERT_SMTP_PORT',
+    yamlPath: 'alerts.smtp.port',
+    type: 'number',
+    default: 587,
+    required: false,
+    secret: false,
+    uiEditable: true,
+    requiresRestart: true,
+    group: 'alerts',
+    label: 'SMTP port',
+    description: 'SMTP server port. 587 for STARTTLS (default), 465 for implicit TLS.',
+    min: 1,
+    max: 65535,
+    introducedIn: '0.2.0',
+  }),
+  defineKey<boolean>({
+    key: 'alerts.smtp.secure',
+    envName: 'ALERT_SMTP_SECURE',
+    yamlPath: 'alerts.smtp.secure',
+    type: 'boolean',
+    default: false,
+    required: false,
+    secret: false,
+    uiEditable: true,
+    requiresRestart: true,
+    group: 'alerts',
+    label: 'SMTP implicit TLS',
+    description: 'Use implicit TLS (set true for port 465). Leave false for STARTTLS on 587.',
+    introducedIn: '0.2.0',
+  }),
+  defineKey<string | undefined>({
+    key: 'alerts.smtp.user',
+    envName: 'ALERT_SMTP_USER',
+    yamlPath: 'alerts.smtp.user',
+    type: 'string',
+    default: undefined,
+    required: false,
+    secret: false,
+    uiEditable: true,
+    requiresRestart: true,
+    group: 'alerts',
+    label: 'SMTP username',
+    description: 'SMTP auth username. Leave blank for an unauthenticated relay.',
+    introducedIn: '0.2.0',
+  }),
+  defineKey<string | undefined>({
+    key: 'alerts.smtp.password',
+    envName: 'ALERT_SMTP_PASSWORD',
+    yamlPath: null,
+    type: 'string',
+    default: undefined,
+    required: false,
+    secret: true,
+    uiEditable: false,
+    requiresRestart: true,
+    group: 'alerts',
+    label: 'SMTP password',
+    description:
+      'SMTP auth password / API key. Secret — masked in API and logs, never returned. Set via env only.',
+    introducedIn: '0.2.0',
+  }),
+  defineKey<string | undefined>({
+    key: 'alerts.smtp.from',
+    envName: 'ALERT_SMTP_FROM',
+    yamlPath: 'alerts.smtp.from',
+    type: 'email',
+    default: undefined,
+    required: false,
+    secret: false,
+    uiEditable: true,
+    requiresRestart: true,
+    group: 'alerts',
+    label: 'Alert sender address',
+    description:
+      'From address for alert emails. Defaults to the SMTP username when omitted.',
+    examples: ['alerts@example.com'],
+    introducedIn: '0.2.0',
   }),
 ] as const satisfies ReadonlyArray<ConfigKeyDef<unknown>>;
 

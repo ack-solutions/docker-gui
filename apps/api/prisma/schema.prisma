@@ -249,8 +249,11 @@ model AlertRule {
   forSeconds      Int       @default(0)
   // Minimum gap between repeated fires of the same rule.
   cooldownSeconds Int       @default(300)
-  // Delivery: a webhook URL (Slack/Discord/generic). Email is a follow-up.
+  // Delivery channels (a rule can target one or both):
+  //  - webhookUrl: a Slack/Discord/generic incoming webhook
+  //  - emailTo: comma-separated recipient(s), delivered via the SMTP transport
   webhookUrl      String?
+  emailTo         String?
   enabled         Boolean   @default(true)
   lastFiredAt     DateTime?
   createdAt       DateTime  @default(now())

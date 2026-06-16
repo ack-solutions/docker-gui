@@ -16,6 +16,23 @@ export interface AlertRoutesOptions {
 
 const operatorSchema = z.enum(['gt', 'lt', 'gte', 'lte', 'eq']);
 
+// Comma-separated recipient list. Each part must be a valid email; reject
+// control chars (CRLF) to prevent header injection. Null clears the channel.
+const EMAIL_RE = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
+const emailListSchema = z
+  .string()
+  .max(512)
+  .refine((v) => !/[\r\n]/.test(v), { message: 'Recipients must not contain line breaks' })
+  .refine(
+    (v) => {
+      const parts = v.split(',').map((s) => s.trim()).filter(Boolean);
+      return parts.length > 0 && parts.every((p) => EMAIL_RE.test(p));
+    },
+    { message: 'Must be one or more comma-separated email addresses' },
+  )
+  .nullable()
+  .optional();
+
 const createRuleSchema = z.object({
   name: z.string().min(1).max(80),
   metric: z.string().min(1).max(120),
@@ -24,6 +41,7 @@ const createRuleSchema = z.object({
   forSeconds: z.number().int().min(0).max(86400).optional(),
   cooldownSeconds: z.number().int().min(0).max(86400).optional(),
   webhookUrl: z.string().url().max(2048).nullable().optional(),
+  emailTo: emailListSchema,
   enabled: z.boolean().optional(),
 });
 
@@ -36,6 +54,7 @@ const updateRuleSchema = z
     forSeconds: z.number().int().min(0).max(86400).optional(),
     cooldownSeconds: z.number().int().min(0).max(86400).optional(),
     webhookUrl: z.string().url().max(2048).nullable().optional(),
+    emailTo: emailListSchema,
     enabled: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
@@ -73,6 +92,7 @@ export const alertRoutes: FastifyPluginAsync<AlertRoutesOptions> = async (app, o
       ...(b.forSeconds !== undefined ? { forSeconds: b.forSeconds } : {}),
       ...(b.cooldownSeconds !== undefined ? { cooldownSeconds: b.cooldownSeconds } : {}),
       ...(b.webhookUrl !== undefined ? { webhookUrl: b.webhookUrl } : {}),
+      ...(b.emailTo !== undefined ? { emailTo: b.emailTo } : {}),
       ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
     });
     return reply.status(201).send(created);
@@ -91,6 +111,7 @@ export const alertRoutes: FastifyPluginAsync<AlertRoutesOptions> = async (app, o
         ...(b.forSeconds !== undefined ? { forSeconds: b.forSeconds } : {}),
         ...(b.cooldownSeconds !== undefined ? { cooldownSeconds: b.cooldownSeconds } : {}),
         ...(b.webhookUrl !== undefined ? { webhookUrl: b.webhookUrl } : {}),
+        ...(b.emailTo !== undefined ? { emailTo: b.emailTo } : {}),
         ...(b.enabled !== undefined ? { enabled: b.enabled } : {}),
       });
     },

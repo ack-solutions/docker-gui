@@ -21,7 +21,13 @@ import { DatabaseService } from './services/database.service.js';
 import { BackupService } from './services/backup.service.js';
 import { BackupSchedulerService, NodeCronScheduler } from './services/backup-scheduler.service.js';
 import { DbExplorerService } from './services/db-explorer.service.js';
-import { AlertService, WebhookAlertSender } from './services/alert.service.js';
+import nodemailer from 'nodemailer';
+import {
+  AlertService,
+  WebhookAlertSender,
+  EmailAlertSender,
+  type AlertSender,
+} from './services/alert.service.js';
 import { getCpuUsagePercent, getMemoryMetrics, getDiskMetrics } from './services/system-metrics.service.js';
 import { PublicIpService } from './services/public-ip.service.js';
 import { assembleSnapshot, buildMetricCatalog } from './services/metric-snapshot.js';
@@ -92,7 +98,28 @@ async function main(): Promise<void> {
   const explorer = new DbExplorerService(prisma, cryptoBox, docker, {
     network: config.DOCKER_GUI_NETWORK,
   });
-  const alerts = new AlertService(prisma, { sender: new WebhookAlertSender() });
+  // Alert delivery channels: webhook always; email when SMTP is configured.
+  const alertSenders: AlertSender[] = [new WebhookAlertSender()];
+  const smtpHost = configSnapshot.getOptional<string>('alerts.smtp.host');
+  if (smtpHost) {
+    const smtpUser = configSnapshot.getOptional<string>('alerts.smtp.user');
+    const smtpPass = configSnapshot.getOptional<string>('alerts.smtp.password');
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: configSnapshot.get<number>('alerts.smtp.port'),
+      secure: configSnapshot.get<boolean>('alerts.smtp.secure'),
+      ...(smtpUser ? { auth: { user: smtpUser, pass: smtpPass ?? '' } } : {}),
+    });
+    const from =
+      configSnapshot.getOptional<string>('alerts.smtp.from') ?? smtpUser ?? 'docker-gui@localhost';
+    alertSenders.push(
+      new EmailAlertSender({
+        transport: { sendMail: (m) => transporter.sendMail(m).then(() => undefined) },
+        from,
+      }),
+    );
+  }
+  const alerts = new AlertService(prisma, { senders: alertSenders });
 
   // Disk paths the alert evaluator watches — kept in step with the health page.
   const metricDiskPaths = ['/'];

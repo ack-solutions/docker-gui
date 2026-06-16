@@ -15,6 +15,7 @@ const fakeSender: AlertSender = {
   async send(rule: AlertRuleSummary, event: AlertEventView) {
     if (senderFails) throw new Error('webhook down');
     sent.push({ rule: rule.name, status: event.status });
+    return true;
   },
 };
 
@@ -103,6 +104,30 @@ describe('rule CRUD + RBAC', () => {
     expect((await env.app.inject({
       method: 'POST', url: '/api/v1/alerts/rules', headers: auth(adminToken),
       payload: { name: 'bad', metric: 'm', operator: 'gt', threshold: 1, webhookUrl: 'not-a-url' },
+    })).statusCode).toBe(400);
+  });
+
+  it('round-trips emailTo (comma-separated) and rejects malformed recipients', async () => {
+    const rule = await mkRule({ name: 'mem-email', emailTo: 'ops@example.com, sre@example.com' });
+    expect(rule.emailTo).toBe('ops@example.com, sre@example.com');
+
+    const list = await env.app.inject({
+      method: 'GET', url: '/api/v1/alerts/rules', headers: bearer(adminToken),
+    });
+    expect(list.json().find((r: AlertRuleSummary) => r.name === 'mem-email').emailTo).toBe(
+      'ops@example.com, sre@example.com',
+    );
+
+    // Malformed recipient → 400.
+    expect((await env.app.inject({
+      method: 'POST', url: '/api/v1/alerts/rules', headers: auth(adminToken),
+      payload: { name: 'bad-email', metric: 'm', operator: 'gt', threshold: 1, emailTo: 'not-an-email' },
+    })).statusCode).toBe(400);
+
+    // CRLF header-injection attempt → 400.
+    expect((await env.app.inject({
+      method: 'POST', url: '/api/v1/alerts/rules', headers: auth(adminToken),
+      payload: { name: 'crlf', metric: 'm', operator: 'gt', threshold: 1, emailTo: 'a@b.co\r\nBcc: evil@x.com' },
     })).statusCode).toBe(400);
   });
 });
@@ -198,5 +223,77 @@ describe('evaluation engine', () => {
     it('requires auth', async () => {
       expect((await env.app.inject({ method: 'GET', url: '/api/v1/alerts/metrics' })).statusCode).toBe(401);
     });
+  });
+});
+
+describe('multi-channel delivery (webhook + email)', () => {
+  it('marks delivered when at least one channel succeeds, even if another throws', async () => {
+    const webhookHits: string[] = [];
+    const emailHits: string[] = [];
+    // Webhook always fails; email succeeds → event should still be delivered.
+    const failingWebhook: AlertSender = {
+      async send(rule) {
+        webhookHits.push(rule.name);
+        throw new Error('webhook down');
+      },
+    };
+    const okEmail: AlertSender = {
+      async send(rule) {
+        emailHits.push(rule.name);
+        return true;
+      },
+    };
+    let clock = 2_000_000_000;
+    const env2 = await buildTestEnv({
+      alertOptions: { senders: [failingWebhook, okEmail], clock: () => clock },
+    });
+    try {
+      await env2.app.inject({
+        method: 'POST', url: '/api/v1/setup/bootstrap',
+        headers: { 'x-setup-secret': TEST_SETUP_SECRET, 'content-type': 'application/json' },
+        payload: { email: 'o@x.co', password: 'OwnerPass1', name: 'O' },
+      });
+      await env2.prisma.alertRule.create({
+        data: {
+          name: 'r1', metric: 'system.memory.percent', operator: 'gt', threshold: 90,
+          forSeconds: 0, cooldownSeconds: 300,
+          webhookUrl: 'https://hooks.example.com/x', emailTo: 'ops@example.com',
+        },
+      });
+      const created = await env2.alerts.evaluate({ 'system.memory.percent': 95 });
+      expect(created).toHaveLength(1);
+      expect(webhookHits).toEqual(['r1']); // attempted
+      expect(emailHits).toEqual(['r1']); // attempted + succeeded
+      const events = await env2.prisma.alertEvent.findMany();
+      expect(events[0]!.delivered).toBe(true); // at-least-one semantics
+    } finally {
+      // exercise clock var so lint doesn't flag it unused on some configs
+      clock += 1;
+      await env2.cleanup();
+    }
+  });
+
+  it('leaves delivered:false when every channel fails', async () => {
+    const dead: AlertSender = { async send() { throw new Error('nope'); } };
+    const env2 = await buildTestEnv({ alertOptions: { senders: [dead], clock: () => 3_000_000_000 } });
+    try {
+      await env2.app.inject({
+        method: 'POST', url: '/api/v1/setup/bootstrap',
+        headers: { 'x-setup-secret': TEST_SETUP_SECRET, 'content-type': 'application/json' },
+        payload: { email: 'o2@x.co', password: 'OwnerPass1', name: 'O2' },
+      });
+      await env2.prisma.alertRule.create({
+        data: {
+          name: 'r2', metric: 'system.memory.percent', operator: 'gt', threshold: 90,
+          forSeconds: 0, cooldownSeconds: 300, emailTo: 'ops@example.com',
+        },
+      });
+      const created = await env2.alerts.evaluate({ 'system.memory.percent': 95 });
+      expect(created).toHaveLength(1); // still recorded
+      const events = await env2.prisma.alertEvent.findMany();
+      expect(events[0]!.delivered).toBe(false);
+    } finally {
+      await env2.cleanup();
+    }
   });
 });
