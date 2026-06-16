@@ -58,7 +58,13 @@ export class SitesService {
       data: {
         primaryDomain: parsed.primaryDomain,
         aliasDomains: JSON.stringify(parsed.aliasDomains),
-        upstreamUrl: parsed.upstreamUrl,
+        backendType: parsed.backendType,
+        // Null the upstream for static; keep it for container/external.
+        upstreamUrl: parsed.backendType === 'static' ? null : parsed.upstreamUrl ?? null,
+        ...(parsed.containerName !== undefined ? { containerName: parsed.containerName } : {}),
+        ...(parsed.containerPort !== undefined ? { containerPort: parsed.containerPort } : {}),
+        ...(parsed.imageRef !== undefined ? { imageRef: parsed.imageRef } : {}),
+        spaFallback: parsed.spaFallback,
         enableHttps: parsed.enableHttps,
         forceHttps: parsed.forceHttps,
         ...(parsed.letsEncryptEmail !== undefined ? { letsEncryptEmail: parsed.letsEncryptEmail } : {}),
@@ -86,7 +92,14 @@ export class SitesService {
     const data: Record<string, unknown> = {};
     if (parsed.primaryDomain !== undefined) data['primaryDomain'] = parsed.primaryDomain;
     if (parsed.aliasDomains !== undefined) data['aliasDomains'] = JSON.stringify(parsed.aliasDomains);
+    if (parsed.backendType !== undefined) data['backendType'] = parsed.backendType;
     if (parsed.upstreamUrl !== undefined) data['upstreamUrl'] = parsed.upstreamUrl;
+    if (parsed.containerName !== undefined) data['containerName'] = parsed.containerName;
+    if (parsed.containerPort !== undefined) data['containerPort'] = parsed.containerPort;
+    if (parsed.imageRef !== undefined) data['imageRef'] = parsed.imageRef;
+    if (parsed.spaFallback !== undefined) data['spaFallback'] = parsed.spaFallback;
+    // Static sites never keep an upstream.
+    if (parsed.backendType === 'static') data['upstreamUrl'] = null;
     if (parsed.enableHttps !== undefined) data['enableHttps'] = parsed.enableHttps;
     if (parsed.forceHttps !== undefined) data['forceHttps'] = parsed.forceHttps;
     if (parsed.letsEncryptEmail !== undefined) data['letsEncryptEmail'] = parsed.letsEncryptEmail;
@@ -163,7 +176,15 @@ export function toSummary(s: Site): SiteSummary {
     id: s.id,
     primaryDomain: s.primaryDomain,
     aliasDomains: parseAliases(s.aliasDomains),
+    backendType: (['container', 'static', 'external'].includes(s.backendType)
+      ? s.backendType
+      : 'external') as SiteSummary['backendType'],
     upstreamUrl: s.upstreamUrl,
+    containerName: s.containerName,
+    containerPort: s.containerPort,
+    imageRef: s.imageRef,
+    spaFallback: s.spaFallback,
+    currentDeployId: s.currentDeployId,
     enableHttps: s.enableHttps,
     forceHttps: s.forceHttps,
     letsEncryptEmail: s.letsEncryptEmail,

@@ -83,7 +83,7 @@ export function render(sites: readonly Site[], opts: RendererOptions = {}): Cadd
 
     const route: CaddyRoute = {
       match: [{ host: hosts }],
-      handle: [reverseProxy(site.upstreamUrl)],
+      handle: backendHandle(site),
       terminal: true,
     };
 
@@ -148,6 +148,43 @@ function parseJsonArray(raw: string | null | undefined): string[] {
     // fall through
   }
   return [];
+}
+
+/** Where Caddy file-serves static sites from (the caddy-www volume mount). */
+const STATIC_ROOT_BASE = '/srv/sites';
+
+/** The terminal handler chain for a site, by backend type. */
+function backendHandle(site: Site): Array<Record<string, unknown>> {
+  if (site.backendType === 'static') return staticHandlers(site);
+  // container → the panel-run container's network address; external → the URL.
+  const upstream =
+    site.backendType === 'container' && site.containerName
+      ? `${site.containerName}:${site.containerPort ?? 80}`
+      : site.upstreamUrl ?? '';
+  return [reverseProxy(upstream)];
+}
+
+/** file_server from /srv/sites/<id>/current (a stable symlink the deploy
+ *  endpoint swaps), with optional SPA fallback to index.html. */
+function staticHandlers(site: Site): Array<Record<string, unknown>> {
+  const root = `${STATIC_ROOT_BASE}/${site.id}/current`;
+  const handlers: Array<Record<string, unknown>> = [{ handler: 'vars', root }];
+  if (site.spaFallback) {
+    handlers.push({
+      handler: 'subroute',
+      routes: [
+        {
+          // Serve the requested file if it exists; else rewrite to index.html.
+          match: [{ file: { try_files: ['{http.request.uri.path}', '/index.html'] } }],
+          handle: [{ handler: 'rewrite', uri: '{http.matchers.file.relative}' }],
+        },
+        { handle: [{ handler: 'file_server' }] },
+      ],
+    });
+  } else {
+    handlers.push({ handler: 'file_server' });
+  }
+  return handlers;
 }
 
 function reverseProxy(upstream: string): Record<string, unknown> {

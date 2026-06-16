@@ -47,7 +47,19 @@ model Site {
   id               String    @id @default(uuid())
   primaryDomain    String    @unique
   aliasDomains     String    @default("[]") // JSON array of additional domains
-  upstreamUrl      String // host:port (e.g. "web:80") or full URL
+  // What this site serves. Default "external" preserves every existing row's
+  // reverse-proxy behaviour. container = panel-run container; static = files
+  // uploaded via deploy, served by Caddy file_server; external = foreign URL.
+  backendType      String    @default("external") // container | static | external
+  upstreamUrl      String? // container/external: host:port or URL. Null for static.
+  // container backend — the panel-managed app process.
+  containerName    String?
+  containerPort    Int?
+  imageRef         String? // last deployed image, e.g. registry.example.com/app:<sha>
+  envJson          String? // JSON map of env vars re-applied on recreate
+  // static backend — SPA fallback + the currently-live release (symlink target).
+  spaFallback      Boolean   @default(false)
+  currentDeployId  String?
   enableHttps      Boolean   @default(true)
   forceHttps       Boolean   @default(true)
   letsEncryptEmail String?
@@ -60,12 +72,31 @@ model Site {
   // site was created via the wizard and the user chose auto-DNS. Used to
   // surface drift warnings and one-click DNS reconcile.
   dnsProviderId    String?
-  dnsProvider      DnsProvider? @relation(fields: [dnsProviderId], references: [id], onDelete: SetNull)
+  dnsProvider      DnsProvider?  @relation(fields: [dnsProviderId], references: [id], onDelete: SetNull)
+  deployTokens     DeployToken[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([dnsProviderId])
   @@map("sites")
+}
+
+// A scoped, per-site CI credential for the deploy endpoint. Only the one-way
+// hash is stored (mirrors RefreshToken); the plaintext is shown once at mint.
+model DeployToken {
+  id         String    @id @default(uuid())
+  siteId     String
+  name       String
+  tokenHash  String    @unique
+  scope      String    @default("static") // static | container | both
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("deploy_tokens")
 }
 
 model DnsProvider {
