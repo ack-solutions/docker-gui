@@ -201,6 +201,8 @@ interface BackupJob {
 interface S3Conn {
   id: string;
   name: string;
+  isDefault: boolean;
+  defaultBucket: string | null;
 }
 
 function fmtSize(n: number | null): string {
@@ -357,7 +359,12 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
     apiFetch<S3Conn[]>("/api/v1/storage/connections")
       .then((list) => {
         setS3conns(list);
-        if (list[0]) setS3Id(list[0].id);
+        // Prefer the default connection, then its default bucket.
+        const preferred = list.find((c) => c.isDefault) ?? list[0];
+        if (preferred) {
+          setS3Id(preferred.id);
+          if (preferred.defaultBucket) setBucket((b) => b || preferred.defaultBucket || "");
+        }
       })
       .catch(() => setS3conns([]));
     apiFetch<Schedule>(`/api/v1/databases/connections/${conn.id}/schedule`)
@@ -467,6 +474,7 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
               {s3conns.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
                   {c.name}
+                  {c.isDefault ? " (default)" : ""}
                 </MenuItem>
               ))}
             </TextField>

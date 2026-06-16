@@ -216,8 +216,15 @@ describe('FeaturesService.enable', () => {
 
   it('auto-registers a "Local MinIO" S3 connection with sealed credentials', async () => {
     const create = vi.fn().mockResolvedValue({});
+    const update = vi.fn().mockResolvedValue({});
     const fakePrisma = {
-      s3Connection: { findUnique: vi.fn().mockResolvedValue(null), create, update: vi.fn() },
+      s3Connection: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        // No connection is the default yet.
+        findFirst: vi.fn().mockResolvedValue(null),
+        create,
+        update,
+      },
     };
     const cryptoBox = { seal: (s: string) => `sealed:${s}`, open: (s: string) => s };
     const svc = new FeaturesService(docker as unknown as Docker, {
@@ -237,6 +244,34 @@ describe('FeaturesService.enable', () => {
     });
     expect(String(data.secretKeyCipher)).toMatch(/^sealed:/);
     expect(String(data.accessKey)).toMatch(/^dgui-/);
+    // With no existing default, MinIO claims it.
+    expect(update).toHaveBeenCalledWith({
+      where: { name: 'Local MinIO' },
+      data: { isDefault: true },
+    });
+  });
+
+  it('does NOT steal the default when another connection is already default', async () => {
+    const update = vi.fn().mockResolvedValue({});
+    const fakePrisma = {
+      s3Connection: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        // An operator-chosen default already exists.
+        findFirst: vi.fn().mockResolvedValue({ id: 'other', isDefault: true }),
+        create: vi.fn().mockResolvedValue({}),
+        update,
+      },
+    };
+    const cryptoBox = { seal: (s: string) => `sealed:${s}`, open: (s: string) => s };
+    const svc = new FeaturesService(docker as unknown as Docker, {
+      network: 'docker-gui_dgui',
+      hostInstallDir: '/opt/docker-gui',
+      prisma: fakePrisma as never,
+      cryptoBox: cryptoBox as never,
+    });
+    await svc.enable('minio');
+    // It must NOT flip isDefault on itself.
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('records the error and throws when start() fails', async () => {

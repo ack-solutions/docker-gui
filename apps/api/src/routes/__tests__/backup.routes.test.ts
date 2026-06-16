@@ -255,6 +255,70 @@ describe('backup lifecycle', () => {
   });
 });
 
+describe('backup destination fallback (default connection)', () => {
+  it('falls back to the default storage connection + its defaultBucket when none given', async () => {
+    const { dbId, s3Id } = await seed();
+    // Make the connection the default and give it a default bucket.
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/storage/connections/${s3Id}`,
+      headers: auth(operatorToken),
+      payload: { defaultBucket: 'default-backups' },
+    });
+    await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/storage/connections/${s3Id}/default`,
+      headers: bearer(operatorToken),
+    });
+
+    // Trigger a backup with NO s3ConnectionId/bucket.
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${dbId}/backups`,
+      headers: auth(operatorToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(202);
+    const done = await waitFor(async () => {
+      const j = await env.prisma.backupJob.findUnique({ where: { id: res.json().id } });
+      return j && (j.status === 'success' || j.status === 'failed') ? j : null;
+    });
+    expect(done!.status).toBe('success');
+    expect(done!.s3ConnectionId).toBe(s3Id);
+    expect(done!.bucket).toBe('default-backups');
+    expect(putCalls.at(-1)!.Bucket).toBe('default-backups');
+  });
+
+  it('400 backup.no_destination when no s3ConnectionId and no default set', async () => {
+    const { dbId } = await seed();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${dbId}/backups`,
+      headers: auth(operatorToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('backup.no_destination');
+  });
+
+  it('400 backup.no_bucket when the default connection has no defaultBucket and no bucket given', async () => {
+    const { dbId, s3Id } = await seed();
+    await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/storage/connections/${s3Id}/default`,
+      headers: bearer(operatorToken),
+    });
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/databases/connections/${dbId}/backups`,
+      headers: auth(operatorToken),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('backup.no_bucket');
+  });
+});
+
 describe('restore', () => {
   it('restores a successful backup: downloads from S3, feeds the engine', async () => {
     const { dbId, s3Id } = await seed();

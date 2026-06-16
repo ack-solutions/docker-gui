@@ -36,8 +36,10 @@ export const updateDatabaseConnectionSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 
 export const startBackupSchema = z.object({
-  s3ConnectionId: z.string().min(1).max(64),
-  bucket: z.string().min(1).max(63),
+  // Both optional — when omitted the backup falls back to the default storage
+  // connection and its default bucket (resolved in BackupService.startBackup).
+  s3ConnectionId: z.string().min(1).max(64).optional(),
+  bucket: z.string().min(1).max(63).optional(),
 });
 
 export const restoreBackupSchema = z.object({

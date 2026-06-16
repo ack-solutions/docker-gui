@@ -140,9 +140,16 @@ model S3Connection {
   verified          Boolean   @default(false)
   lastVerifiedAt    DateTime?
   lastError         String?
+  // Exactly one connection may be the default (enforced in the service
+  // transaction — SQLite can't express a partial unique index). Backups fall
+  // back to the default when no connection is specified.
+  isDefault         Boolean   @default(false)
+  // Bucket backups use when none is given and this is the default connection.
+  defaultBucket     String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  @@index([isDefault])
   @@map("s3_connections")
 }
 

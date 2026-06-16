@@ -14,7 +14,11 @@ import {
   type S3Client,
 } from '@aws-sdk/client-s3';
 import type { TestEnv } from '../../__tests__/test-helpers.js';
-import { buildTestEnv, TEST_SETUP_SECRET } from '../../__tests__/test-helpers.js';
+import {
+  buildTestEnv,
+  TEST_SETUP_SECRET,
+  createUserAndLogin,
+} from '../../__tests__/test-helpers.js';
 
 // -------------------- Fake S3 backend --------------------
 
@@ -323,6 +327,133 @@ describe('Storage — connections', () => {
     });
     expect(res.statusCode).toBe(204);
     expect(await env.prisma.s3Connection.count()).toBe(0);
+  });
+});
+
+describe('Storage — default connection', () => {
+  async function createNamed(name: string, extra: Record<string, unknown> = {}): Promise<string> {
+    const t = await token();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/storage/connections',
+      headers: { authorization: `Bearer ${t}`, 'content-type': 'application/json' },
+      payload: {
+        name,
+        endpoint: 'http://minio:9000',
+        accessKey: 'minioadmin',
+        secretKey: 'minioadmin-secret',
+        ...extra,
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    return JSON.parse(res.body).id as string;
+  }
+
+  it('new connections are not default and carry a null defaultBucket', async () => {
+    const id = await createConnection();
+    const t = await token();
+    const res = await env.app.inject({
+      method: 'GET',
+      url: `/api/v1/storage/connections/${id}`,
+      headers: { authorization: `Bearer ${t}` },
+    });
+    const body = JSON.parse(res.body);
+    expect(body.isDefault).toBe(false);
+    expect(body.defaultBucket).toBeNull();
+  });
+
+  it('set-default marks one connection default and flips any previous default off', async () => {
+    const a = await createNamed('conn-a');
+    const b = await createNamed('conn-b');
+    const t = await token();
+
+    const setA = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/storage/connections/${a}/default`,
+      headers: { authorization: `Bearer ${t}` },
+    });
+    expect(setA.statusCode).toBe(200);
+    expect(JSON.parse(setA.body).isDefault).toBe(true);
+
+    // Switching the default to B must clear A.
+    const setB = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/storage/connections/${b}/default`,
+      headers: { authorization: `Bearer ${t}` },
+    });
+    expect(setB.statusCode).toBe(200);
+
+    const list = await env.app.inject({
+      method: 'GET',
+      url: '/api/v1/storage/connections',
+      headers: { authorization: `Bearer ${t}` },
+    });
+    const defaults = JSON.parse(list.body).filter((c: { isDefault: boolean }) => c.isDefault);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].id).toBe(b);
+  });
+
+  it('set-default on an unknown id returns 404', async () => {
+    const t = await token();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/storage/connections/does-not-exist/default',
+      headers: { authorization: `Bearer ${t}` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('create + PATCH round-trip defaultBucket', async () => {
+    const id = await createNamed('with-bucket', { defaultBucket: 'backups-bucket' });
+    const t = await token();
+    const got = await env.app.inject({
+      method: 'GET',
+      url: `/api/v1/storage/connections/${id}`,
+      headers: { authorization: `Bearer ${t}` },
+    });
+    expect(JSON.parse(got.body).defaultBucket).toBe('backups-bucket');
+
+    const patched = await env.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/storage/connections/${id}`,
+      headers: { authorization: `Bearer ${t}`, 'content-type': 'application/json' },
+      payload: { defaultBucket: 'other-bucket' },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(JSON.parse(patched.body).defaultBucket).toBe('other-bucket');
+  });
+
+  it('rejects an invalid defaultBucket name with 400', async () => {
+    const t = await token();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/storage/connections',
+      headers: { authorization: `Bearer ${t}`, 'content-type': 'application/json' },
+      payload: {
+        name: 'bad-bucket-conn',
+        endpoint: 'http://minio:9000',
+        accessKey: 'k',
+        secretKey: 's',
+        defaultBucket: 'BAD_NAME',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('set-default requires operator+ (viewer gets 403)', async () => {
+    const id = await createConnection();
+    const viewerToken = await createUserAndLogin(env, {
+      email: 'viewer-storage@example.com',
+      password: 'StrongPass1',
+      name: 'Viewer',
+      role: 'viewer',
+    });
+    const res = await env.app.inject({
+      method: 'POST',
+      url: `/api/v1/storage/connections/${id}/default`,
+      headers: { authorization: `Bearer ${viewerToken}` },
+    });
+    expect(res.statusCode).toBe(403);
   });
 });
 

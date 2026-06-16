@@ -66,6 +66,7 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
       ...(input.region !== undefined ? { region: input.region } : {}),
       ...(input.flavor !== undefined ? { flavor: input.flavor } : {}),
       ...(input.pathStyle !== undefined ? { pathStyle: input.pathStyle } : {}),
+      ...(input.defaultBucket !== undefined ? { defaultBucket: input.defaultBucket } : {}),
     });
     return reply.status(201).send(created);
   });
@@ -83,6 +84,7 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
         ...(input.pathStyle !== undefined ? { pathStyle: input.pathStyle } : {}),
         ...(input.accessKey !== undefined ? { accessKey: input.accessKey } : {}),
         ...(input.secretKey !== undefined ? { secretKey: input.secretKey } : {}),
+        ...(input.defaultBucket !== undefined ? { defaultBucket: input.defaultBucket } : {}),
       });
     },
   );
@@ -101,6 +103,15 @@ export const storageRoutes: FastifyPluginAsync<StorageRoutesOptions> = async (ap
     { preHandler: requireOperator },
     async (req) => {
       return opts.storage.verifyConnection(req.params.id);
+    },
+  );
+
+  // Make this connection the single default (used by backups when none given).
+  app.post<{ Params: { id: string } }>(
+    '/storage/connections/:id/default',
+    { preHandler: requireOperator },
+    async (req) => {
+      return opts.storage.setDefault(req.params.id);
     },
   );
 

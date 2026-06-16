@@ -25,8 +25,10 @@ export interface BackupJobSummary {
 
 export interface StartBackupInput {
   connectionId: string;
-  s3ConnectionId: string;
-  bucket: string;
+  /** Omit to fall back to the default storage connection. */
+  s3ConnectionId?: string;
+  /** Omit to fall back to the (default) connection's defaultBucket. */
+  bucket?: string;
   trigger?: 'manual' | 'scheduled';
 }
 
@@ -74,8 +76,31 @@ export class BackupService {
       if (input.trigger === 'scheduled') return this.toSummary(running);
       throw new AppError('backup.in_progress', 'A backup for this connection is already running', 409);
     }
-    // Validate the S3 destination exists up front for a clean error.
-    await this.storage.getConnection(input.s3ConnectionId);
+    // Resolve the S3 destination, falling back to the default connection /
+    // its default bucket when the caller didn't specify one.
+    let s3ConnectionId = input.s3ConnectionId;
+    let bucket = input.bucket;
+    if (!s3ConnectionId) {
+      const def = await this.storage.getDefaultConnection();
+      if (!def) {
+        throw new AppError(
+          'backup.no_destination',
+          'No S3 destination specified and no default storage connection is set',
+          400,
+        );
+      }
+      s3ConnectionId = def.id;
+      if (!bucket && def.defaultBucket) bucket = def.defaultBucket;
+    }
+    if (!bucket) {
+      throw new AppError(
+        'backup.no_bucket',
+        'No bucket specified and the storage connection has no default bucket',
+        400,
+      );
+    }
+    // Validate the (resolved) S3 destination exists up front for a clean error.
+    await this.storage.getConnection(s3ConnectionId);
 
     const objectKeyBase = `backups/${slug(conn.name)}`;
     const job = await this.prisma.backupJob.create({
@@ -85,8 +110,8 @@ export class BackupService {
         engine: conn.engine,
         status: 'running',
         trigger: input.trigger ?? 'manual',
-        s3ConnectionId: input.s3ConnectionId,
-        bucket: input.bucket,
+        s3ConnectionId,
+        bucket,
         objectKey: '', // filled below once we know the id
         startedAt: new Date(),
       },
@@ -104,7 +129,7 @@ export class BackupService {
       ssl: conn.ssl,
     };
 
-    this.schedule(() => this.runBackup(job.id, config, input.s3ConnectionId, input.bucket, objectKey));
+    this.schedule(() => this.runBackup(job.id, config, s3ConnectionId, bucket, objectKey));
 
     const fresh = await this.prisma.backupJob.findUnique({ where: { id: job.id } });
     return this.toSummary(fresh!);

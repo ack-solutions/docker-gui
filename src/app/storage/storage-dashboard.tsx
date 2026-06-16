@@ -26,6 +26,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { toast } from "sonner";
 import {
   AuthGuard,
@@ -52,6 +54,8 @@ interface S3Connection {
   verified: boolean;
   lastVerifiedAt: string | null;
   lastError: string | null;
+  isDefault: boolean;
+  defaultBucket: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +68,7 @@ interface ConnectionForm {
   pathStyle: boolean;
   accessKey: string;
   secretKey: string;
+  defaultBucket: string;
 }
 
 const EMPTY_FORM: ConnectionForm = {
@@ -73,7 +78,8 @@ const EMPTY_FORM: ConnectionForm = {
   flavor: "auto",
   pathStyle: true,
   accessKey: "",
-  secretKey: ""
+  secretKey: "",
+  defaultBucket: ""
 };
 
 const FLAVOR_LABEL: Record<Flavor, string> = {
@@ -130,7 +136,8 @@ function StorageInner({ user }: { user: PublicUser }) {
       flavor: c.flavor,
       pathStyle: c.pathStyle,
       accessKey: "",
-      secretKey: ""
+      secretKey: "",
+      defaultBucket: c.defaultBucket ?? ""
     });
     setCreating(false);
     setEditing(c);
@@ -155,15 +162,27 @@ function StorageInner({ user }: { user: PublicUser }) {
         };
         if (form.accessKey) patch.accessKey = form.accessKey;
         if (form.secretKey) patch.secretKey = form.secretKey;
+        // Only send a default bucket when set — the API rejects "" (3-63 chars).
+        if (form.defaultBucket.trim()) patch.defaultBucket = form.defaultBucket.trim();
         await apiFetch(`/api/v1/storage/connections/${editing.id}`, {
           method: "PATCH",
           body: JSON.stringify(patch)
         });
         toast.success(`Updated ${form.name}`);
       } else {
+        const payload: Partial<ConnectionForm> = {
+          name: form.name,
+          endpoint: form.endpoint,
+          region: form.region,
+          flavor: form.flavor,
+          pathStyle: form.pathStyle,
+          accessKey: form.accessKey,
+          secretKey: form.secretKey
+        };
+        if (form.defaultBucket.trim()) payload.defaultBucket = form.defaultBucket.trim();
         await apiFetch("/api/v1/storage/connections", {
           method: "POST",
-          body: JSON.stringify(form)
+          body: JSON.stringify(payload)
         });
         toast.success(`Added ${form.name}`);
       }
@@ -210,6 +229,22 @@ function StorageInner({ user }: { user: PublicUser }) {
     }
   }
 
+  async function makeDefault(c: S3Connection) {
+    setBusyId(c.id);
+    try {
+      await apiFetch(`/api/v1/storage/connections/${c.id}/default`, {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+      toast.success(`${c.name} is now the default for backups`);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function applyPreset(label: string) {
     const preset = PRESET_ENDPOINTS.find((p) => p.label === label);
     if (!preset) return;
@@ -237,6 +272,15 @@ function StorageInner({ user }: { user: PublicUser }) {
             label={FLAVOR_LABEL[c.flavor]}
             sx={{ fontSize: 10 }}
           />
+          {c.isDefault && (
+            <Chip
+              size="small"
+              color="primary"
+              icon={<StarIcon sx={{ fontSize: 12 }} />}
+              label="Default"
+              sx={{ fontSize: 10 }}
+            />
+          )}
         </Stack>
       )
     },
@@ -295,6 +339,18 @@ function StorageInner({ user }: { user: PublicUser }) {
               disabled={busy}
             >
               <ArrowForwardIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title={c.isDefault ? "Default for backups" : "Set as default"}>
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => makeDefault(c)}
+              disabled={busy || c.isDefault}
+              color={c.isDefault ? "primary" : "default"}
+            >
+              {c.isDefault ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
             </IconButton>
           </span>
         </Tooltip>
@@ -478,6 +534,15 @@ function StorageInner({ user }: { user: PublicUser }) {
                 placeholder={editing ? "(unchanged)" : ""}
                 inputProps={{ maxLength: 256 }}
                 helperText="Encrypted with AES-256-GCM derived from JWT_SECRET"
+              />
+              <TextField
+                label="Default bucket (optional)"
+                value={form.defaultBucket}
+                onChange={(e) => setForm({ ...form, defaultBucket: e.target.value })}
+                size="small"
+                placeholder="db-backups"
+                inputProps={{ maxLength: 63 }}
+                helperText="Used by backups when no bucket is specified. 3–63 chars, lowercase."
               />
             </Stack>
           </DialogContent>

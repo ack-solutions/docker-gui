@@ -385,6 +385,15 @@ export class FeaturesService {
     } else {
       await prisma.s3Connection.create({ data: { name: MINIO_CONNECTION_NAME, ...data } });
     }
+    // Claim default only when no connection is the default yet — never steal it
+    // from an operator-chosen one (idempotent across re-enables).
+    const hasDefault = await prisma.s3Connection.findFirst({ where: { isDefault: true } });
+    if (!hasDefault) {
+      await prisma.s3Connection.update({
+        where: { name: MINIO_CONNECTION_NAME },
+        data: { isDefault: true },
+      });
+    }
   }
 
   /**
