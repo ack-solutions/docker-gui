@@ -8,10 +8,12 @@ import {
 } from '../middleware/auth.middleware.js';
 import { createSiteSchema, updateSiteSchema } from '../schemas/site.schema.js';
 import type { DeployTokenService } from '../services/deploy-token.service.js';
+import type { DeployService } from '../services/deploy.service.js';
 
 export interface SitesRoutesOptions {
   sites: SitesService;
   tokens: DeployTokenService;
+  deploy: DeployService;
   authMiddleware: AuthMiddlewareDeps;
 }
 
@@ -102,6 +104,29 @@ export const sitesRoutes: FastifyPluginAsync<SitesRoutesOptions> = async (app, o
       const { id } = parse(req, idParamSchema, 'params');
       await opts.tokens.revoke(id, req.params.tokenId);
       return reply.send({ data: { id: req.params.tokenId, action: 'revoke', ok: true } });
+    },
+  );
+
+  // ---- Deploy history + rollback. Rollback is an operator action and lives
+  //      under JWT auth here (NOT the token-auth deploy plugin) — per-site CI
+  //      tokens are deploy-only and can never trigger a rollback. ----
+  app.get('/sites/:id/deploys', async (req, reply) => {
+    const { id } = parse(req, idParamSchema, 'params');
+    return reply.send({ data: await opts.deploy.listDeploys(id) });
+  });
+
+  app.post<{ Params: { id: string; deployId: string } }>(
+    '/sites/:id/deploys/:deployId/rollback',
+    { preHandler: requireOperator },
+    async (req, reply) => {
+      const { id } = parse(req, idParamSchema, 'params');
+      const { deployId } = parse(
+        req,
+        z.object({ deployId: z.string().min(1).max(64) }),
+        'params',
+      );
+      const actorId = req.user?.sub ?? 'operator';
+      return reply.send({ data: await opts.deploy.rollback(id, deployId, actorId) });
     },
   );
 };

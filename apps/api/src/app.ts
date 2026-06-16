@@ -219,6 +219,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       await api.register(sitesRoutes, {
         sites: opts.sites,
         tokens: opts.deployTokens,
+        deploy: opts.deploy,
         authMiddleware,
       });
       // Deploy endpoint lives in its OWN scope (no JWT requireAuth hook) —

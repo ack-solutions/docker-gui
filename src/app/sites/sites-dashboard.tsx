@@ -952,7 +952,9 @@ function SitesInner({ user }: { user: PublicUser }) {
         </Box>
       </Dialog>
 
-      {deployFor && <DeployDialog site={deployFor} onClose={() => setDeployFor(null)} />}
+      {deployFor && (
+        <DeployDialog site={deployFor} onClose={() => setDeployFor(null)} onChanged={load} />
+      )}
     </PageShell>
   );
 }
@@ -966,14 +968,48 @@ interface DeployTokenSummary {
   createdAt: string;
 }
 
-function DeployDialog({ site, onClose }: { site: SiteSummary; onClose: () => void }) {
+interface DeploySummary {
+  id: string;
+  kind: "static" | "container";
+  ref: string;
+  status: string;
+  active: boolean;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+function shortRef(d: DeploySummary): string {
+  if (d.kind === "container") {
+    // show the tag / last path segment of the image ref
+    const tag = d.ref.split(":").pop() ?? d.ref;
+    return tag.length > 24 ? `${tag.slice(0, 24)}…` : tag;
+  }
+  return d.ref;
+}
+
+function DeployDialog({
+  site,
+  onClose,
+  onChanged
+}: {
+  site: SiteSummary;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
   const [tokens, setTokens] = useState<DeployTokenSummary[]>([]);
+  const [deploys, setDeploys] = useState<DeploySummary[]>([]);
   const [minted, setMinted] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rollingBack, setRollingBack] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setTokens(await apiFetch<DeployTokenSummary[]>(`/api/v1/sites/${site.id}/deploy-tokens`));
+      const [tk, dep] = await Promise.all([
+        apiFetch<DeployTokenSummary[]>(`/api/v1/sites/${site.id}/deploy-tokens`),
+        apiFetch<DeploySummary[]>(`/api/v1/sites/${site.id}/deploys`)
+      ]);
+      setTokens(tk);
+      setDeploys(dep);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : String(err));
     }
@@ -982,6 +1018,21 @@ function DeployDialog({ site, onClose }: { site: SiteSummary; onClose: () => voi
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function rollback(d: DeploySummary) {
+    if (!confirm(`Roll ${site.primaryDomain} back to ${shortRef(d)}?`)) return;
+    setRollingBack(d.id);
+    try {
+      await apiFetch(`/api/v1/sites/${site.id}/deploys/${d.id}/rollback`, { method: "POST" });
+      toast.success(`Rolled back to ${shortRef(d)}`);
+      await load();
+      onChanged?.();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setRollingBack(null);
+    }
+  }
 
   const scope = site.backendType === "container" ? "container" : "static";
 
@@ -1060,6 +1111,56 @@ function DeployDialog({ site, onClose }: { site: SiteSummary; onClose: () => voi
                 </Stack>
               ))}
             </Stack>
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              Deploy history
+            </Typography>
+            {deploys.length === 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                No deploys yet. Once CI deploys this site, releases appear here and you can roll back.
+              </Typography>
+            ) : (
+              <Stack spacing={0.5}>
+                {deploys.map((d) => {
+                  const stale = d.status === "stale";
+                  return (
+                    <Stack key={d.id} direction="row" alignItems="center" spacing={1}>
+                      <Chip size="small" label={d.kind} variant="outlined" sx={{ fontSize: 10 }} />
+                      <Typography
+                        variant="body2"
+                        sx={{ flex: 1, fontFamily: "monospace", color: stale ? "text.disabled" : "text.primary" }}
+                      >
+                        {shortRef(d)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatRelativeTime(d.createdAt)}
+                      </Typography>
+                      {d.active ? (
+                        <StatusChip status="ok" label="Active" />
+                      ) : stale ? (
+                        <Tooltip title="Release files were pruned — cannot roll back">
+                          <span>
+                            <Button size="small" disabled>
+                              Pruned
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          size="small"
+                          onClick={() => rollback(d)}
+                          disabled={rollingBack !== null}
+                        >
+                          {rollingBack === d.id ? "Rolling back…" : "Roll back"}
+                        </Button>
+                      )}
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            )}
           </Box>
 
           <Box>

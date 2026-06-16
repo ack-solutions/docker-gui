@@ -6,6 +6,7 @@ import { buildTestEnv, TEST_SETUP_SECRET } from '../../__tests__/test-helpers.js
 // Docker stub that captures pull + createContainer for a container deploy.
 const created: Array<Record<string, unknown>> = [];
 const removed: string[] = [];
+const renamed: Array<{ name: string }> = [];
 const startSpy = vi.fn(async () => {});
 const containerDocker = {
   getContainer: (name: string) => ({
@@ -18,7 +19,12 @@ const containerDocker = {
   modem: { followProgress: (_s: unknown, done: (e: Error | null) => void) => done(null) },
   createContainer: async (spec: Record<string, unknown>) => {
     created.push(spec);
-    return { start: startSpy };
+    return {
+      start: startSpy,
+      rename: async (opts: { name: string }) => {
+        renamed.push(opts);
+      },
+    };
   },
 } as unknown as Docker;
 
@@ -71,8 +77,9 @@ async function mint(scope: 'static' | 'container' | 'both'): Promise<string> {
 }
 
 describe('container deploy', () => {
-  it('pulls the image and recreates the container under its stable name', async () => {
+  it('pulls the image and recreates the container (create-then-swap to the stable name)', async () => {
     created.length = 0;
+    renamed.length = 0;
     const token = await mint('container');
     const res = await env.app.inject({
       method: 'POST',
@@ -83,12 +90,15 @@ describe('container deploy', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toMatchObject({ image: 'registry.example.com/app:abc123', containerName: 'app-test' });
     expect(created).toHaveLength(1);
+    // New container is created under a temp name first (zero-downtime / failure-safe).
     expect(created[0]).toMatchObject({
-      name: 'app-test',
+      name: 'app-test-deploying',
       Image: 'registry.example.com/app:abc123',
       ExposedPorts: { '8080/tcp': {} },
     });
     expect(startSpy).toHaveBeenCalled();
+    // …then promoted to the stable name once it's up.
+    expect(renamed).toContainEqual({ name: 'app-test' });
   });
 
   it('rejects a JSON deploy with a malformed image ref (400)', async () => {

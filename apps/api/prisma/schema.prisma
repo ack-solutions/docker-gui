@@ -74,11 +74,34 @@ model Site {
   dnsProviderId    String?
   dnsProvider      DnsProvider?  @relation(fields: [dnsProviderId], references: [id], onDelete: SetNull)
   deployTokens     DeployToken[]
+  deploys          Deploy[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([dnsProviderId])
   @@map("sites")
+}
+
+// History of successful deploys for a site, enabling one-click rollback.
+// Exactly one row per site is `active` (the live release/image), mirrored by
+// Site.currentDeployId / Site.imageRef.
+model Deploy {
+  id        String   @id @default(uuid())
+  siteId    String
+  kind      String // "static" | "container"
+  // static: the on-disk release dir id (the server-generated deployId, e.g.
+  // "r<base36><hex>"); container: the full image ref pulled for this deploy.
+  ref       String
+  status    String   @default("active") // active | superseded | stale
+  active    Boolean  @default(false)
+  // "ci" for token-driven deploys, or the operator user id for a rollback.
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, createdAt])
+  @@map("deploys")
 }
 
 // A scoped, per-site CI credential for the deploy endpoint. Only the one-way
