@@ -129,6 +129,7 @@ function siteStatusLabel(s: SiteSummary): string {
 function SitesInner({ user }: { user: PublicUser }) {
   const [rows, setRows] = useState<SiteSummary[] | null>(null);
   const [caddyConfigured, setCaddyConfigured] = useState<boolean | null>(null);
+  const [caddyReachable, setCaddyReachable] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -153,10 +154,11 @@ function SitesInner({ user }: { user: PublicUser }) {
     try {
       const [list, status] = await Promise.all([
         apiFetch<SiteSummary[]>("/api/v1/sites"),
-        apiFetch<{ caddyConfigured: boolean }>("/api/v1/sites/status")
+        apiFetch<{ caddyConfigured: boolean; caddyReachable?: boolean }>("/api/v1/sites/status")
       ]);
       setRows(list);
       setCaddyConfigured(status.caddyConfigured);
+      setCaddyReachable(status.caddyReachable ?? null);
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : String(err));
@@ -482,7 +484,7 @@ function SitesInner({ user }: { user: PublicUser }) {
             variant="contained"
             color="primary"
             size="small"
-            disabled={applying || !dirty || caddyConfigured === false}
+            disabled={applying || !dirty || caddyConfigured === false || caddyReachable === false}
             onClick={applyAll}
           >
             {applying ? "Applying…" : "Apply to Caddy"}
@@ -498,6 +500,13 @@ function SitesInner({ user }: { user: PublicUser }) {
           Caddy admin URL is not configured on the API
           (<code>CADDY_ADMIN_URL</code>). You can still create sites — they
           just won&apos;t be applied until Caddy is wired up.
+        </Alert>
+      )}
+      {caddyConfigured !== false && caddyReachable === false && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          The reverse proxy isn&apos;t running yet. Enable{" "}
+          <strong>Reverse proxy + automatic HTTPS</strong> on the <strong>Features</strong> page,
+          then Apply. You can create and edit sites now — they apply once it&apos;s up.
         </Alert>
       )}
       {loadError && (

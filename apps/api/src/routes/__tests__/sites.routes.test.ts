@@ -69,7 +69,7 @@ describe('GET /api/v1/sites/status', () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data).toEqual({ caddyConfigured: true });
+    expect(res.json().data).toEqual({ caddyConfigured: true, caddyReachable: true });
   });
 });
 

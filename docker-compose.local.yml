@@ -32,6 +32,10 @@ services:
       CORS_ORIGINS: "http://localhost:3000"
       LOG_PRETTY: "true"
       DOCKER_GUI_NETWORK: docker-gui-local_dgui
+      # Reverse proxy: the api talks to Caddy's admin API over the docker
+      # network. Matches the well-known feature-container name.
+      CADDY_ADMIN_URL: "http://docker-gui-caddy:2019"
+      CADDY_DEFAULT_LE_EMAIL: "admin@local.test"
     volumes:
       - app-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -64,8 +68,28 @@ services:
     networks:
       - dgui
 
+  # Reverse proxy. In production this is launched on demand by the Features
+  # page (same image + container name + admin port); here we run it directly
+  # so the Sites flow is testable end-to-end. Admin API stays internal.
+  caddy:
+    image: caddy:2-alpine
+    container_name: docker-gui-caddy
+    restart: unless-stopped
+    command: ["caddy", "run", "--config", "/etc/caddy/initial.json", "--resume"]
+    volumes:
+      - ./docker/caddy/initial.json:/etc/caddy/initial.json:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "18080:80"
+      - "18443:443"
+    networks:
+      - dgui
+
 volumes:
   app-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   dgui:

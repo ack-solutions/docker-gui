@@ -41,7 +41,10 @@ export const sitesRoutes: FastifyPluginAsync<SitesRoutesOptions> = async (app, o
   });
 
   app.get('/sites/status', async (_req, reply) => {
-    return reply.send({ data: { caddyConfigured: opts.sites.caddyConfigured() } });
+    const status = await opts.sites.caddyStatus();
+    return reply.send({
+      data: { caddyConfigured: status.configured, caddyReachable: status.reachable },
+    });
   });
 
   app.get('/sites/:id', async (req, reply) => {

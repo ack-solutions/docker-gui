@@ -26,6 +26,15 @@ export class SitesService {
     return this.caddy !== null;
   }
 
+  /**
+   * Whether Apply can succeed right now: Caddy must be configured AND its admin
+   * API reachable (the reverse-proxy feature container actually running).
+   */
+  async caddyStatus(): Promise<{ configured: boolean; reachable: boolean }> {
+    if (!this.caddy) return { configured: false, reachable: false };
+    return { configured: true, reachable: await this.caddy.ping() };
+  }
+
   async list(): Promise<SiteSummary[]> {
     const rows = await this.db.site.findMany({ orderBy: { primaryDomain: 'asc' } });
     return rows.map(toSummary);

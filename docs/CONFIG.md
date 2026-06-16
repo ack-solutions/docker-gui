@@ -314,12 +314,12 @@ Host path where install.sh wrote configs, snapshots, and feature data. Used to b
 
 ### `caddy.adminUrl`
 
-URL of the Caddy admin API. Without this, Sites can be edited but Apply is disabled. Production compose default is http://caddy:2019 — reachable only on the internal docker network.
+URL of the Caddy admin API. Defaults to the on-demand reverse-proxy feature container (docker-gui-caddy:2019), reachable only on the internal docker network — so enabling Sites from the Features page works with no manual config. Apply stays pending until that container is running.
 
 | Field | Value |
 | --- | --- |
 | Type | `url` |
-| Default | _(unset → feature disabled or auto-detected)_ |
+| Default | `http://docker-gui-caddy:2019` |
 | Env var | `CADDY_ADMIN_URL` |
 | YAML path | `caddy.admin_url` |
 | UI editable | no |
@@ -329,7 +329,7 @@ URL of the Caddy admin API. Without this, Sites can be edited but Apply is disab
 Examples:
 
 ```
-http://caddy:2019
+http://docker-gui-caddy:2019
 ```
 
 ### `caddy.defaultLetsEncryptEmail`

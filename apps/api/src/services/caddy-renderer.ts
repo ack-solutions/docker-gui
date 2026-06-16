@@ -16,7 +16,22 @@ export interface RendererOptions {
   httpsPorts?: string[];
   /** Listen ports for HTTP. Default `[":80"]`. */
   httpPorts?: string[];
+  /**
+   * Allowed admin-API origins (Host values). `POST /load` replaces the entire
+   * config — including `admin` — so we must re-assert these every apply or
+   * Caddy reverts to a loopback-only admin and the next apply can't reach it.
+   */
+  adminOrigins?: string[];
 }
+
+/** The reverse-proxy feature container + loopback, reachable on the internal
+ *  docker network. Keep in sync with docker/caddy/initial.json. */
+const DEFAULT_ADMIN_ORIGINS = [
+  'docker-gui-caddy:2019',
+  'localhost:2019',
+  '127.0.0.1:2019',
+  '[::1]:2019',
+];
 
 interface CaddyRoute {
   match: Array<{ host: string[] }>;
@@ -31,7 +46,7 @@ interface CaddyServer {
 }
 
 export interface CaddyConfig {
-  admin: { listen: string };
+  admin: { listen: string; origins: string[] };
   apps: {
     http: { servers: Record<string, CaddyServer> };
     tls?: {
@@ -102,7 +117,7 @@ export function render(sites: readonly Site[], opts: RendererOptions = {}): Cadd
   }
 
   const config: CaddyConfig = {
-    admin: { listen: ':2019' },
+    admin: { listen: ':2019', origins: opts.adminOrigins ?? DEFAULT_ADMIN_ORIGINS },
     apps: {
       http: { servers },
     },

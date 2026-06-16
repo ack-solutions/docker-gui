@@ -30,6 +30,13 @@ describe('render', () => {
     expect(config.apps.tls).toBeUndefined();
   });
 
+  it('re-asserts admin origins so POST /load keeps the admin API reachable', () => {
+    // /load replaces the whole config; without origins Caddy reverts to a
+    // loopback-only admin and the next apply can't reach it cross-container.
+    expect(render([]).admin.origins).toContain('docker-gui-caddy:2019');
+    expect(render([], { adminOrigins: ['caddy:2019'] }).admin.origins).toEqual(['caddy:2019']);
+  });
+
   it('renders one site as a single HTTPS route', () => {
     const config = render([makeSite()]);
     expect(config.apps.http.servers['https']).toBeDefined();

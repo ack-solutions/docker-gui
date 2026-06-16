@@ -428,7 +428,7 @@ export const CONFIG_REGISTRY = [
     envName: 'CADDY_ADMIN_URL',
     yamlPath: 'caddy.admin_url',
     type: 'url',
-    default: undefined,
+    default: 'http://docker-gui-caddy:2019',
     required: false,
     secret: false,
     uiEditable: false,
@@ -436,8 +436,8 @@ export const CONFIG_REGISTRY = [
     group: 'caddy',
     label: 'Caddy admin URL',
     description:
-      'URL of the Caddy admin API. Without this, Sites can be edited but Apply is disabled. Production compose default is http://caddy:2019 — reachable only on the internal docker network.',
-    examples: ['http://caddy:2019'],
+      'URL of the Caddy admin API. Defaults to the on-demand reverse-proxy feature container (docker-gui-caddy:2019), reachable only on the internal docker network — so enabling Sites from the Features page works with no manual config. Apply stays pending until that container is running.',
+    examples: ['http://docker-gui-caddy:2019'],
     introducedIn: '0.1.0',
   }),
   defineKey<string | undefined>({
