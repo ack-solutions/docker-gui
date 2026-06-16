@@ -79,13 +79,23 @@ describe('FeaturesService.list', () => {
     );
   });
 
-  it('flags email / postgres-gui as coming-soon (MinIO is now implemented)', async () => {
+  it('flags email as coming-soon (MinIO + pgweb are now implemented)', async () => {
     const docker = makeDocker();
     const svc = buildSvc(docker);
     const list = await svc.list();
     expect(list.find((f) => f.key === 'email')?.comingSoon).toBe(true);
-    expect(list.find((f) => f.key === 'postgres-gui')?.comingSoon).toBe(true);
     expect(list.find((f) => f.key === 'minio')?.comingSoon).toBe(false);
+    expect(list.find((f) => f.key === 'postgres-gui')?.comingSoon).toBe(false);
+  });
+
+  it('postgres-gui is implemented (NOT coming-soon) and reports a real status', async () => {
+    const docker = makeDocker({ containerExists: false });
+    const svc = buildSvc(docker);
+    const pgweb = (await svc.list()).find((f) => f.key === 'postgres-gui');
+    expect(pgweb).toBeTruthy();
+    expect(pgweb?.comingSoon).toBe(false);
+    expect(pgweb?.status).toBe('stopped');
+    expect(pgweb?.category).toBe('database');
   });
 
   it('registry is implemented (NOT coming-soon) and reports a real status', async () => {
@@ -188,6 +198,20 @@ describe('FeaturesService.enable', () => {
     expect(user).toMatch(/^MINIO_ROOT_USER=dgui-[0-9a-f]{12}$/);
     expect(pass).toBeDefined();
     expect(pass).not.toBe('MINIO_ROOT_PASSWORD=minioadmin');
+  });
+
+  it('creates the pgweb container on the network with no host port binding', async () => {
+    const svc = buildSvc(docker);
+    await svc.enable('postgres-gui');
+    const spec = docker.createContainer.mock.calls[0]?.[0] as {
+      Image: string;
+      ExposedPorts: Record<string, unknown>;
+      HostConfig: { PortBindings?: unknown; NetworkMode?: string };
+    };
+    expect(spec.Image).toBe('sosedoff/pgweb:latest');
+    expect(spec.HostConfig.NetworkMode).toBe('docker-gui_dgui');
+    expect(spec.HostConfig.PortBindings).toBeUndefined();
+    expect(spec.ExposedPorts).toHaveProperty('8081/tcp');
   });
 
   it('auto-registers a "Local MinIO" S3 connection with sealed credentials', async () => {

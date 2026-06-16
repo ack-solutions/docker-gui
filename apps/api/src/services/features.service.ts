@@ -161,10 +161,29 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     displayName: 'Postgres GUI',
     category: 'database',
     description:
-      'Browser-based Postgres explorer (pgweb). Connects to your Docker-native Postgres containers automatically. Coming soon.',
+      'Browser-based Postgres explorer (pgweb). Runs on the internal network with no exposed host port — front it with a Site (reverse proxy + auth), then paste a connection string for any reachable Postgres, including your Docker-native databases. Stores nothing server-side.',
     ports: [],
     containerName: 'docker-gui-pgweb',
     volumes: [],
+    build: ({ network }) => ({
+      name: 'docker-gui-pgweb',
+      Image: 'sosedoff/pgweb:latest',
+      // pgweb binds 127.0.0.1 by default — bind all interfaces so the reverse
+      // proxy on the docker network can reach it. No DB URL is baked in; the
+      // user enters a connection string in pgweb's own UI (stateless).
+      Cmd: ['pgweb', '--bind=0.0.0.0', '--listen=8081'],
+      Labels: {
+        'docker-gui.managed-by': 'features-service',
+        'docker-gui.feature': 'postgres-gui',
+      },
+      ExposedPorts: { '8081/tcp': {} },
+      HostConfig: {
+        RestartPolicy: { Name: 'unless-stopped' },
+        // No host port binding — reached over the docker network as
+        // docker-gui-pgweb:8081. Front with a Site for browser access.
+        NetworkMode: network,
+      },
+    }),
   },
   {
     key: 'registry',
