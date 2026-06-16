@@ -603,6 +603,9 @@ function SitesInner({ user }: { user: PublicUser }) {
         <Box component="form" onSubmit={submit}>
           <DialogContent sx={{ pt: 0 }}>
             <Stack spacing={2.5}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Domain
+              </Typography>
               <TextField
                 autoFocus
                 label="Primary domain"
@@ -623,6 +626,9 @@ function SitesInner({ user }: { user: PublicUser }) {
                 fullWidth
                 helperText="Comma-separated. Optional."
               />
+              <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
+                What to serve
+              </Typography>
               <TextField
                 select
                 label="Backend"
@@ -630,12 +636,18 @@ function SitesInner({ user }: { user: PublicUser }) {
                 onChange={(e) => setForm({ ...form, backendType: e.target.value as BackendType })}
                 disabled={submitting}
                 fullWidth
-                helperText="What this domain serves."
               >
-                <MenuItem value="container">Container app (panel-managed)</MenuItem>
-                <MenuItem value="static">Static site (upload a build — no compute)</MenuItem>
-                <MenuItem value="external">External URL (proxy something else)</MenuItem>
+                <MenuItem value="container">Container app — the panel runs your Docker image</MenuItem>
+                <MenuItem value="static">Static site — upload a build, no server (HTML/JS/CSS)</MenuItem>
+                <MenuItem value="external">External URL — proxy a service you run elsewhere</MenuItem>
               </TextField>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                {form.backendType === "container"
+                  ? "CI pushes an image to your registry, then triggers a deploy; the panel recreates the container and Caddy proxies it."
+                  : form.backendType === "static"
+                    ? "CI uploads your built files; Caddy serves them directly over HTTPS — no compute needed."
+                    : "Caddy reverse-proxies to a URL or host you run elsewhere."}
+              </Typography>
 
               {form.backendType === "container" && (
                 <Stack direction="row" spacing={2}>
@@ -687,6 +699,9 @@ function SitesInner({ user }: { user: PublicUser }) {
                   helperText="Where Caddy will reverse-proxy traffic."
                 />
               )}
+              <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
+                HTTPS
+              </Typography>
               <FormControlLabel
                 control={
                   <Switch
@@ -721,6 +736,9 @@ function SitesInner({ user }: { user: PublicUser }) {
                   />
                 </>
               )}
+              <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
+                Options
+              </Typography>
               <FormControlLabel
                 control={
                   <Switch

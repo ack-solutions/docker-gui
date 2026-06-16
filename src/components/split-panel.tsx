@@ -255,10 +255,8 @@ export function SplitPanel({
             color: "text.disabled",
             transition: "background-color 120ms, color 120ms",
             "&:hover": { bgcolor: "action.hover", color: "primary.main" },
-            "&:focus-visible": {
-              outline: (t) => `2px solid ${t.palette.primary.main}`,
-              outlineOffset: -2
-            },
+            // Keyboard focus shows a subtle tint, no outline ring.
+            "&:focus-visible": { bgcolor: "action.hover", color: "primary.main", outline: "none" },
             ...(isResizing ? { bgcolor: "action.selected", color: "primary.main" } : {})
           }}
         >

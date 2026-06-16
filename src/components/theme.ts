@@ -76,7 +76,6 @@ export const theme = createTheme({
     },
     MuiTooltip: { styleOverrides: { tooltip: { borderRadius: 8, fontSize: "0.75rem" } } },
     MuiTextField: { defaultProps: { size: "small" } },
-    MuiInputLabel: { styleOverrides: { root: { fontSize: "0.9rem" } } },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
@@ -84,8 +83,8 @@ export const theme = createTheme({
           backgroundColor: "#ffffff",
           "& .MuiOutlinedInput-notchedOutline": { borderColor: "#dfe3e8" },
           "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#c4ccd6" },
-          "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderWidth: 1, borderColor: "#2563eb" },
-          "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(37,99,235,0.12)" }
+          // Keep a subtle focused-border colour but no glow/outline ring.
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderWidth: 1, borderColor: "#2563eb" }
         }
       }
     }
