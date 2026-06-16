@@ -357,6 +357,8 @@ function StorageInner({ user }: { user: PublicUser }) {
       }
     >
       <DataTable
+        searchable
+        searchPlaceholder="Search connections…"
         columns={columns}
         rows={list}
         rowKey={(c) => c.id}

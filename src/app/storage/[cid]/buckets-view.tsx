@@ -228,6 +228,8 @@ function BucketsInner({ user, connectionId }: { user: PublicUser; connectionId: 
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search buckets…"
         columns={columns}
         rows={list}
         rowKey={(b) => b.name}

@@ -335,6 +335,8 @@ function DnsInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search providers…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}

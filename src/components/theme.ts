@@ -32,10 +32,13 @@ export const theme = createTheme({
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
-        root: { textTransform: "none", borderRadius: 10 },
-        sizeSmall: { borderRadius: 8 }
+        root: { textTransform: "none", borderRadius: 10, fontWeight: 600 },
+        sizeSmall: { borderRadius: 8, paddingTop: 5, paddingBottom: 5 },
+        containedPrimary: { boxShadow: "0 1px 2px rgba(37,99,235,0.28)" },
+        outlined: { borderColor: "#d8dee6" }
       }
     },
+    MuiIconButton: { styleOverrides: { root: { borderRadius: 8 } } },
     MuiCard: {
       defaultProps: { variant: "outlined" },
       styleOverrides: {
@@ -47,16 +50,45 @@ export const theme = createTheme({
       }
     },
     MuiPaper: { styleOverrides: { root: { backgroundImage: "none" } } },
-    MuiChip: { styleOverrides: { root: { fontWeight: 500, borderRadius: 8 } } },
+    MuiChip: {
+      styleOverrides: {
+        root: { fontWeight: 500, borderRadius: 8 },
+        sizeSmall: { height: 22 }
+      }
+    },
+    MuiTableHead: { styleOverrides: { root: { backgroundColor: "#f8fafc" } } },
     MuiTableCell: {
       styleOverrides: {
         root: { borderColor: "#eef1f5" },
-        head: { fontWeight: 600, color: "#64748b", fontSize: "0.8rem", letterSpacing: "0.01em" }
+        head: {
+          fontWeight: 600,
+          color: "#64748b",
+          fontSize: "0.7rem",
+          letterSpacing: "0.05em",
+          textTransform: "uppercase"
+        }
+      }
+    },
+    MuiTableRow: {
+      styleOverrides: {
+        root: { "&.MuiTableRow-hover:hover": { backgroundColor: "#f9fafb" } }
       }
     },
     MuiTooltip: { styleOverrides: { tooltip: { borderRadius: 8, fontSize: "0.75rem" } } },
     MuiTextField: { defaultProps: { size: "small" } },
-    MuiOutlinedInput: { styleOverrides: { root: { borderRadius: 10 } } }
+    MuiInputLabel: { styleOverrides: { root: { fontSize: "0.9rem" } } },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+          backgroundColor: "#ffffff",
+          "& .MuiOutlinedInput-notchedOutline": { borderColor: "#dfe3e8" },
+          "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#c4ccd6" },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderWidth: 1, borderColor: "#2563eb" },
+          "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(37,99,235,0.12)" }
+        }
+      }
+    }
   }
 });
 

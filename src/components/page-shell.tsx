@@ -131,7 +131,7 @@ export function PageShell({
   user,
   actions,
   hideChrome = false,
-  maxWidth = "xl",
+  maxWidth = false,
   splitPanel,
   children
 }: PageShellProps): JSX.Element {
@@ -350,7 +350,11 @@ export function PageShell({
                 sx={{ display: { xs: "none", sm: "flex" }, maxWidth: 220 }}
               />
             )}
-            {actions && <Stack direction="row" spacing={1}>{actions}</Stack>}
+            {actions && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                {actions}
+              </Stack>
+            )}
           </Toolbar>
         </Box>
 
@@ -365,7 +369,17 @@ export function PageShell({
             py: { xs: 2.5, md: 3.5 }
           }}
         >
-          <Box sx={{ maxWidth: maxWidth === false ? "100%" : 1320, mx: "auto" }}>{children}</Box>
+          <Box
+            sx={{
+              maxWidth:
+                maxWidth === false
+                  ? "100%"
+                  : { sm: 640, md: 900, lg: 1200, xl: 1536 }[maxWidth],
+              mx: "auto"
+            }}
+          >
+            {children}
+          </Box>
         </Box>
 
         {/* Optional AWS-style docked panel: a flex sibling AFTER the content, so

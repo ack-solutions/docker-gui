@@ -512,6 +512,8 @@ function SitesInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search sites…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}

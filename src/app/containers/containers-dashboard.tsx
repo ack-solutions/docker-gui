@@ -350,6 +350,9 @@ function ContainersInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search by name, image, status…"
+        getSearchText={(r) => `${r.names.join(" ")} ${r.image} ${r.status} ${r.shortId} ${r.state}`}
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}
