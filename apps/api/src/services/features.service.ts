@@ -118,8 +118,8 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     displayName: 'MinIO object storage',
     category: 'storage',
     description:
-      'S3-compatible object storage. Enabling it launches MinIO on the internal network and auto-registers a "Local MinIO" connection on the Storage page (with generated root credentials). The console is on :9001 (loopback).',
-    ports: [9000, 9001],
+      'S3-compatible object storage. Enabling it launches MinIO on the internal network and auto-registers a "Local MinIO" connection on the Storage page (with generated root credentials). To reach the S3 API or console from a browser, front it with a Site (reverse proxy).',
+    ports: [],
     containerName: 'docker-gui-minio',
     volumes: [`${PROJECT}_minio-data`],
     configHref: '/storage',
@@ -138,12 +138,9 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
       ExposedPorts: { '9000/tcp': {}, '9001/tcp': {} },
       HostConfig: {
         RestartPolicy: { Name: 'unless-stopped' },
-        PortBindings: {
-          // S3 API + console on loopback; the panel reaches the API over the
-          // docker network. Front with the reverse proxy for external access.
-          '9000/tcp': [{ HostIp: '127.0.0.1', HostPort: '9000' }],
-          '9001/tcp': [{ HostIp: '127.0.0.1', HostPort: '9001' }],
-        },
+        // No host port bindings — the panel reaches MinIO over the docker
+        // network (docker-gui-minio:9000), avoiding host port conflicts.
+        // Front with the reverse proxy for external/browser access.
         Binds: [`${PROJECT}_minio-data:/data`],
         NetworkMode: network,
       },
@@ -288,9 +285,7 @@ export class FeaturesService {
         hostInstallDir: this.opts.hostInstallDir,
         ...(secrets ? { secrets } : {}),
       });
-      const created = (await (this.docker as unknown as {
-        createContainer: (s: DockerCreateContainerOpts) => Promise<{ start: () => Promise<void> }>;
-      }).createContainer(spec));
+      const created = await this.createWithPull(spec);
       await created.start();
 
       if (key === 'minio' && secrets) {
@@ -305,6 +300,41 @@ export class FeaturesService {
       throw new AppError('feature.enable_failed', message, 500);
     }
     return this.toView(def);
+  }
+
+  /** createContainer, pulling the image first if it isn't present locally
+   *  (dockerode's createContainer never auto-pulls). Keeps already-local
+   *  images network-free. */
+  private async createWithPull(
+    spec: DockerCreateContainerOpts,
+  ): Promise<{ start: () => Promise<void> }> {
+    const create = () =>
+      (
+        this.docker as unknown as {
+          createContainer: (s: DockerCreateContainerOpts) => Promise<{ start: () => Promise<void> }>;
+        }
+      ).createContainer(spec);
+    try {
+      return await create();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/no such image/i.test(msg)) throw err;
+      await this.pullImage(spec.Image);
+      return create();
+    }
+  }
+
+  private pullImage(image: string): Promise<void> {
+    const docker = this.docker as unknown as {
+      pull: (img: string, cb: (err: Error | null, stream?: NodeJS.ReadableStream) => void) => void;
+      modem: { followProgress: (s: NodeJS.ReadableStream, done: (e: Error | null) => void) => void };
+    };
+    return new Promise((resolve, reject) => {
+      docker.pull(image, (err, stream) => {
+        if (err || !stream) return reject(err ?? new Error(`Could not pull ${image}`));
+        docker.modem.followProgress(stream, (e) => (e ? reject(e) : resolve()));
+      });
+    });
   }
 
   private generateMinioSecrets(): { accessKey: string; secretKey: string } {
