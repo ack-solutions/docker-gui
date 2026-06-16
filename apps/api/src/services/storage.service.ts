@@ -45,6 +45,8 @@ export interface S3ConnectionSummary {
   verified: boolean;
   lastVerifiedAt: string | null;
   lastError: string | null;
+  isDefault: boolean;
+  defaultBucket: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -57,6 +59,7 @@ export interface CreateS3ConnectionInput {
   pathStyle?: boolean;
   accessKey: string;
   secretKey: string;
+  defaultBucket?: string;
 }
 
 export interface UpdateS3ConnectionInput {
@@ -67,6 +70,7 @@ export interface UpdateS3ConnectionInput {
   pathStyle?: boolean;
   accessKey?: string;
   secretKey?: string;
+  defaultBucket?: string;
 }
 
 export interface BucketSummary {
@@ -188,6 +192,7 @@ export class StorageService {
         verified,
         lastVerifiedAt,
         lastError,
+        ...(input.defaultBucket !== undefined ? { defaultBucket: input.defaultBucket } : {}),
       },
     });
     return this.toSummary(created);
@@ -208,6 +213,7 @@ export class StorageService {
     if (input.pathStyle !== undefined) data['pathStyle'] = input.pathStyle;
     if (input.accessKey !== undefined) data['accessKey'] = input.accessKey;
     if (input.secretKey !== undefined) data['secretKeyCipher'] = this.cryptoBox.seal(input.secretKey);
+    if (input.defaultBucket !== undefined) data['defaultBucket'] = input.defaultBucket;
     // Touching credentials invalidates verification.
     if (input.accessKey !== undefined || input.secretKey !== undefined || input.endpoint !== undefined) {
       data['verified'] = false;
@@ -249,6 +255,30 @@ export class StorageService {
       },
     });
     return this.toSummary(updated);
+  }
+
+  /**
+   * Make this connection the single default. Clears any other default and
+   * sets this one in one transaction so there is never more than one default
+   * (the invariant SQLite can't express as a partial unique index).
+   */
+  async setDefault(id: string): Promise<S3ConnectionSummary> {
+    const row = await this.prisma.s3Connection.findUnique({ where: { id } });
+    if (!row) throw new NotFoundError('Connection not found');
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.s3Connection.updateMany({
+        where: { isDefault: true, NOT: { id } },
+        data: { isDefault: false },
+      }),
+      this.prisma.s3Connection.update({ where: { id }, data: { isDefault: true } }),
+    ]);
+    return this.toSummary(updated);
+  }
+
+  /** The current default connection, or null when none is set. */
+  async getDefaultConnection(): Promise<S3ConnectionSummary | null> {
+    const row = await this.prisma.s3Connection.findFirst({ where: { isDefault: true } });
+    return row ? this.toSummary(row) : null;
   }
 
   // -------------------- Buckets --------------------
@@ -508,6 +538,8 @@ export class StorageService {
     verified: boolean;
     lastVerifiedAt: Date | null;
     lastError: string | null;
+    isDefault: boolean;
+    defaultBucket: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): S3ConnectionSummary {
@@ -522,6 +554,8 @@ export class StorageService {
       verified: row.verified,
       lastVerifiedAt: row.lastVerifiedAt ? row.lastVerifiedAt.toISOString() : null,
       lastError: row.lastError,
+      isDefault: row.isDefault,
+      defaultBucket: row.defaultBucket,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

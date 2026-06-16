@@ -183,7 +183,12 @@ describe('loadConfig snapshot (public API)', () => {
 
   it('returns undefined for unset optional keys via getOptional', () => {
     const snapshot = loadConfig({ env: validBaseEnv() });
-    expect(snapshot.getOptional<string>('caddy.adminUrl')).toBeUndefined();
+    expect(snapshot.getOptional<string>('caddy.defaultLetsEncryptEmail')).toBeUndefined();
+  });
+
+  it('defaults caddy.adminUrl to the reverse-proxy feature container', () => {
+    const snapshot = loadConfig({ env: validBaseEnv() });
+    expect(snapshot.getOptional<string>('caddy.adminUrl')).toBe('http://docker-gui-caddy:2019');
   });
 
   it('throws on missing required keys at boot', () => {

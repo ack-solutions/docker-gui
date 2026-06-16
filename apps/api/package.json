@@ -23,6 +23,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@aws-sdk/client-route-53": "^3.1042.0",
     "@aws-sdk/client-s3": "^3.1042.0",
     "@aws-sdk/s3-request-presigner": "^3.1042.0",
     "@fastify/cors": "^10.0.1",
@@ -35,9 +36,12 @@
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.22.5",
     "node-cron": "^4.2.1",
+    "nodemailer": "^6",
     "pg": "^8.21.0",
     "pino": "^9.5.0",
     "pino-pretty": "^13.0.0",
+    "tar-fs": "^3",
+    "tar-stream": "^3",
     "ws": "^8.18.0",
     "yaml": "^2.6.0",
     "zod": "^3.23.8"
@@ -47,7 +51,10 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.9.0",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
+    "@types/tar-fs": "^2.0.4",
+    "@types/tar-stream": "^3.1.4",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^2.1.5",
     "prisma": "^6.1.0",

@@ -50,10 +50,12 @@ export class CaddyClient {
     return res;
   }
 
-  /** Liveness probe — `GET /` returns "Caddy is running" plain text. */
-  async ping(): Promise<boolean> {
+  /** Liveness probe against the admin API. Uses `GET /config/` (the admin root
+   *  `/` 404s — "Caddy is running" is served by the data plane, not admin). A
+   *  short timeout keeps the Sites status poll snappy when Caddy isn't up. */
+  async ping(timeoutMs = 3000): Promise<boolean> {
     try {
-      await this.request('GET', '/');
+      await this.request('GET', '/config/', undefined, timeoutMs);
       return true;
     } catch {
       return false;
@@ -64,19 +66,23 @@ export class CaddyClient {
     method: 'GET' | 'POST' | 'DELETE',
     path: string,
     body?: unknown,
+    timeoutMs?: number,
   ): Promise<unknown> {
     const url = `${this.adminUrl}${path}`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs ?? this.timeoutMs);
     try {
+      // Caddy's admin API enforces an origin allow-list when it listens on a
+      // non-loopback address (so a cross-container caller is rejected with
+      // "not allowed to access from origin ''"). Server-side fetch sends no
+      // Origin header, so set one matching our admin URL; the Caddy config's
+      // `admin.origins` must include this host.
+      const headers: Record<string, string> = { Origin: this.adminUrl };
+      if (body !== undefined) headers['content-type'] = 'application/json';
       const res = await this.fetchImpl(url, {
         method,
-        ...(body !== undefined
-          ? {
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(body),
-            }
-          : {}),
+        headers,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
       });
       const text = await res.text();

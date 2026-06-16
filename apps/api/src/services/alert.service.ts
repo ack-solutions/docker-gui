@@ -12,6 +12,7 @@ export interface AlertRuleSummary {
   forSeconds: number;
   cooldownSeconds: number;
   webhookUrl: string | null;
+  emailTo: string | null;
   enabled: boolean;
   lastFiredAt: string | null;
   createdAt: string;
@@ -26,6 +27,7 @@ export interface CreateAlertRuleInput {
   forSeconds?: number;
   cooldownSeconds?: number;
   webhookUrl?: string | null;
+  emailTo?: string | null;
   enabled?: boolean;
 }
 
@@ -46,26 +48,33 @@ export interface AlertEventView {
 /** A point-in-time snapshot of metric values the evaluator checks rules against. */
 export type MetricSnapshot = Record<string, number>;
 
-/** Delivers a fired alert (webhook today; email is a follow-up). Injected so
- *  tests don't make real network calls. */
+/**
+ * Delivers a fired/resolved alert over one channel. Injected so tests never
+ * make real network/SMTP calls. `send` returns `true` when it actually
+ * delivered, `false` when the channel isn't configured for this rule (so the
+ * caller can record "delivered" only when at least one channel succeeded).
+ */
 export interface AlertSender {
-  send(rule: AlertRuleSummary, event: AlertEventView): Promise<void>;
+  send(rule: AlertRuleSummary, event: AlertEventView): Promise<boolean>;
 }
 
 export interface AlertServiceOptions {
+  /** Single delivery channel (back-compat). Prefer `senders`. */
   sender?: AlertSender;
+  /** One or more delivery channels (webhook, email, …). */
+  senders?: AlertSender[];
   /** Clock seam for deterministic duration/cooldown tests. */
   clock?: () => number;
 }
 
 /** Real webhook sender: POSTs a compact JSON payload. */
 export class WebhookAlertSender implements AlertSender {
-  async send(rule: AlertRuleSummary, event: AlertEventView): Promise<void> {
-    if (!rule.webhookUrl) return;
+  async send(rule: AlertRuleSummary, event: AlertEventView): Promise<boolean> {
+    if (!rule.webhookUrl) return false;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     try {
-      await fetch(rule.webhookUrl, {
+      const res = await fetch(rule.webhookUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -78,9 +87,57 @@ export class WebhookAlertSender implements AlertSender {
         }),
         signal: controller.signal,
       });
+      return res.ok;
     } finally {
       clearTimeout(timer);
     }
+  }
+}
+
+/** A single outbound mail. The transport sets the wire details. */
+export interface MailMessage {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+}
+
+/** SMTP boundary — wrapped around nodemailer in production, faked in tests. */
+export interface MailTransport {
+  sendMail(message: MailMessage): Promise<void>;
+}
+
+export interface EmailAlertSenderOptions {
+  transport: MailTransport;
+  /** From address for alert emails. */
+  from: string;
+}
+
+/** Email sender: delivers fired/resolved alerts to a rule's emailTo list. */
+export class EmailAlertSender implements AlertSender {
+  constructor(private readonly opts: EmailAlertSenderOptions) {}
+
+  async send(rule: AlertRuleSummary, event: AlertEventView): Promise<boolean> {
+    if (!rule.emailTo) return false;
+    const recipients = rule.emailTo
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (recipients.length === 0) return false;
+    const verb = event.status === 'firing' ? 'FIRING' : 'RESOLVED';
+    await this.opts.transport.sendMail({
+      from: this.opts.from,
+      to: recipients.join(', '),
+      subject: `[docker-gui] ${verb}: ${rule.name}`,
+      text:
+        `${event.message}\n\n` +
+        `Rule:   ${rule.name}\n` +
+        `Metric: ${event.metric}\n` +
+        `Value:  ${event.value}\n` +
+        `Status: ${event.status}\n` +
+        `Time:   ${event.createdAt}\n`,
+    });
+    return true;
   }
 }
 
@@ -97,7 +154,7 @@ function compare(value: number, op: AlertOperator, threshold: number): boolean {
 const VALID_OPS: AlertOperator[] = ['gt', 'lt', 'gte', 'lte', 'eq'];
 
 export class AlertService {
-  private readonly sender: AlertSender | undefined;
+  private readonly senders: AlertSender[];
   private readonly clock: () => number;
   /** ruleId → epoch ms the condition first became true (debounce tracking). */
   private readonly pendingSince = new Map<string, number>();
@@ -106,7 +163,8 @@ export class AlertService {
     private readonly prisma: PrismaClient,
     options: AlertServiceOptions = {},
   ) {
-    this.sender = options.sender;
+    // `senders` is preferred; `sender` is kept for back-compat (single channel).
+    this.senders = options.senders ?? (options.sender ? [options.sender] : []);
     this.clock = options.clock ?? (() => Date.now());
   }
 
@@ -130,6 +188,7 @@ export class AlertService {
         forSeconds: input.forSeconds ?? 0,
         cooldownSeconds: input.cooldownSeconds ?? 300,
         webhookUrl: input.webhookUrl ?? null,
+        emailTo: input.emailTo ?? null,
         enabled: input.enabled ?? true,
       },
     });
@@ -151,6 +210,7 @@ export class AlertService {
       if (input[k] !== undefined) data[k] = input[k];
     }
     if (input.webhookUrl !== undefined) data['webhookUrl'] = input.webhookUrl;
+    if (input.emailTo !== undefined) data['emailTo'] = input.emailTo;
     const updated = await this.prisma.alertRule.update({ where: { id }, data });
     return toRule(updated);
   }
@@ -218,15 +278,20 @@ export class AlertService {
         `${rule.name}: ${rule.metric} ${rule.operator} ${rule.threshold} (is ${value})`,
       );
       await this.prisma.alertRule.update({ where: { id: rule.id }, data: { lastFiredAt: new Date(now) } });
-      // Best-effort delivery — never let it break evaluation.
-      if (this.sender && rule.webhookUrl) {
+      // Best-effort delivery across every channel — never let it break
+      // evaluation. Each sender self-gates (returns false when its channel
+      // isn't configured for this rule); delivered = at least one succeeded.
+      let delivered = false;
+      for (const sender of this.senders) {
         try {
-          await this.sender.send(rule, ev);
-          await this.prisma.alertEvent.update({ where: { id: ev.id }, data: { delivered: true } });
-          ev.delivered = true;
+          if (await sender.send(rule, ev)) delivered = true;
         } catch {
-          // left delivered:false; visible in history
+          // this channel failed; others still get a shot, delivered stays false
         }
+      }
+      if (delivered) {
+        await this.prisma.alertEvent.update({ where: { id: ev.id }, data: { delivered: true } });
+        ev.delivered = true;
       }
       created.push(ev);
     }
@@ -248,13 +313,14 @@ export class AlertService {
 
 function toRule(r: {
   id: string; name: string; metric: string; operator: string; threshold: number;
-  forSeconds: number; cooldownSeconds: number; webhookUrl: string | null; enabled: boolean;
+  forSeconds: number; cooldownSeconds: number; webhookUrl: string | null;
+  emailTo: string | null; enabled: boolean;
   lastFiredAt: Date | null; createdAt: Date; updatedAt: Date;
 }): AlertRuleSummary {
   return {
     id: r.id, name: r.name, metric: r.metric, operator: r.operator as AlertOperator,
     threshold: r.threshold, forSeconds: r.forSeconds, cooldownSeconds: r.cooldownSeconds,
-    webhookUrl: r.webhookUrl, enabled: r.enabled,
+    webhookUrl: r.webhookUrl, emailTo: r.emailTo, enabled: r.enabled,
     lastFiredAt: r.lastFiredAt ? r.lastFiredAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(),
   };

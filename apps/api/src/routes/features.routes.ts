@@ -25,6 +25,14 @@ export const featuresRoutes: FastifyPluginAsync<FeaturesRoutesOptions> = async (
     return opts.features.list();
   });
 
+  // Prerequisites for on-prem email (read-only; any authenticated role). The
+  // email feature stays gated — this surfaces exactly what hosting mail needs.
+  // Declared BEFORE /features/:key so it isn't shadowed by the param route.
+  app.get<{ Querystring: { domain?: string } }>('/features/email/preconditions', async (req) => {
+    const domain = typeof req.query.domain === 'string' ? req.query.domain : null;
+    return opts.features.emailPreconditions(domain);
+  });
+
   app.get<{ Params: { key: string } }>('/features/:key', async (req) => {
     const key = featureKeySchema.parse(req.params.key) as FeatureKey;
     return opts.features.get(key);

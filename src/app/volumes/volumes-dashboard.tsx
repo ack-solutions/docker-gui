@@ -216,6 +216,8 @@ function VolumesInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search volumes…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.name}

@@ -6,7 +6,7 @@ const endpointSchema = z
   .string()
   .url('endpoint must be a valid URL (e.g. http://minio:9000 or https://s3.example.com)');
 
-const bucketNameSchema = z
+export const bucketNameSchema = z
   .string()
   // S3 bucket naming: 3-63 chars, lowercase, digits, dots, hyphens.
   .regex(
@@ -22,6 +22,7 @@ export const createConnectionSchema = z.object({
   pathStyle: z.boolean().optional(),
   accessKey: z.string().min(1).max(128),
   secretKey: z.string().min(1).max(256),
+  defaultBucket: bucketNameSchema.optional(),
 });
 
 export const updateConnectionSchema = z
@@ -33,6 +34,7 @@ export const updateConnectionSchema = z
     pathStyle: z.boolean().optional(),
     accessKey: z.string().min(1).max(128).optional(),
     secretKey: z.string().min(1).max(256).optional(),
+    defaultBucket: bucketNameSchema.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 

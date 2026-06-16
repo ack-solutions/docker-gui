@@ -41,6 +41,7 @@ interface Rule {
   forSeconds: number;
   cooldownSeconds: number;
   webhookUrl: string | null;
+  emailTo: string | null;
   enabled: boolean;
   lastFiredAt: string | null;
 }
@@ -56,7 +57,14 @@ interface Event {
   createdAt: string;
 }
 
-const METRICS = [
+interface MetricOption {
+  value: string;
+  label: string;
+}
+
+// Shown until the live catalog (which adds per-disk + per-container metrics)
+// loads, and as a fallback if the endpoint is unreachable.
+const FALLBACK_METRICS: MetricOption[] = [
   { value: "system.cpu.percent", label: "CPU %" },
   { value: "system.memory.percent", label: "Memory %" }
 ];
@@ -70,7 +78,8 @@ const EMPTY = {
   threshold: "90",
   forSeconds: "60",
   cooldownSeconds: "300",
-  webhookUrl: ""
+  webhookUrl: "",
+  emailTo: ""
 };
 
 function AlertsInner({ user }: { user: PublicUser }) {
@@ -81,15 +90,18 @@ function AlertsInner({ user }: { user: PublicUser }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [busy, setBusy] = useState(false);
+  const [metricOptions, setMetricOptions] = useState<MetricOption[]>(FALLBACK_METRICS);
 
   const load = useCallback(async () => {
     try {
-      const [r, e] = await Promise.all([
+      const [r, e, m] = await Promise.all([
         apiFetch<Rule[]>("/api/v1/alerts/rules"),
-        apiFetch<Event[]>("/api/v1/alerts/events").catch(() => [])
+        apiFetch<Event[]>("/api/v1/alerts/events").catch(() => []),
+        apiFetch<MetricOption[]>("/api/v1/alerts/metrics").catch(() => [])
       ]);
       setRules(r);
       setEvents(e);
+      if (m.length > 0) setMetricOptions(m);
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : String(err));
@@ -112,6 +124,7 @@ function AlertsInner({ user }: { user: PublicUser }) {
         cooldownSeconds: Number(form.cooldownSeconds)
       };
       if (form.webhookUrl.trim()) payload["webhookUrl"] = form.webhookUrl.trim();
+      if (form.emailTo.trim()) payload["emailTo"] = form.emailTo.trim();
       await apiFetch("/api/v1/alerts/rules", { method: "POST", body: JSON.stringify(payload) });
       toast.success("Rule created");
       setCreateOpen(false);
@@ -168,7 +181,7 @@ function AlertsInner({ user }: { user: PublicUser }) {
   return (
     <PageShell
       title="Alerts"
-      subtitle="Threshold rules on system metrics. Firing rules deliver to a webhook (Slack/Discord/generic)."
+      subtitle="Threshold rules on system metrics. Firing rules deliver to a webhook (Slack/Discord/generic) and/or email."
       user={user}
       actions={
         <Stack direction="row" spacing={1}>
@@ -195,6 +208,7 @@ function AlertsInner({ user }: { user: PublicUser }) {
               <TableCell>Condition</TableCell>
               <TableCell>For / cooldown</TableCell>
               <TableCell>Webhook</TableCell>
+              <TableCell>Email</TableCell>
               <TableCell>Enabled</TableCell>
               {canManage && <TableCell />}
             </TableRow>
@@ -212,6 +226,7 @@ function AlertsInner({ user }: { user: PublicUser }) {
                   {r.forSeconds}s / {r.cooldownSeconds}s
                 </TableCell>
                 <TableCell>{r.webhookUrl ? "✓" : "—"}</TableCell>
+                <TableCell>{r.emailTo ? "✓" : "—"}</TableCell>
                 <TableCell>
                   <Switch size="small" checked={r.enabled} disabled={!canManage} onChange={() => toggle(r)} />
                 </TableCell>
@@ -290,8 +305,12 @@ function AlertsInner({ user }: { user: PublicUser }) {
               onChange={(e) => setForm((f) => ({ ...f, metric: e.target.value }))}
               size="small"
               fullWidth
+              helperText="System CPU/memory, each disk, and every running container."
             >
-              {METRICS.map((m) => (
+              {(metricOptions.some((m) => m.value === form.metric)
+                ? metricOptions
+                : [{ value: form.metric, label: form.metric }, ...metricOptions]
+              ).map((m) => (
                 <MenuItem key={m.value} value={m.value}>
                   {m.label}
                 </MenuItem>
@@ -346,6 +365,15 @@ function AlertsInner({ user }: { user: PublicUser }) {
               size="small"
               fullWidth
             />
+            <TextField
+              label="Email to (optional)"
+              placeholder="ops@example.com, sre@example.com"
+              value={form.emailTo}
+              onChange={(e) => setForm((f) => ({ ...f, emailTo: e.target.value }))}
+              size="small"
+              fullWidth
+              helperText="Comma-separated. Requires SMTP configured on the server (ALERT_SMTP_*)."
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -358,8 +386,9 @@ function AlertsInner({ user }: { user: PublicUser }) {
 
       <Box sx={{ mt: 3 }}>
         <Alert severity="info">
-          Rules are evaluated every 60 seconds against live system metrics. Email delivery and
-          per-container / disk metrics are coming next.
+          Rules are evaluated every 60 seconds against live metrics — system CPU/memory, disk
+          usage, and per-container CPU/memory. Firing rules deliver to a webhook and/or email
+          (email requires SMTP configured on the server via ALERT_SMTP_*).
         </Alert>
       </Box>
     </PageShell>

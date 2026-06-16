@@ -201,6 +201,8 @@ interface BackupJob {
 interface S3Conn {
   id: string;
   name: string;
+  isDefault: boolean;
+  defaultBucket: string | null;
 }
 
 function fmtSize(n: number | null): string {
@@ -357,7 +359,12 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
     apiFetch<S3Conn[]>("/api/v1/storage/connections")
       .then((list) => {
         setS3conns(list);
-        if (list[0]) setS3Id(list[0].id);
+        // Prefer the default connection, then its default bucket.
+        const preferred = list.find((c) => c.isDefault) ?? list[0];
+        if (preferred) {
+          setS3Id(preferred.id);
+          if (preferred.defaultBucket) setBucket((b) => b || preferred.defaultBucket || "");
+        }
       })
       .catch(() => setS3conns([]));
     apiFetch<Schedule>(`/api/v1/databases/connections/${conn.id}/schedule`)
@@ -467,6 +474,7 @@ function BackupsDialog({ conn, onClose }: { conn: DbConnection; onClose: () => v
               {s3conns.map((c) => (
                 <MenuItem key={c.id} value={c.id}>
                   {c.name}
+                  {c.isDefault ? " (default)" : ""}
                 </MenuItem>
               ))}
             </TextField>
@@ -749,7 +757,7 @@ function DatabasesInner({ user }: { user: PublicUser }) {
   return (
     <PageShell
       title="Databases"
-      subtitle="Discover database containers and save connection profiles. Query console and backups are coming next."
+      subtitle="Discover database containers, save connection profiles, run SQL, browse with pgweb/phpMyAdmin, and back up to S3."
       user={user}
       actions={
         <Stack direction="row" spacing={1}>
@@ -889,9 +897,10 @@ function DatabasesInner({ user }: { user: PublicUser }) {
 
       <Alert severity="info" sx={{ mt: 3 }}>
         Verification checks network reachability (host:port). Use <strong>Query</strong> to run SQL
-        (read-only by default — create a read-only DB user for safe browsing) and{" "}
+        (read-only by default — create a read-only DB user for safe browsing), <strong>Explore</strong>{" "}
+        to open a browser-based UI (pgweb for Postgres, phpMyAdmin for MySQL/MariaDB), and{" "}
         <strong>Backups</strong> to dump a database to S3/MinIO, restore it, or schedule recurring
-        backups. A browser-based DB explorer (pgweb/phpMyAdmin) is coming next.
+        backups.
       </Alert>
 
       {queryConn && <QueryConsole conn={queryConn} onClose={() => setQueryConn(null)} />}

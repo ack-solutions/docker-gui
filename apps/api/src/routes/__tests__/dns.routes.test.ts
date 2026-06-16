@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { CloudflareClient } from '../../lib/dns/cloudflare.js';
+import type { DnsProviderClient } from '../../lib/dns/types.js';
 import type { TestEnv } from '../../__tests__/test-helpers.js';
 import { buildTestEnv, TEST_SETUP_SECRET } from '../../__tests__/test-helpers.js';
 
 let env: TestEnv;
 let cfMock: {
   verifyToken: ReturnType<typeof vi.fn>;
+  verify: ReturnType<typeof vi.fn>;
   listZones: ReturnType<typeof vi.fn>;
   listRecords: ReturnType<typeof vi.fn>;
   createRecord: ReturnType<typeof vi.fn>;
@@ -13,10 +15,21 @@ let cfMock: {
   deleteRecord: ReturnType<typeof vi.fn>;
 };
 let dohFetch: ReturnType<typeof vi.fn>;
+let r53Mock: {
+  verify: ReturnType<typeof vi.fn>;
+  listZones: ReturnType<typeof vi.fn>;
+  listRecords: ReturnType<typeof vi.fn>;
+  createRecord: ReturnType<typeof vi.fn>;
+  updateRecord: ReturnType<typeof vi.fn>;
+  deleteRecord: ReturnType<typeof vi.fn>;
+};
 
 beforeAll(async () => {
   cfMock = {
     verifyToken: vi.fn().mockResolvedValue({ status: 'active' }),
+    // The service calls the uniform verify(); delegate so the existing
+    // verifyToken mock setup + assertions keep working.
+    verify: vi.fn(() => cfMock.verifyToken()),
     listZones: vi.fn().mockResolvedValue([
       { id: 'zone1', name: 'example.com', accountName: 'My Acc' },
     ]),
@@ -42,10 +55,20 @@ beforeAll(async () => {
     }),
   );
 
+  r53Mock = {
+    verify: vi.fn().mockResolvedValue({ status: 'active' }),
+    listZones: vi.fn().mockResolvedValue([{ id: 'Z1', name: 'example.com' }]),
+    listRecords: vi.fn().mockResolvedValue([]),
+    createRecord: vi.fn(),
+    updateRecord: vi.fn(),
+    deleteRecord: vi.fn(),
+  };
+
   env = await buildTestEnv({
     dnsOptions: {
       publicIp: '1.2.3.4',
       buildCloudflare: () => cfMock as unknown as CloudflareClient,
+      buildRoute53: () => r53Mock as unknown as DnsProviderClient,
       fetchImpl: dohFetch as unknown as typeof fetch,
     },
   });
@@ -80,6 +103,12 @@ beforeEach(async () => {
       headers: { 'content-type': 'application/json' },
     }),
   );
+  r53Mock.verify.mockClear();
+  r53Mock.verify.mockResolvedValue({ status: 'active' });
+  r53Mock.listZones.mockClear();
+  r53Mock.listZones.mockResolvedValue([{ id: 'Z1', name: 'example.com' }]);
+  r53Mock.listRecords.mockClear();
+  r53Mock.listRecords.mockResolvedValue([]);
   await env.prisma.dnsProvider.deleteMany();
 });
 
@@ -174,6 +203,38 @@ describe('POST /api/v1/dns/providers', () => {
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe('dns.name_taken');
+  });
+
+  it('creates a Route 53 provider, verifies it, and masks the access-key id', async () => {
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/dns/providers',
+      headers: await authHeaders(),
+      payload: {
+        name: 'AWS prod',
+        kind: 'route53',
+        accessKeyId: 'AKIAEXAMPLE0000000000',
+        secretAccessKey: 'SUPERSECRETvalue00000000000000000000',
+        region: 'us-east-1',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const data = res.json().data;
+    expect(data.kind).toBe('route53');
+    expect(data.verified).toBe(true);
+    // Mask reflects the access-key id; the secret is never returned, even masked.
+    expect(data.tokenMask).toContain('•');
+    expect(JSON.stringify(data)).not.toContain('SUPERSECRET');
+  });
+
+  it('rejects a Route 53 provider missing AWS credentials (schema)', async () => {
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/dns/providers',
+      headers: await authHeaders(),
+      payload: { name: 'AWS bad', kind: 'route53', region: 'us-east-1' },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('rejects unsupported kind', async () => {
@@ -328,6 +389,32 @@ describe('zones + records', () => {
     const cfErr = new Error('Authentication error');
     cfErr.name = 'CloudflareError';
     cfMock.listZones.mockRejectedValueOnce(cfErr);
+    const res = await env.app.inject({
+      method: 'GET',
+      url: `/api/v1/dns/providers/${id}/zones`,
+      headers: { authorization: `Bearer ${await token()}` },
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error.code).toBe('dns.upstream_error');
+  });
+
+  it('maps Route 53 errors to dns.upstream_error 502 (not an unhandled error)', async () => {
+    const res0 = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/dns/providers',
+      headers: await authHeaders(),
+      payload: {
+        name: 'AWS prod',
+        kind: 'route53',
+        accessKeyId: 'AKIAEXAMPLE0000000000',
+        secretAccessKey: 'SUPERSECRETvalue00000000000000000000',
+        region: 'us-east-1',
+      },
+    });
+    const id = res0.json().data.id as string;
+    const r53Err = new Error('Route 53 listZones: AccessDenied: not authorized');
+    r53Err.name = 'Route53Error';
+    r53Mock.listZones.mockRejectedValueOnce(r53Err);
     const res = await env.app.inject({
       method: 'GET',
       url: `/api/v1/dns/providers/${id}/zones`,

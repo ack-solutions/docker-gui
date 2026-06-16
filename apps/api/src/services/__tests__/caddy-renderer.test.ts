@@ -30,6 +30,13 @@ describe('render', () => {
     expect(config.apps.tls).toBeUndefined();
   });
 
+  it('re-asserts admin origins so POST /load keeps the admin API reachable', () => {
+    // /load replaces the whole config; without origins Caddy reverts to a
+    // loopback-only admin and the next apply can't reach it cross-container.
+    expect(render([]).admin.origins).toContain('docker-gui-caddy:2019');
+    expect(render([], { adminOrigins: ['caddy:2019'] }).admin.origins).toEqual(['caddy:2019']);
+  });
+
   it('renders one site as a single HTTPS route', () => {
     const config = render([makeSite()]);
     expect(config.apps.http.servers['https']).toBeDefined();
@@ -119,5 +126,33 @@ describe('render', () => {
   it('tolerates corrupt aliasDomains JSON', () => {
     const config = render([makeSite({ aliasDomains: '{not json}' })]);
     expect(config.apps.http.servers['https']!.routes[0]!.match[0]!.host).toEqual(['example.com']);
+  });
+
+  it('static backend → file_server from /srv/sites/<id>/current, no reverse_proxy', () => {
+    const config = render([makeSite({ id: 'site-x', backendType: 'static', upstreamUrl: null })]);
+    const handle = config.apps.http.servers['https']!.routes[0]!.handle;
+    expect(handle).toEqual([
+      { handler: 'vars', root: '/srv/sites/site-x/current' },
+      { handler: 'file_server' },
+    ]);
+    expect(JSON.stringify(handle)).not.toContain('reverse_proxy');
+  });
+
+  it('static backend with SPA fallback → try_files subroute then file_server', () => {
+    const config = render([makeSite({ id: 'spa-1', backendType: 'static', spaFallback: true, upstreamUrl: null })]);
+    const handle = config.apps.http.servers['https']!.routes[0]!.handle as Array<Record<string, unknown>>;
+    expect(handle[0]).toEqual({ handler: 'vars', root: '/srv/sites/spa-1/current' });
+    const sub = handle[1] as { handler: string; routes: Array<Record<string, unknown>> };
+    expect(sub.handler).toBe('subroute');
+    expect(JSON.stringify(sub)).toContain('index.html');
+    expect(JSON.stringify(sub)).toContain('file_server');
+  });
+
+  it('container backend → reverse_proxy to <containerName>:<port>', () => {
+    const config = render([
+      makeSite({ backendType: 'container', containerName: 'app-abc', containerPort: 8080, upstreamUrl: null }),
+    ]);
+    const handle = config.apps.http.servers['https']!.routes[0]!.handle as Array<Record<string, unknown>>;
+    expect(handle[0]).toMatchObject({ handler: 'reverse_proxy', upstreams: [{ dial: 'app-abc:8080' }] });
   });
 });

@@ -37,7 +37,7 @@ import {
 } from "@/components";
 import { ApiError, apiFetch, type PublicUser } from "@/lib/v2/auth-client";
 
-type DnsKind = "cloudflare";
+type DnsKind = "cloudflare" | "route53";
 
 interface DnsProvider {
   id: string;
@@ -55,11 +55,21 @@ interface ProviderForm {
   name: string;
   kind: DnsKind;
   apiToken: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
 }
 
-const EMPTY_FORM: ProviderForm = { name: "", kind: "cloudflare", apiToken: "" };
+const EMPTY_FORM: ProviderForm = {
+  name: "",
+  kind: "cloudflare",
+  apiToken: "",
+  accessKeyId: "",
+  secretAccessKey: "",
+  region: "us-east-1"
+};
 
-const KIND_LABEL: Record<DnsKind, string> = { cloudflare: "Cloudflare" };
+const KIND_LABEL: Record<DnsKind, string> = { cloudflare: "Cloudflare", route53: "AWS Route 53" };
 
 function DnsInner({ user }: { user: PublicUser }) {
   const [rows, setRows] = useState<DnsProvider[] | null>(null);
@@ -94,7 +104,7 @@ function DnsInner({ user }: { user: PublicUser }) {
   }
 
   function openEdit(p: DnsProvider) {
-    setForm({ name: p.name, kind: p.kind, apiToken: "" });
+    setForm({ ...EMPTY_FORM, name: p.name, kind: p.kind });
     setEditing(p);
     setCreating(false);
   }
@@ -113,7 +123,13 @@ function DnsInner({ user }: { user: PublicUser }) {
       if (editing) {
         const payload: Record<string, string> = {};
         if (form.name && form.name !== editing.name) payload["name"] = form.name.trim();
-        if (form.apiToken.trim()) payload["apiToken"] = form.apiToken.trim();
+        if (editing.kind === "cloudflare") {
+          if (form.apiToken.trim()) payload["apiToken"] = form.apiToken.trim();
+        } else {
+          if (form.accessKeyId.trim()) payload["accessKeyId"] = form.accessKeyId.trim();
+          if (form.secretAccessKey.trim()) payload["secretAccessKey"] = form.secretAccessKey.trim();
+          if (form.region.trim()) payload["region"] = form.region.trim();
+        }
         if (Object.keys(payload).length === 0) {
           closeDialog();
           return;
@@ -124,13 +140,19 @@ function DnsInner({ user }: { user: PublicUser }) {
         });
         toast.success(`Updated ${form.name || editing.name}`);
       } else {
+        const payload: Record<string, string> =
+          form.kind === "cloudflare"
+            ? { name: form.name.trim(), kind: "cloudflare", apiToken: form.apiToken.trim() }
+            : {
+                name: form.name.trim(),
+                kind: "route53",
+                accessKeyId: form.accessKeyId.trim(),
+                secretAccessKey: form.secretAccessKey.trim(),
+                region: form.region.trim() || "us-east-1"
+              };
         await apiFetch("/api/v1/dns/providers", {
           method: "POST",
-          body: JSON.stringify({
-            name: form.name.trim(),
-            kind: form.kind,
-            apiToken: form.apiToken.trim()
-          })
+          body: JSON.stringify(payload)
         });
         toast.success(`Added ${form.name}`);
       }
@@ -335,6 +357,8 @@ function DnsInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search providers…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}
@@ -374,29 +398,67 @@ function DnsInner({ user }: { user: PublicUser }) {
                 onChange={(e) => setForm({ ...form, kind: e.target.value as DnsKind })}
                 disabled={submitting || editing !== null}
                 fullWidth
-                helperText={
-                  editing
-                    ? "Provider type can't be changed."
-                    : "More providers (Route 53, etc.) coming soon."
-                }
+                helperText={editing ? "Provider type can't be changed." : "Where your DNS is hosted."}
               >
                 <MenuItem value="cloudflare">Cloudflare</MenuItem>
+                <MenuItem value="route53">AWS Route 53</MenuItem>
               </TextField>
-              <TextField
-                label={editing ? "New API token (leave blank to keep existing)" : "API token"}
-                placeholder="A scoped Cloudflare API token"
-                type="password"
-                value={form.apiToken}
-                onChange={(e) => setForm({ ...form, apiToken: e.target.value })}
-                disabled={submitting}
-                required={!editing}
-                fullWidth
-                helperText={
-                  editing
-                    ? `Currently stored: ${editing.tokenMask ?? "—"}`
-                    : "Token is verified against Cloudflare and stored encrypted at rest."
-                }
-              />
+
+              {form.kind === "cloudflare" && (
+                <TextField
+                  label={editing ? "New API token (leave blank to keep existing)" : "API token"}
+                  placeholder="A scoped Cloudflare API token"
+                  type="password"
+                  value={form.apiToken}
+                  onChange={(e) => setForm({ ...form, apiToken: e.target.value })}
+                  disabled={submitting}
+                  required={!editing}
+                  fullWidth
+                  helperText={
+                    editing
+                      ? `Currently stored: ${editing.tokenMask ?? "—"}`
+                      : "Token is verified against Cloudflare and stored encrypted at rest."
+                  }
+                />
+              )}
+
+              {form.kind === "route53" && (
+                <>
+                  <TextField
+                    label="AWS Access Key ID"
+                    placeholder="AKIA…"
+                    value={form.accessKeyId}
+                    onChange={(e) => setForm({ ...form, accessKeyId: e.target.value })}
+                    disabled={submitting}
+                    required={!editing}
+                    fullWidth
+                    helperText={
+                      editing ? `Currently stored: ${editing.tokenMask ?? "—"}` : undefined
+                    }
+                  />
+                  <TextField
+                    label={
+                      editing ? "AWS Secret Access Key (leave blank to keep)" : "AWS Secret Access Key"
+                    }
+                    type="password"
+                    value={form.secretAccessKey}
+                    onChange={(e) => setForm({ ...form, secretAccessKey: e.target.value })}
+                    disabled={submitting}
+                    required={!editing}
+                    fullWidth
+                    helperText="IAM user/role needs route53:ListHostedZones, ListResourceRecordSets, ChangeResourceRecordSets. Stored encrypted at rest."
+                  />
+                  <TextField
+                    label="Region"
+                    placeholder="us-east-1"
+                    value={form.region}
+                    onChange={(e) => setForm({ ...form, region: e.target.value })}
+                    disabled={submitting}
+                    fullWidth
+                    helperText="Route 53 is global; any valid region works for the API endpoint."
+                  />
+                </>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>

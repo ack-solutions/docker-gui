@@ -6,7 +6,10 @@ import {
   CloudflareError,
   findZoneForDomain,
 } from '../lib/dns/cloudflare.js';
+import { Route53Client } from '../lib/dns/route53.js';
+import { isPublicIpv4 } from './public-ip.service.js';
 import type {
+  DnsProviderClient,
   DnsRecord,
   DnsRecordInput,
   DnsRecordType,
@@ -29,15 +32,25 @@ export interface DnsServiceOptions {
    */
   publicIp?: string;
   publicIp6?: string;
+  /**
+   * Live public-IP resolver (auto-detected), preferred over the static
+   * `publicIp` when it returns a value. Lets recommendations track a changing
+   * server IP without a restart.
+   */
+  getPublicIp?: () => { ipv4?: string | null; ipv6?: string | null };
   /** Override DoH base for tests. Default: Cloudflare. */
   dohBaseUrl?: string;
   fetchImpl?: typeof fetch;
   /** Override Cloudflare client constructor (for tests). */
-  buildCloudflare?: (apiToken: string) => CloudflareClient;
+  buildCloudflare?: (apiToken: string) => DnsProviderClient;
+  /** Override Route 53 client constructor (for tests). */
+  buildRoute53?: (creds: Route53Credentials) => DnsProviderClient;
 }
 
-interface CloudflareCredentials {
-  apiToken: string;
+interface Route53Credentials {
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
 }
 
 export class DnsService {
@@ -61,13 +74,17 @@ export class DnsService {
   }
 
   async create(input: CreateDnsProviderInput): Promise<DnsProviderSummary> {
-    if (input.kind !== 'cloudflare') {
-      throw new AppError('dns.kind_unsupported', `Unsupported provider kind: ${input.kind}`, 400);
-    }
     const dupe = await this.db.dnsProvider.findUnique({ where: { name: input.name } });
     if (dupe) throw new AppError('dns.name_taken', 'A provider with that name already exists', 409);
 
-    const creds: CloudflareCredentials = { apiToken: input.apiToken };
+    const creds: Record<string, string> =
+      input.kind === 'cloudflare'
+        ? { apiToken: input.apiToken }
+        : {
+            accessKeyId: input.accessKeyId,
+            secretAccessKey: input.secretAccessKey,
+            region: input.region,
+          };
     const cipher = this.box.seal(JSON.stringify(creds));
 
     // Verify before saving so the user gets immediate feedback.
@@ -75,10 +92,9 @@ export class DnsService {
     let lastError: string | null = null;
     let lastVerifiedAt: Date | null = null;
     try {
-      const cf = this.cf(creds.apiToken);
-      const r = await cf.verifyToken();
+      const r = await this.buildClient(input.kind, creds).verify();
       if (r.status !== 'active') {
-        lastError = `Token reported status: ${r.status}`;
+        lastError = `Provider reported status: ${r.status}`;
       } else {
         verified = true;
         lastVerifiedAt = new Date();
@@ -111,10 +127,23 @@ export class DnsService {
       data['name'] = input.name;
     }
 
-    if (input.apiToken) {
-      const creds: CloudflareCredentials = { apiToken: input.apiToken };
-      data['credentialsCipher'] = this.box.seal(JSON.stringify(creds));
-      // New token → re-verify on next call.
+    const kind = existing.kind as DnsProviderKind;
+    let newCreds: Record<string, string> | null = null;
+    if (kind === 'cloudflare') {
+      if (input.apiToken) newCreds = { apiToken: input.apiToken };
+    } else if (input.accessKeyId || input.secretAccessKey || input.region) {
+      // Merge supplied fields over the existing ones so a partial update
+      // (e.g. just the region) keeps the rest of the credential intact.
+      const cur = this.openCreds(existing);
+      newCreds = {
+        accessKeyId: input.accessKeyId ?? cur['accessKeyId'] ?? '',
+        secretAccessKey: input.secretAccessKey ?? cur['secretAccessKey'] ?? '',
+        region: input.region ?? cur['region'] ?? 'us-east-1',
+      };
+    }
+    if (newCreds) {
+      data['credentialsCipher'] = this.box.seal(JSON.stringify(newCreds));
+      // New credentials → re-verify on next call.
       data['verified'] = false;
       data['lastError'] = null;
       data['lastVerifiedAt'] = null;
@@ -133,15 +162,14 @@ export class DnsService {
   async verify(id: string): Promise<DnsProviderSummary> {
     const row = await this.db.dnsProvider.findUnique({ where: { id } });
     if (!row) throw new NotFoundError('DNS provider not found');
-    const creds = this.openCreds(row);
-    const cf = this.cf(creds.apiToken);
+    const client = this.buildClientFor(row);
     let verified = false;
     let lastError: string | null = null;
     let lastVerifiedAt: Date | null = null;
     try {
-      const r = await cf.verifyToken();
+      const r = await client.verify();
       if (r.status !== 'active') {
-        lastError = `Token reported status: ${r.status}`;
+        lastError = `Provider reported status: ${r.status}`;
       } else {
         verified = true;
         lastVerifiedAt = new Date();
@@ -206,20 +234,27 @@ export class DnsService {
   recommendedFor(zoneName: string, domain: string): RecommendedRecords {
     const isApex = domain.toLowerCase() === zoneName.toLowerCase();
     const records: DnsRecordInput[] = [];
-    if (this.opts.publicIp) {
+    // Prefer the live auto-detected IP; fall back to the static config value.
+    // The live IP is already validated; re-validate here so a misconfigured
+    // static SYSTEM_PUBLIC_IP (private/garbage) can never be written to DNS.
+    const live = this.opts.getPublicIp?.();
+    const ipv4Raw = live?.ipv4 ?? this.opts.publicIp;
+    const ipv4 = ipv4Raw && isPublicIpv4(ipv4Raw) ? ipv4Raw : undefined;
+    const ipv6 = live?.ipv6 ?? this.opts.publicIp6;
+    if (ipv4) {
       records.push({
         type: 'A',
         name: domain,
-        value: this.opts.publicIp,
+        value: ipv4,
         ttl: 1, // Cloudflare "automatic"
         proxied: false,
       });
     }
-    if (this.opts.publicIp6) {
+    if (ipv6) {
       records.push({
         type: 'AAAA',
         name: domain,
-        value: this.opts.publicIp6,
+        value: ipv6,
         ttl: 1,
         proxied: false,
       });
@@ -258,6 +293,41 @@ export class DnsService {
     return out;
   }
 
+  /**
+   * Dynamic DNS: re-point every enabled site that has a linked DNS provider at
+   * the current public IP. Called when the detected server IP changes so the
+   * panel self-heals managed records. Best-effort and per-site isolated — one
+   * failing site never blocks the others; results are returned for logging.
+   */
+  async resyncSiteRecords(): Promise<Array<{ domain: string; ok: boolean; error?: string }>> {
+    const sites = await this.db.site.findMany({
+      where: { dnsProviderId: { not: null }, enabled: true },
+    });
+    const results: Array<{ domain: string; ok: boolean; error?: string }> = [];
+    for (const site of sites) {
+      const providerId = site.dnsProviderId;
+      if (!providerId) continue;
+      try {
+        const client = await this.clientFor(providerId);
+        const zone = findZoneForDomain(site.primaryDomain, await client.listZones());
+        if (!zone) {
+          results.push({ domain: site.primaryDomain, ok: false, error: 'no matching zone in provider' });
+          continue;
+        }
+        const rec = this.recommendedFor(zone.name, site.primaryDomain);
+        if (rec.records.length === 0) {
+          results.push({ domain: site.primaryDomain, ok: false, error: 'no public IP known' });
+          continue;
+        }
+        await this.applyRecommended(providerId, zone.id, site.primaryDomain, rec.records);
+        results.push({ domain: site.primaryDomain, ok: true });
+      } catch (err) {
+        results.push({ domain: site.primaryDomain, ok: false, error: errMsg(err) });
+      }
+    }
+    return results;
+  }
+
   // ---------- propagation check ----------
 
   /**
@@ -289,53 +359,74 @@ export class DnsService {
 
   // ---------- helpers ----------
 
-  private async clientFor(id: string): Promise<CloudflareClient> {
+  private async clientFor(id: string): Promise<DnsProviderClient> {
     const row = await this.db.dnsProvider.findUnique({ where: { id } });
     if (!row) throw new NotFoundError('DNS provider not found');
-    if (row.kind !== 'cloudflare') {
-      throw new AppError('dns.kind_unsupported', `Unsupported provider kind: ${row.kind}`, 400);
+    return this.buildClientFor(row);
+  }
+
+  private buildClientFor(row: DnsProvider): DnsProviderClient {
+    return this.buildClient(row.kind as DnsProviderKind, this.openCreds(row));
+  }
+
+  private buildClient(kind: DnsProviderKind, creds: Record<string, string>): DnsProviderClient {
+    if (kind === 'cloudflare') {
+      if (this.opts.buildCloudflare) return this.opts.buildCloudflare(creds['apiToken'] ?? '');
+      const fetchOpt = this.opts.fetchImpl;
+      return new CloudflareClient({
+        apiToken: creds['apiToken'] ?? '',
+        ...(fetchOpt ? { fetch: fetchOpt } : {}),
+      });
     }
-    const creds = this.openCreds(row);
-    return this.cf(creds.apiToken);
+    const r53: Route53Credentials = {
+      accessKeyId: creds['accessKeyId'] ?? '',
+      secretAccessKey: creds['secretAccessKey'] ?? '',
+      region: creds['region'] ?? 'us-east-1',
+    };
+    if (this.opts.buildRoute53) return this.opts.buildRoute53(r53);
+    return new Route53Client(r53);
   }
 
-  private cf(apiToken: string): CloudflareClient {
-    if (this.opts.buildCloudflare) return this.opts.buildCloudflare(apiToken);
-    const fetchOpt = this.opts.fetchImpl;
-    return new CloudflareClient({
-      apiToken,
-      ...(fetchOpt ? { fetch: fetchOpt } : {}),
-    });
-  }
-
-  private openCreds(row: DnsProvider): CloudflareCredentials {
+  /** Decrypt + validate the stored credential fields for the row's kind. */
+  private openCreds(row: DnsProvider): Record<string, string> {
     let parsed: unknown;
     try {
       parsed = JSON.parse(this.box.open(row.credentialsCipher));
     } catch (err) {
       throw new AppError(
         'dns.creds_unreadable',
-        'DNS provider credentials could not be decrypted. Re-enter the API token.',
+        'DNS provider credentials could not be decrypted. Re-enter the credentials.',
         500,
         { cause: errMsg(err) },
       );
     }
-    if (
-      !parsed ||
-      typeof parsed !== 'object' ||
-      !('apiToken' in parsed) ||
-      typeof (parsed as { apiToken: unknown }).apiToken !== 'string'
-    ) {
+    if (!parsed || typeof parsed !== 'object') {
       throw new AppError('dns.creds_invalid', 'Stored credentials are malformed', 500);
     }
-    return parsed as CloudflareCredentials;
+    const obj = parsed as Record<string, unknown>;
+    const required =
+      (row.kind as DnsProviderKind) === 'cloudflare'
+        ? ['apiToken']
+        : ['accessKeyId', 'secretAccessKey', 'region'];
+    const out: Record<string, string> = {};
+    for (const field of required) {
+      const v = obj[field];
+      if (typeof v !== 'string') {
+        throw new AppError('dns.creds_invalid', 'Stored credentials are malformed', 500);
+      }
+      out[field] = v;
+    }
+    return out;
   }
 
   private toSummary(row: DnsProvider): DnsProviderSummary {
     let tokenMask: string | null = null;
     try {
-      const creds = JSON.parse(this.box.open(row.credentialsCipher)) as CloudflareCredentials;
-      tokenMask = maskSecret(creds.apiToken);
+      const creds = this.openCreds(row);
+      // Mask the apiToken (Cloudflare) or the access-key id (Route 53). The
+      // secret key is never surfaced, even masked.
+      const shown = row.kind === 'cloudflare' ? creds['apiToken'] : creds['accessKeyId'];
+      if (shown) tokenMask = maskSecret(shown);
     } catch {
       // Decryption failure (e.g. JWT_SECRET rotated). Surface as null mask;
       // routes can decide to mark provider as broken.

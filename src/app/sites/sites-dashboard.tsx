@@ -42,11 +42,20 @@ import {
 } from "@/components";
 import { ApiError, apiFetch, type PublicUser } from "@/lib/v2/auth-client";
 
+type BackendType = "container" | "static" | "external";
+
 interface SiteSummary {
   id: string;
   primaryDomain: string;
   aliasDomains: string[];
-  upstreamUrl: string;
+  backendType: BackendType;
+  upstreamUrl: string | null;
+  containerName: string | null;
+  containerPort: number | null;
+  imageRef: string | null;
+  env: { key: string; value: string }[];
+  spaFallback: boolean;
+  currentDeployId: string | null;
   enableHttps: boolean;
   forceHttps: boolean;
   letsEncryptEmail: string | null;
@@ -62,12 +71,28 @@ interface SiteSummary {
 interface SiteForm {
   primaryDomain: string;
   aliasDomains: string;
+  backendType: BackendType;
   upstreamUrl: string;
+  containerName: string;
+  containerPort: string;
+  env: { key: string; value: string }[];
+  spaFallback: boolean;
   enableHttps: boolean;
   forceHttps: boolean;
   letsEncryptEmail: string;
   enabled: boolean;
   notes: string;
+}
+
+interface SiteCertStatusLite {
+  siteId: string;
+  configured: boolean;
+  dnsOk?: boolean;
+  certStatus: "active" | "pending" | "error";
+  servedOk: boolean;
+  httpStatus?: number;
+  reason?: string;
+  lastCheckedAt: string;
 }
 
 interface DnsProviderLite {
@@ -93,7 +118,12 @@ interface DnsRecommendation {
 const EMPTY_FORM: SiteForm = {
   primaryDomain: "",
   aliasDomains: "",
+  backendType: "container",
   upstreamUrl: "",
+  containerName: "",
+  containerPort: "",
+  env: [],
+  spaFallback: false,
   enableHttps: true,
   forceHttps: true,
   letsEncryptEmail: "",
@@ -105,7 +135,12 @@ function siteToForm(s: SiteSummary): SiteForm {
   return {
     primaryDomain: s.primaryDomain,
     aliasDomains: s.aliasDomains.join(", "),
-    upstreamUrl: s.upstreamUrl,
+    backendType: s.backendType,
+    upstreamUrl: s.upstreamUrl ?? "",
+    containerName: s.containerName ?? "",
+    containerPort: s.containerPort != null ? String(s.containerPort) : "",
+    env: s.env.map((e) => ({ ...e })),
+    spaFallback: s.spaFallback,
     enableHttps: s.enableHttps,
     forceHttps: s.forceHttps,
     letsEncryptEmail: s.letsEncryptEmail ?? "",
@@ -129,6 +164,7 @@ function siteStatusLabel(s: SiteSummary): string {
 function SitesInner({ user }: { user: PublicUser }) {
   const [rows, setRows] = useState<SiteSummary[] | null>(null);
   const [caddyConfigured, setCaddyConfigured] = useState<boolean | null>(null);
+  const [caddyReachable, setCaddyReachable] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -137,6 +173,8 @@ function SitesInner({ user }: { user: PublicUser }) {
   // dialog state
   const [editing, setEditing] = useState<SiteSummary | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deployFor, setDeployFor] = useState<SiteSummary | null>(null);
+  const openDeploy = (s: SiteSummary) => setDeployFor(s);
   const [form, setForm] = useState<SiteForm>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const dialogOpen = creating || editing !== null;
@@ -148,20 +186,38 @@ function SitesInner({ user }: { user: PublicUser }) {
   const [dnsLookupError, setDnsLookupError] = useState<string | null>(null);
   const [dnsLooking, setDnsLooking] = useState(false);
   const [dnsApplying, setDnsApplying] = useState(false);
+  const [certStatuses, setCertStatuses] = useState<Record<string, SiteCertStatusLite>>({});
+
+  // Live TLS/serving status per site — fetched after the list loads, in
+  // parallel and best-effort (a slow/failing probe never blocks the table).
+  const loadCertStatuses = useCallback(async (sites: SiteSummary[]) => {
+    await Promise.all(
+      sites.map(async (s) => {
+        try {
+          const cs = await apiFetch<SiteCertStatusLite>(`/api/v1/sites/${s.id}/cert-status`);
+          setCertStatuses((prev) => ({ ...prev, [s.id]: cs }));
+        } catch {
+          // leave unknown — the chip falls back to the static indicator
+        }
+      })
+    );
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const [list, status] = await Promise.all([
         apiFetch<SiteSummary[]>("/api/v1/sites"),
-        apiFetch<{ caddyConfigured: boolean }>("/api/v1/sites/status")
+        apiFetch<{ caddyConfigured: boolean; caddyReachable?: boolean }>("/api/v1/sites/status")
       ]);
       setRows(list);
       setCaddyConfigured(status.caddyConfigured);
+      setCaddyReachable(status.caddyReachable ?? null);
       setLoadError(null);
+      void loadCertStatuses(list);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : String(err));
     }
-  }, []);
+  }, [loadCertStatuses]);
 
   useEffect(() => {
     load();
@@ -259,13 +315,27 @@ function SitesInner({ user }: { user: PublicUser }) {
     setSubmitting(true);
     setActionError(null);
     try {
+      const backend =
+        form.backendType === "static"
+          ? { backendType: "static" as const, spaFallback: form.spaFallback }
+          : form.backendType === "container"
+            ? {
+                backendType: "container" as const,
+                containerName: form.containerName.trim(),
+                containerPort: Number(form.containerPort) || undefined,
+                // Drop empty rows; trim keys. Values pass through as-is.
+                env: form.env
+                  .filter((p) => p.key.trim())
+                  .map((p) => ({ key: p.key.trim(), value: p.value }))
+              }
+            : { backendType: "external" as const, upstreamUrl: form.upstreamUrl.trim() };
       const payload = {
         primaryDomain: form.primaryDomain.trim(),
         aliasDomains: form.aliasDomains
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean),
-        upstreamUrl: form.upstreamUrl.trim(),
+        ...backend,
         enableHttps: form.enableHttps,
         forceHttps: form.forceHttps,
         ...(form.letsEncryptEmail.trim()
@@ -378,31 +448,76 @@ function SitesInner({ user }: { user: PublicUser }) {
       )
     },
     {
-      key: "upstream",
-      header: "Upstream",
+      key: "backend",
+      header: "Backend",
       render: (r) => (
-        <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-          {r.upstreamUrl}
-        </Typography>
+        <Stack spacing={0.25}>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={
+              r.backendType === "container" ? "Container" : r.backendType === "static" ? "Static" : "External"
+            }
+            color={r.backendType === "static" ? "secondary" : "default"}
+            sx={{ width: "fit-content" }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+            {r.backendType === "container"
+              ? `${r.containerName ?? "—"}:${r.containerPort ?? "?"}`
+              : r.backendType === "static"
+                ? r.currentDeployId
+                  ? `deployed ${r.currentDeployId}`
+                  : "awaiting first deploy"
+                : (r.upstreamUrl ?? "—")}
+          </Typography>
+        </Stack>
       )
     },
     {
       key: "tls",
       header: "TLS",
-      width: 100,
-      render: (r) =>
-        r.enableHttps ? (
-          <StatusChip
-            status="ok"
-            label={r.forceHttps ? "Force" : "On"}
-            variant="outlined"
-            withIcon={false}
-          />
-        ) : (
-          <Typography variant="caption" color="text.secondary">
-            HTTP only
-          </Typography>
-        )
+      width: 120,
+      render: (r) => {
+        if (!r.enableHttps) {
+          return (
+            <Typography variant="caption" color="text.secondary">
+              HTTP only
+            </Typography>
+          );
+        }
+        const cs = certStatuses[r.id];
+        if (!cs) {
+          // Status not loaded yet — show the configured intent.
+          return (
+            <StatusChip
+              status="unknown"
+              label={r.forceHttps ? "Force" : "On"}
+              variant="outlined"
+              withIcon={false}
+            />
+          );
+        }
+        const map = {
+          active: { status: "ok" as const, label: "HTTPS live" },
+          pending: { status: "degraded" as const, label: "Issuing…" },
+          error: { status: "down" as const, label: "No cert" }
+        }[cs.certStatus];
+        const tip = [
+          cs.reason,
+          `configured: ${cs.configured ? "yes" : "no"}`,
+          cs.dnsOk === undefined ? null : `DNS points here: ${cs.dnsOk ? "yes" : "no"}`,
+          `checked ${formatRelativeTime(cs.lastCheckedAt)}`
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <Tooltip title={tip}>
+            <span>
+              <StatusChip status={map.status} label={map.label} variant="outlined" withIcon={false} />
+            </span>
+          </Tooltip>
+        );
+      }
     },
     {
       key: "status",
@@ -433,6 +548,15 @@ function SitesInner({ user }: { user: PublicUser }) {
     const busy = busyId === r.id;
     return (
       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+        {(r.backendType === "static" || r.backendType === "container") && (
+          <Tooltip title="Deploy tokens & CI">
+            <span>
+              <IconButton size="small" disabled={busy} onClick={() => openDeploy(r)}>
+                <CloudUploadIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <Tooltip title="Edit">
           <span>
             <IconButton size="small" disabled={busy} onClick={() => openEdit(r)}>
@@ -482,7 +606,7 @@ function SitesInner({ user }: { user: PublicUser }) {
             variant="contained"
             color="primary"
             size="small"
-            disabled={applying || !dirty || caddyConfigured === false}
+            disabled={applying || !dirty || caddyConfigured === false || caddyReachable === false}
             onClick={applyAll}
           >
             {applying ? "Applying…" : "Apply to Caddy"}
@@ -500,6 +624,13 @@ function SitesInner({ user }: { user: PublicUser }) {
           just won&apos;t be applied until Caddy is wired up.
         </Alert>
       )}
+      {caddyConfigured !== false && caddyReachable === false && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          The reverse proxy isn&apos;t running yet. Enable{" "}
+          <strong>Reverse proxy + automatic HTTPS</strong> on the <strong>Features</strong> page,
+          then Apply. You can create and edit sites now — they apply once it&apos;s up.
+        </Alert>
+      )}
       {loadError && (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setLoadError(null)}>
           Latest refresh failed: {loadError}
@@ -512,6 +643,8 @@ function SitesInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search sites…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}
@@ -534,6 +667,9 @@ function SitesInner({ user }: { user: PublicUser }) {
         <Box component="form" onSubmit={submit}>
           <DialogContent sx={{ pt: 0 }}>
             <Stack spacing={2.5}>
+              <Typography variant="subtitle2" color="text.secondary">
+                Domain
+              </Typography>
               <TextField
                 autoFocus
                 label="Primary domain"
@@ -554,16 +690,156 @@ function SitesInner({ user }: { user: PublicUser }) {
                 fullWidth
                 helperText="Comma-separated. Optional."
               />
+              <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
+                What to serve
+              </Typography>
               <TextField
-                label="Upstream"
-                placeholder="web:80 or http://10.0.0.5:8080"
-                value={form.upstreamUrl}
-                onChange={(e) => setForm({ ...form, upstreamUrl: e.target.value })}
+                select
+                label="Backend"
+                value={form.backendType}
+                onChange={(e) => setForm({ ...form, backendType: e.target.value as BackendType })}
                 disabled={submitting}
-                required
                 fullWidth
-                helperText="Where Caddy will reverse-proxy traffic."
-              />
+              >
+                <MenuItem value="container">Container app — the panel runs your Docker image</MenuItem>
+                <MenuItem value="static">Static site — upload a build, no server (HTML/JS/CSS)</MenuItem>
+                <MenuItem value="external">External URL — proxy a service you run elsewhere</MenuItem>
+              </TextField>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                {form.backendType === "container"
+                  ? "CI pushes an image to your registry, then triggers a deploy; the panel recreates the container and Caddy proxies it."
+                  : form.backendType === "static"
+                    ? "CI uploads your built files; Caddy serves them directly over HTTPS — no compute needed."
+                    : "Caddy reverse-proxies to a URL or host you run elsewhere."}
+              </Typography>
+
+              {form.backendType === "container" && (
+                <>
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      label="Container name"
+                      placeholder="app-myproject"
+                      value={form.containerName}
+                      onChange={(e) => setForm({ ...form, containerName: e.target.value })}
+                      disabled={submitting}
+                      required
+                      fullWidth
+                      helperText="Stable name the panel runs your image under."
+                    />
+                    <TextField
+                      label="Port"
+                      placeholder="8080"
+                      value={form.containerPort}
+                      onChange={(e) => setForm({ ...form, containerPort: e.target.value })}
+                      disabled={submitting}
+                      required
+                      sx={{ width: 140 }}
+                      helperText="App listen port."
+                    />
+                  </Stack>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                      Environment variables
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Stored in plaintext and applied on the next deploy — saving here does not
+                      restart a running container.
+                    </Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {form.env.map((pair, i) => (
+                        <Stack direction="row" spacing={1} key={i} alignItems="center">
+                          <TextField
+                            label="Key"
+                            value={pair.key}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                env: form.env.map((p, j) =>
+                                  j === i ? { ...p, key: e.target.value } : p
+                                )
+                              })
+                            }
+                            disabled={submitting}
+                            size="small"
+                            sx={{ flex: 1 }}
+                            placeholder="NODE_ENV"
+                          />
+                          <TextField
+                            label="Value"
+                            value={pair.value}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                env: form.env.map((p, j) =>
+                                  j === i ? { ...p, value: e.target.value } : p
+                                )
+                              })
+                            }
+                            disabled={submitting}
+                            size="small"
+                            sx={{ flex: 2 }}
+                            placeholder="production"
+                          />
+                          <Tooltip title="Remove">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  setForm({ ...form, env: form.env.filter((_, j) => j !== i) })
+                                }
+                                disabled={submitting}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      ))}
+                      <Box>
+                        <Button
+                          size="small"
+                          startIcon={<AddIcon />}
+                          onClick={() =>
+                            setForm({ ...form, env: [...form.env, { key: "", value: "" }] })
+                          }
+                          disabled={submitting}
+                        >
+                          Add variable
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </>
+              )}
+
+              {form.backendType === "static" && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.spaFallback}
+                      onChange={(_, v) => setForm({ ...form, spaFallback: v })}
+                      disabled={submitting}
+                    />
+                  }
+                  label="SPA fallback (serve index.html for unknown paths)"
+                />
+              )}
+
+              {form.backendType === "external" && (
+                <TextField
+                  label="Upstream"
+                  placeholder="web:80 or http://10.0.0.5:8080"
+                  value={form.upstreamUrl}
+                  onChange={(e) => setForm({ ...form, upstreamUrl: e.target.value })}
+                  disabled={submitting}
+                  required
+                  fullWidth
+                  helperText="Where Caddy will reverse-proxy traffic."
+                />
+              )}
+              <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
+                HTTPS
+              </Typography>
               <FormControlLabel
                 control={
                   <Switch
@@ -598,6 +874,9 @@ function SitesInner({ user }: { user: PublicUser }) {
                   />
                 </>
               )}
+              <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
+                Options
+              </Typography>
               <FormControlLabel
                 control={
                   <Switch
@@ -728,8 +1007,292 @@ function SitesInner({ user }: { user: PublicUser }) {
           </DialogActions>
         </Box>
       </Dialog>
+
+      {deployFor && (
+        <DeployDialog site={deployFor} onClose={() => setDeployFor(null)} onChanged={load} />
+      )}
     </PageShell>
   );
+}
+
+interface DeployTokenSummary {
+  id: string;
+  name: string;
+  scope: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+interface DeploySummary {
+  id: string;
+  kind: "static" | "container";
+  ref: string;
+  status: string;
+  active: boolean;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+function shortRef(d: DeploySummary): string {
+  if (d.kind === "container") {
+    // show the tag / last path segment of the image ref
+    const tag = d.ref.split(":").pop() ?? d.ref;
+    return tag.length > 24 ? `${tag.slice(0, 24)}…` : tag;
+  }
+  return d.ref;
+}
+
+function DeployDialog({
+  site,
+  onClose,
+  onChanged
+}: {
+  site: SiteSummary;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  const [tokens, setTokens] = useState<DeployTokenSummary[]>([]);
+  const [deploys, setDeploys] = useState<DeploySummary[]>([]);
+  const [minted, setMinted] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [rollingBack, setRollingBack] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [tk, dep] = await Promise.all([
+        apiFetch<DeployTokenSummary[]>(`/api/v1/sites/${site.id}/deploy-tokens`),
+        apiFetch<DeploySummary[]>(`/api/v1/sites/${site.id}/deploys`)
+      ]);
+      setTokens(tk);
+      setDeploys(dep);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    }
+  }, [site.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function rollback(d: DeploySummary) {
+    if (!confirm(`Roll ${site.primaryDomain} back to ${shortRef(d)}?`)) return;
+    setRollingBack(d.id);
+    try {
+      await apiFetch(`/api/v1/sites/${site.id}/deploys/${d.id}/rollback`, { method: "POST" });
+      toast.success(`Rolled back to ${shortRef(d)}`);
+      await load();
+      onChanged?.();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setRollingBack(null);
+    }
+  }
+
+  const scope = site.backendType === "container" ? "container" : "static";
+
+  async function mint() {
+    setBusy(true);
+    try {
+      const res = await apiFetch<DeployTokenSummary & { token: string }>(
+        `/api/v1/sites/${site.id}/deploy-tokens`,
+        { method: "POST", body: JSON.stringify({ name: "ci", scope }) }
+      );
+      setMinted(res.token);
+      await load();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(id: string) {
+    try {
+      await apiFetch(`/api/v1/sites/${site.id}/deploy-tokens/${id}`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : String(err));
+    }
+  }
+
+  const active = tokens.filter((t) => !t.revokedAt);
+  const yaml =
+    site.backendType === "static"
+      ? staticWorkflowYaml(site.id)
+      : containerWorkflowYaml(site.id, site.containerName ?? "app");
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>Deploy {site.primaryDomain}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2.5} sx={{ pt: 1 }}>
+          <Box>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="subtitle2">Deploy tokens</Typography>
+              <Button size="small" variant="outlined" onClick={mint} disabled={busy}>
+                Mint token
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Scoped to this site ({scope}). Used by CI — never your login. Shown once.
+            </Typography>
+            {minted && (
+              <Alert severity="success" sx={{ mt: 1 }} onClose={() => setMinted(null)}>
+                Copy this token now — it won&apos;t be shown again:
+                <Box component="pre" sx={{ m: "8px 0 0", p: 1, bgcolor: "action.hover", borderRadius: 1, fontSize: 12, overflowX: "auto" }}>
+                  {minted}
+                </Box>
+              </Alert>
+            )}
+            <Stack spacing={0.5} sx={{ mt: 1 }}>
+              {active.length === 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  No active tokens. Mint one to wire up CI.
+                </Typography>
+              )}
+              {active.map((t) => (
+                <Stack key={t.id} direction="row" alignItems="center" spacing={1}>
+                  <Chip size="small" label={t.scope} variant="outlined" />
+                  <Typography variant="body2" sx={{ flex: 1 }}>
+                    {t.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {t.lastUsedAt ? `used ${new Date(t.lastUsedAt).toLocaleDateString()}` : "never used"}
+                  </Typography>
+                  <Button size="small" color="error" onClick={() => revoke(t.id)}>
+                    Revoke
+                  </Button>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              Deploy history
+            </Typography>
+            {deploys.length === 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                No deploys yet. Once CI deploys this site, releases appear here and you can roll back.
+              </Typography>
+            ) : (
+              <Stack spacing={0.5}>
+                {deploys.map((d) => {
+                  const stale = d.status === "stale";
+                  return (
+                    <Stack key={d.id} direction="row" alignItems="center" spacing={1}>
+                      <Chip size="small" label={d.kind} variant="outlined" sx={{ fontSize: 10 }} />
+                      <Typography
+                        variant="body2"
+                        sx={{ flex: 1, fontFamily: "monospace", color: stale ? "text.disabled" : "text.primary" }}
+                      >
+                        {shortRef(d)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatRelativeTime(d.createdAt)}
+                      </Typography>
+                      {d.active ? (
+                        <StatusChip status="ok" label="Active" />
+                      ) : stale ? (
+                        <Tooltip title="Release files were pruned — cannot roll back">
+                          <span>
+                            <Button size="small" disabled>
+                              Pruned
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          size="small"
+                          onClick={() => rollback(d)}
+                          disabled={rollingBack !== null}
+                        >
+                          {rollingBack === d.id ? "Rolling back…" : "Roll back"}
+                        </Button>
+                      )}
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            )}
+          </Box>
+
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              GitHub Actions
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Add <code>DOCKER_GUI_URL</code> (this panel&apos;s URL) and{" "}
+              <code>DOCKER_GUI_DEPLOY_TOKEN</code> (the minted token) as repo secrets, then commit{" "}
+              <code>.github/workflows/deploy.yml</code>:
+            </Typography>
+            <Box
+              component="pre"
+              sx={{ mt: 1, p: 1.5, bgcolor: "#0b0e14", color: "#d6deeb", borderRadius: 1, fontSize: 11.5, overflowX: "auto", lineHeight: 1.5 }}
+            >
+              {yaml}
+            </Box>
+          </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function staticWorkflowYaml(siteId: string): string {
+  return `name: Deploy
+on: { push: { branches: [main] } }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci && npm run build
+      - name: Upload to docker-gui
+        run: |
+          tar -czf site.tgz -C dist .
+          curl --fail -X POST "$DOCKER_GUI_URL/api/v1/sites/${siteId}/deploy" \\
+            -H "Authorization: Bearer $DOCKER_GUI_DEPLOY_TOKEN" \\
+            -H "Content-Type: application/gzip" \\
+            --data-binary @site.tgz
+        env:
+          DOCKER_GUI_URL: \${{ secrets.DOCKER_GUI_URL }}
+          DOCKER_GUI_DEPLOY_TOKEN: \${{ secrets.DOCKER_GUI_DEPLOY_TOKEN }}`;
+}
+
+function containerWorkflowYaml(siteId: string, app: string): string {
+  return `name: Deploy
+on: { push: { branches: [main] } }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: \${{ secrets.REGISTRY_HOST }}
+          username: \${{ secrets.REGISTRY_USER }}
+          password: \${{ secrets.REGISTRY_PASSWORD }}
+      - uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: \${{ secrets.REGISTRY_HOST }}/${app}:\${{ github.sha }}
+      - name: Tell docker-gui to deploy
+        run: |
+          curl --fail -X POST "$DOCKER_GUI_URL/api/v1/sites/${siteId}/deploy" \\
+            -H "Authorization: Bearer $DOCKER_GUI_DEPLOY_TOKEN" \\
+            -H "Content-Type: application/json" \\
+            -d "{\\"image\\":\\"\${{ secrets.REGISTRY_HOST }}/${app}:\${{ github.sha }}\\"}"
+        env:
+          DOCKER_GUI_URL: \${{ secrets.DOCKER_GUI_URL }}
+          DOCKER_GUI_DEPLOY_TOKEN: \${{ secrets.DOCKER_GUI_DEPLOY_TOKEN }}`;
 }
 
 export default function SitesDashboard() {

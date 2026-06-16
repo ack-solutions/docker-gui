@@ -93,6 +93,11 @@ export class CloudflareClient {
     return { status: data.status };
   }
 
+  /** DnsProviderClient surface — verifies the scoped token. */
+  async verify(): Promise<{ status: string }> {
+    return this.verifyToken();
+  }
+
   async listZones(): Promise<DnsZone[]> {
     const out: DnsZone[] = [];
     let page = 1;

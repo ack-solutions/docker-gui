@@ -22,6 +22,7 @@ const GROUP_TITLES: Record<ConfigGroup, string> = {
   dns: 'DNS',
   storage: 'Storage',
   features: 'Features',
+  alerts: 'Alerts (email)',
   system: 'System',
 };
 

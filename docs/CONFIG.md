@@ -13,6 +13,7 @@ docker-gui reads configuration from three layers, in increasing precedence: hard
 - [Docker](#docker)
 - [Caddy (reverse proxy)](#caddy-(reverse-proxy))
 - [System](#system)
+- [Alerts (email)](#alerts-(email))
 
 ## Authentication
 
@@ -314,12 +315,12 @@ Host path where install.sh wrote configs, snapshots, and feature data. Used to b
 
 ### `caddy.adminUrl`
 
-URL of the Caddy admin API. Without this, Sites can be edited but Apply is disabled. Production compose default is http://caddy:2019 — reachable only on the internal docker network.
+URL of the Caddy admin API. Defaults to the on-demand reverse-proxy feature container (docker-gui-caddy:2019), reachable only on the internal docker network — so enabling Sites from the Features page works with no manual config. Apply stays pending until that container is running.
 
 | Field | Value |
 | --- | --- |
 | Type | `url` |
-| Default | _(unset → feature disabled or auto-detected)_ |
+| Default | `http://docker-gui-caddy:2019` |
 | Env var | `CADDY_ADMIN_URL` |
 | YAML path | `caddy.admin_url` |
 | UI editable | no |
@@ -329,7 +330,7 @@ URL of the Caddy admin API. Without this, Sites can be edited but Apply is disab
 Examples:
 
 ```
-http://caddy:2019
+http://docker-gui-caddy:2019
 ```
 
 ### `caddy.defaultLetsEncryptEmail`
@@ -392,5 +393,105 @@ Examples:
 
 ```
 2001:db8::1
+```
+
+## Alerts (email)
+
+### `alerts.smtp.host`
+
+SMTP server hostname for email alert delivery. Leave blank to disable email alerts (webhook delivery still works).
+
+| Field | Value |
+| --- | --- |
+| Type | `string` |
+| Default | _(unset → feature disabled or auto-detected)_ |
+| Env var | `ALERT_SMTP_HOST` |
+| YAML path | `alerts.smtp.host` |
+| UI editable | yes |
+| Restart required | yes |
+| Since | v0.2.0 |
+
+Examples:
+
+```
+smtp.sendgrid.net
+smtp.gmail.com
+```
+
+### `alerts.smtp.port`
+
+SMTP server port. 587 for STARTTLS (default), 465 for implicit TLS.
+
+| Field | Value |
+| --- | --- |
+| Type | `number` |
+| Default | `587` |
+| Env var | `ALERT_SMTP_PORT` |
+| YAML path | `alerts.smtp.port` |
+| Range | 1 – 65535 |
+| UI editable | yes |
+| Restart required | yes |
+| Since | v0.2.0 |
+
+### `alerts.smtp.secure`
+
+Use implicit TLS (set true for port 465). Leave false for STARTTLS on 587.
+
+| Field | Value |
+| --- | --- |
+| Type | `boolean` |
+| Default | `false` |
+| Env var | `ALERT_SMTP_SECURE` |
+| YAML path | `alerts.smtp.secure` |
+| UI editable | yes |
+| Restart required | yes |
+| Since | v0.2.0 |
+
+### `alerts.smtp.user`
+
+SMTP auth username. Leave blank for an unauthenticated relay.
+
+| Field | Value |
+| --- | --- |
+| Type | `string` |
+| Default | _(unset → feature disabled or auto-detected)_ |
+| Env var | `ALERT_SMTP_USER` |
+| YAML path | `alerts.smtp.user` |
+| UI editable | yes |
+| Restart required | yes |
+| Since | v0.2.0 |
+
+### `alerts.smtp.password` 🔒
+
+SMTP auth password / API key. Secret — masked in API and logs, never returned. Set via env only.
+
+| Field | Value |
+| --- | --- |
+| Type | `string` |
+| Default | _(unset → feature disabled or auto-detected)_ |
+| Env var | `ALERT_SMTP_PASSWORD` |
+| YAML path | _(env-only — never written to config.yml)_ |
+| UI editable | no |
+| Restart required | yes |
+| Since | v0.2.0 |
+
+### `alerts.smtp.from`
+
+From address for alert emails. Defaults to the SMTP username when omitted.
+
+| Field | Value |
+| --- | --- |
+| Type | `email` |
+| Default | _(unset → feature disabled or auto-detected)_ |
+| Env var | `ALERT_SMTP_FROM` |
+| YAML path | `alerts.smtp.from` |
+| UI editable | yes |
+| Restart required | yes |
+| Since | v0.2.0 |
+
+Examples:
+
+```
+alerts@example.com
 ```
 

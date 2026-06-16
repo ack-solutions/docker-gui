@@ -13,10 +13,10 @@ const SETUP_SECRET_HEADER = "x-setup-secret";
 type Mode = "loading" | "login" | "bootstrap";
 
 function safeNext(raw: string | null): string {
-  if (!raw) return "/containers";
+  if (!raw) return "/dashboard";
   // Only allow same-origin paths
   if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-  return "/containers";
+  return "/dashboard";
 }
 
 export default function LoginForm() {
@@ -195,7 +195,7 @@ export default function LoginForm() {
           color="text.secondary"
           sx={{ display: "block", textAlign: "center", mt: 2 }}
         >
-          After login: <code>/containers</code> · <code>/health</code>
+          After login: <code>/dashboard</code>
         </Typography>
       </Box>
     </PageShell>

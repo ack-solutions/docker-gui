@@ -66,19 +66,19 @@ describe('CaddyClient.getConfig', () => {
 
 describe('CaddyClient.ping', () => {
   it('returns true on 200', async () => {
-    const fetchMock = mockFetch({ 'GET /': { status: 200, body: 'Caddy is running' } });
+    const fetchMock = mockFetch({ 'GET /config/': { status: 200, body: '{}' } });
     const client = new CaddyClient({ adminUrl: 'http://x:2019', fetch: fetchMock });
     expect(await client.ping()).toBe(true);
   });
 
   it('returns false on network error', async () => {
-    const fetchMock = mockFetch({ 'GET /': new Error('ECONNREFUSED') });
+    const fetchMock = mockFetch({ 'GET /config/': new Error('ECONNREFUSED') });
     const client = new CaddyClient({ adminUrl: 'http://x:2019', fetch: fetchMock });
     expect(await client.ping()).toBe(false);
   });
 
   it('returns false on non-2xx', async () => {
-    const fetchMock = mockFetch({ 'GET /': { status: 503 } });
+    const fetchMock = mockFetch({ 'GET /config/': { status: 503 } });
     const client = new CaddyClient({ adminUrl: 'http://x:2019', fetch: fetchMock });
     expect(await client.ping()).toBe(false);
   });

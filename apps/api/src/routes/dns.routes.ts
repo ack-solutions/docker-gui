@@ -196,8 +196,11 @@ function toRecordInput(input: DnsRecordInputApi): DnsRecordInput {
 function mapApiError(err: unknown): unknown {
   if (err instanceof AppError) return err;
   if (err instanceof NotFoundError) return err;
-  // Cloudflare-specific
-  if (err instanceof Error && err.name === 'CloudflareError') {
+  // Provider-specific upstream errors → one stable code (matched by name to
+  // avoid importing each adapter). Without this, a Route 53 failure would
+  // bypass the contract and bubble to the global handler as an "Unhandled
+  // error", logging raw AWS SDK details.
+  if (err instanceof Error && (err.name === 'CloudflareError' || err.name === 'Route53Error')) {
     return new AppError('dns.upstream_error', err.message, 502);
   }
   return err;

@@ -232,6 +232,8 @@ function ImagesInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search images…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}

@@ -37,8 +37,8 @@ export const backupRoutes: FastifyPluginAsync<BackupRoutesOptions> = async (app,
       const input = parseBody(req, startBackupSchema);
       const job = await opts.backups.startBackup({
         connectionId: req.params.id,
-        s3ConnectionId: input.s3ConnectionId,
-        bucket: input.bucket,
+        ...(input.s3ConnectionId !== undefined ? { s3ConnectionId: input.s3ConnectionId } : {}),
+        ...(input.bucket !== undefined ? { bucket: input.bucket } : {}),
       });
       return reply.status(202).send(job);
     },

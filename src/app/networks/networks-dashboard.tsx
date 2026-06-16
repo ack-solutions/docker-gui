@@ -226,6 +226,8 @@ function NetworksInner({ user }: { user: PublicUser }) {
       )}
 
       <DataTable
+        searchable
+        searchPlaceholder="Search networks…"
         columns={columns}
         rows={rows ?? []}
         rowKey={(r) => r.id}
