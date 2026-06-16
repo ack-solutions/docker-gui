@@ -63,3 +63,18 @@ export interface RecommendedRecords {
   /** Records the user should create. */
   records: DnsRecordInput[];
 }
+
+/**
+ * Provider-agnostic client surface. Cloudflare and Route 53 adapters both
+ * implement this so DnsService can route by provider kind without caring about
+ * each provider's quirks (Route 53 has no per-record ids, batches changes, etc.).
+ */
+export interface DnsProviderClient {
+  /** Confirm the credentials work without mutating anything. */
+  verify(): Promise<{ status: string }>;
+  listZones(): Promise<DnsZone[]>;
+  listRecords(zoneId: string, name?: string): Promise<DnsRecord[]>;
+  createRecord(zoneId: string, input: DnsRecordInput): Promise<DnsRecord>;
+  updateRecord(zoneId: string, recordId: string, input: DnsRecordInput): Promise<DnsRecord>;
+  deleteRecord(zoneId: string, recordId: string): Promise<void>;
+}

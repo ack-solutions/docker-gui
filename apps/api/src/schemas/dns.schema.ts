@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const dnsProviderKindSchema = z.enum(['cloudflare']);
+export const dnsProviderKindSchema = z.enum(['cloudflare', 'route53']);
 export type DnsProviderKind = z.infer<typeof dnsProviderKindSchema>;
 
 export const dnsRecordTypeSchema = z.enum(['A', 'AAAA', 'CNAME', 'TXT', 'MX', 'CAA']);
@@ -25,17 +25,34 @@ export const dnsProviderSummarySchema = z.object({
 });
 export type DnsProviderSummary = z.infer<typeof dnsProviderSummarySchema>;
 
-export const createDnsProviderSchema = z.object({
-  name: z.string().min(1).max(80).trim(),
-  kind: dnsProviderKindSchema,
-  apiToken: z.string().min(20).max(200).trim(),
-});
+// Credentials differ per provider, so create is a discriminated union on kind.
+export const createDnsProviderSchema = z.discriminatedUnion('kind', [
+  z.object({
+    name: z.string().min(1).max(80).trim(),
+    kind: z.literal('cloudflare'),
+    apiToken: z.string().min(20).max(200).trim(),
+  }),
+  z.object({
+    name: z.string().min(1).max(80).trim(),
+    kind: z.literal('route53'),
+    accessKeyId: z.string().min(16).max(128).trim(),
+    secretAccessKey: z.string().min(20).max(256).trim(),
+    region: z.string().min(2).max(40).trim().default('us-east-1'),
+  }),
+]);
 export type CreateDnsProviderInput = z.infer<typeof createDnsProviderSchema>;
 
-export const updateDnsProviderSchema = z.object({
-  name: z.string().min(1).max(80).trim().optional(),
-  apiToken: z.string().min(20).max(200).trim().optional(),
-});
+// Update doesn't carry kind (it's fixed); the service validates the supplied
+// credential fields against the stored provider kind.
+export const updateDnsProviderSchema = z
+  .object({
+    name: z.string().min(1).max(80).trim().optional(),
+    apiToken: z.string().min(20).max(200).trim().optional(),
+    accessKeyId: z.string().min(16).max(128).trim().optional(),
+    secretAccessKey: z.string().min(20).max(256).trim().optional(),
+    region: z.string().min(2).max(40).trim().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'At least one field is required' });
 export type UpdateDnsProviderInput = z.infer<typeof updateDnsProviderSchema>;
 
 export const dnsRecordInputSchema = z.object({

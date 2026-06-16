@@ -181,13 +181,20 @@ async function main(): Promise<void> {
     const publicIpTimer = setInterval(() => {
       void publicIp
         .refresh()
-        .then((r) => {
-          if (r.changed) {
-            app.log.warn(
-              { previous: r.previous, current: r.current },
-              'server public IP changed — managed DNS records may need resync',
-            );
-          }
+        .then(async (r) => {
+          if (!r.changed) return;
+          app.log.warn(
+            { previous: r.previous, current: r.current },
+            'server public IP changed — resyncing managed DNS records',
+          );
+          // Dynamic DNS: re-point sites with a linked provider at the new IP.
+          const results = await dns.resyncSiteRecords();
+          const failed = results.filter((x) => !x.ok);
+          app.log.info(
+            { resynced: results.length - failed.length, failed: failed.length },
+            'DNS resync after IP change complete',
+          );
+          if (failed.length > 0) app.log.warn({ failed }, 'some DNS records could not be resynced');
         })
         .catch((err: unknown) => app.log.warn({ err }, 'public IP refresh failed'));
     }, 20 * 60 * 1000);
