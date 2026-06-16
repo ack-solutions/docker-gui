@@ -79,13 +79,13 @@ describe('FeaturesService.list', () => {
     );
   });
 
-  it('flags MinIO / email / postgres-gui as coming-soon', async () => {
+  it('flags email / postgres-gui as coming-soon (MinIO is now implemented)', async () => {
     const docker = makeDocker();
     const svc = buildSvc(docker);
     const list = await svc.list();
-    const minio = list.find((f) => f.key === 'minio');
-    expect(minio?.comingSoon).toBe(true);
-    expect(minio?.status).toBe('coming-soon');
+    expect(list.find((f) => f.key === 'email')?.comingSoon).toBe(true);
+    expect(list.find((f) => f.key === 'postgres-gui')?.comingSoon).toBe(true);
+    expect(list.find((f) => f.key === 'minio')?.comingSoon).toBe(false);
   });
 
   it('registry is implemented (NOT coming-soon) and reports a real status', async () => {
@@ -172,10 +172,47 @@ describe('FeaturesService.enable', () => {
 
   it('refuses to enable a coming-soon feature with a clear error', async () => {
     const svc = buildSvc(docker);
-    await expect(svc.enable('minio')).rejects.toMatchObject({
+    await expect(svc.enable('email')).rejects.toMatchObject({
       code: 'feature.coming_soon',
       statusCode: 400,
     });
+  });
+
+  it('launches MinIO with generated root credentials (not the default)', async () => {
+    const svc = buildSvc(docker);
+    await svc.enable('minio');
+    const spec = docker.createContainer.mock.calls[0]?.[0] as { Image: string; Env: string[] };
+    expect(spec.Image).toBe('minio/minio:latest');
+    const user = spec.Env.find((e) => e.startsWith('MINIO_ROOT_USER='));
+    const pass = spec.Env.find((e) => e.startsWith('MINIO_ROOT_PASSWORD='));
+    expect(user).toMatch(/^MINIO_ROOT_USER=dgui-[0-9a-f]{12}$/);
+    expect(pass).toBeDefined();
+    expect(pass).not.toBe('MINIO_ROOT_PASSWORD=minioadmin');
+  });
+
+  it('auto-registers a "Local MinIO" S3 connection with sealed credentials', async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const fakePrisma = {
+      s3Connection: { findUnique: vi.fn().mockResolvedValue(null), create, update: vi.fn() },
+    };
+    const cryptoBox = { seal: (s: string) => `sealed:${s}`, open: (s: string) => s };
+    const svc = new FeaturesService(docker as unknown as Docker, {
+      network: 'docker-gui_dgui',
+      hostInstallDir: '/opt/docker-gui',
+      prisma: fakePrisma as never,
+      cryptoBox: cryptoBox as never,
+    });
+    await svc.enable('minio');
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data).toMatchObject({
+      name: 'Local MinIO',
+      endpoint: 'http://docker-gui-minio:9000',
+      flavor: 'minio',
+      pathStyle: true,
+    });
+    expect(String(data.secretKeyCipher)).toMatch(/^sealed:/);
+    expect(String(data.accessKey)).toMatch(/^dgui-/);
   });
 
   it('records the error and throws when start() fails', async () => {

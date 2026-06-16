@@ -230,6 +230,8 @@ export async function buildTestEnv(opts: BuildTestEnvOptions = {}): Promise<Test
   const features = new FeaturesService(docker, {
     network: 'docker-gui_dgui',
     hostInstallDir: '/opt/docker-gui',
+    prisma,
+    cryptoBox,
   });
   const storage = new StorageService(prisma, cryptoBox, opts.storageOptions ?? {});
   const registry = new RegistryService(prisma, cryptoBox, opts.registryOptions ?? {});

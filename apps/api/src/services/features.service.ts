@@ -1,5 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import type Docker from 'dockerode';
+import type { PrismaClient } from '@prisma/client';
 import { AppError, NotFoundError } from '../lib/errors.js';
+import type { CryptoBox } from '../lib/crypto-box.js';
 
 /**
  * Optional add-on capabilities (reverse proxy, object storage, …) that the
@@ -25,6 +28,8 @@ export type FeatureStatus =
 interface BuildDeps {
   network: string; // Docker network the api container is on
   hostInstallDir: string; // host path to /opt/docker-gui (for bind mounts)
+  /** Per-enable generated secrets (e.g. MinIO root creds). */
+  secrets?: Record<string, string>;
 }
 
 interface FeatureDefinition {
@@ -113,11 +118,36 @@ const FEATURE_DEFINITIONS: FeatureDefinition[] = [
     displayName: 'MinIO object storage',
     category: 'storage',
     description:
-      'S3-compatible object storage with a custom UI for buckets, IAM, and visual policy editing. Coming soon — see the roadmap.',
+      'S3-compatible object storage. Enabling it launches MinIO on the internal network and auto-registers a "Local MinIO" connection on the Storage page (with generated root credentials). The console is on :9001 (loopback).',
     ports: [9000, 9001],
     containerName: 'docker-gui-minio',
     volumes: [`${PROJECT}_minio-data`],
     configHref: '/storage',
+    build: ({ network, secrets }) => ({
+      name: 'docker-gui-minio',
+      Image: 'minio/minio:latest',
+      Cmd: ['server', '/data', '--console-address', ':9001'],
+      Env: [
+        `MINIO_ROOT_USER=${secrets?.['accessKey'] ?? 'minioadmin'}`,
+        `MINIO_ROOT_PASSWORD=${secrets?.['secretKey'] ?? 'minioadmin'}`,
+      ],
+      Labels: {
+        'docker-gui.managed-by': 'features-service',
+        'docker-gui.feature': 'minio',
+      },
+      ExposedPorts: { '9000/tcp': {}, '9001/tcp': {} },
+      HostConfig: {
+        RestartPolicy: { Name: 'unless-stopped' },
+        PortBindings: {
+          // S3 API + console on loopback; the panel reaches the API over the
+          // docker network. Front with the reverse proxy for external access.
+          '9000/tcp': [{ HostIp: '127.0.0.1', HostPort: '9000' }],
+          '9001/tcp': [{ HostIp: '127.0.0.1', HostPort: '9001' }],
+        },
+        Binds: [`${PROJECT}_minio-data:/data`],
+        NetworkMode: network,
+      },
+    }),
   },
   {
     key: 'email',
@@ -201,7 +231,13 @@ export interface FeatureView {
 export interface FeaturesServiceOptions {
   network: string;
   hostInstallDir: string;
+  /** Used to auto-register the "Local MinIO" S3 connection on enable. */
+  prisma?: PrismaClient;
+  cryptoBox?: CryptoBox;
 }
+
+const MINIO_CONNECTION_NAME = 'Local MinIO';
+const MINIO_ENDPOINT = 'http://docker-gui-minio:9000';
 
 export class FeaturesService {
   private readonly errors = new Map<FeatureKey, string>();
@@ -243,20 +279,63 @@ export class FeaturesService {
       }
       await this.removeIfExists(def.containerName);
 
+      // MinIO needs root credentials: generate them, launch with them, then
+      // register a Storage connection so the Storage page works immediately.
+      const secrets = key === 'minio' ? this.generateMinioSecrets() : undefined;
+
       const spec = def.build({
         network: this.opts.network,
         hostInstallDir: this.opts.hostInstallDir,
+        ...(secrets ? { secrets } : {}),
       });
       const created = (await (this.docker as unknown as {
         createContainer: (s: DockerCreateContainerOpts) => Promise<{ start: () => Promise<void> }>;
       }).createContainer(spec));
       await created.start();
+
+      if (key === 'minio' && secrets) {
+        // Best-effort: a failure here shouldn't undo a running MinIO.
+        await this.registerMinioConnection(secrets).catch((e: unknown) =>
+          this.errors.set(key, `MinIO started, but registering the Storage connection failed: ${String(e)}`),
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to enable feature';
       this.errors.set(key, message);
       throw new AppError('feature.enable_failed', message, 500);
     }
     return this.toView(def);
+  }
+
+  private generateMinioSecrets(): { accessKey: string; secretKey: string } {
+    return {
+      accessKey: `dgui-${randomBytes(6).toString('hex')}`,
+      secretKey: randomBytes(24).toString('base64url'),
+    };
+  }
+
+  /** Upsert the managed "Local MinIO" S3 connection with the launch creds, so
+   *  Storage works out of the box. No-op if persistence wasn't wired in. */
+  private async registerMinioConnection(secrets: { accessKey: string; secretKey: string }): Promise<void> {
+    const { prisma, cryptoBox } = this.opts;
+    if (!prisma || !cryptoBox) return;
+    const secretKeyCipher = cryptoBox.seal(secrets.secretKey);
+    const existing = await prisma.s3Connection.findUnique({ where: { name: MINIO_CONNECTION_NAME } });
+    const data = {
+      endpoint: MINIO_ENDPOINT,
+      region: 'us-east-1',
+      flavor: 'minio',
+      pathStyle: true,
+      accessKey: secrets.accessKey,
+      secretKeyCipher,
+      verified: false,
+      lastError: null,
+    };
+    if (existing) {
+      await prisma.s3Connection.update({ where: { id: existing.id }, data });
+    } else {
+      await prisma.s3Connection.create({ data: { name: MINIO_CONNECTION_NAME, ...data } });
+    }
   }
 
   /**

@@ -79,6 +79,8 @@ async function main(): Promise<void> {
   const features = new FeaturesService(docker, {
     network: config.DOCKER_GUI_NETWORK,
     hostInstallDir: config.DOCKER_GUI_INSTALL_DIR,
+    prisma,
+    cryptoBox,
   });
   const storage = new StorageService(prisma, cryptoBox);
   const registry = new RegistryService(prisma, cryptoBox);
