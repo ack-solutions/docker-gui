@@ -173,6 +173,99 @@ describe('PATCH /api/v1/sites/:id', () => {
   });
 });
 
+describe('container env vars', () => {
+  const auth = (t: string) => ({ authorization: `Bearer ${t}`, 'content-type': 'application/json' });
+
+  it('persists env on a container site and echoes it back (de-duped, last-wins)', async () => {
+    const token = await getToken();
+    const create = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/sites',
+      headers: auth(token),
+      payload: {
+        primaryDomain: 'app.example.com',
+        backendType: 'container',
+        containerName: 'my-app',
+        containerPort: 8080,
+        env: [
+          { key: 'NODE_ENV', value: 'production' },
+          { key: 'PORT', value: '8080' },
+          { key: 'NODE_ENV', value: 'staging' }, // duplicate → last wins
+        ],
+      },
+    });
+    expect(create.statusCode).toBe(201);
+    const id = create.json().data.id;
+
+    const got = await env.app.inject({
+      method: 'GET',
+      url: `/api/v1/sites/${id}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const env2 = got.json().data.env as Array<{ key: string; value: string }>;
+    const asMap = Object.fromEntries(env2.map((e) => [e.key, e.value]));
+    expect(asMap).toEqual({ NODE_ENV: 'staging', PORT: '8080' });
+
+    // Stored as a JSON map, ready for parseEnv on container recreate.
+    const row = await env.prisma.site.findUnique({ where: { id } });
+    expect(JSON.parse(row!.envJson!)).toEqual({ NODE_ENV: 'staging', PORT: '8080' });
+  });
+
+  it('rejects an invalid env var name with 400', async () => {
+    const token = await getToken();
+    const res = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/sites',
+      headers: auth(token),
+      payload: {
+        primaryDomain: 'bad-env.example.com',
+        backendType: 'container',
+        containerName: 'x',
+        containerPort: 80,
+        env: [{ key: '1BAD NAME', value: 'v' }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('PATCH replaces env; omitting env leaves it unchanged', async () => {
+    const token = await getToken();
+    const create = await env.app.inject({
+      method: 'POST',
+      url: '/api/v1/sites',
+      headers: auth(token),
+      payload: {
+        primaryDomain: 'patch-env.example.com',
+        backendType: 'container',
+        containerName: 'x',
+        containerPort: 80,
+        env: [{ key: 'A', value: '1' }],
+      },
+    });
+    const id = create.json().data.id;
+
+    // PATCH something else, omit env → env unchanged.
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/sites/${id}`,
+      headers: auth(token),
+      payload: { containerPort: 8081 },
+    });
+    let row = await env.prisma.site.findUnique({ where: { id } });
+    expect(JSON.parse(row!.envJson!)).toEqual({ A: '1' });
+
+    // PATCH env → replaced wholesale.
+    await env.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/sites/${id}`,
+      headers: auth(token),
+      payload: { env: [{ key: 'B', value: '2' }] },
+    });
+    row = await env.prisma.site.findUnique({ where: { id } });
+    expect(JSON.parse(row!.envJson!)).toEqual({ B: '2' });
+  });
+});
+
 describe('DELETE /api/v1/sites/:id', () => {
   it('removes a site', async () => {
     const token = await getToken();

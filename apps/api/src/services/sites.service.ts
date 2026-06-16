@@ -6,6 +6,7 @@ import {
   createSiteSchema,
   updateSiteSchema,
   type CreateSiteInput,
+  type EnvVar,
   type SiteSummary,
   type UpdateSiteInput,
   type ApplyResult,
@@ -64,6 +65,7 @@ export class SitesService {
         ...(parsed.containerName !== undefined ? { containerName: parsed.containerName } : {}),
         ...(parsed.containerPort !== undefined ? { containerPort: parsed.containerPort } : {}),
         ...(parsed.imageRef !== undefined ? { imageRef: parsed.imageRef } : {}),
+        ...(parsed.env !== undefined ? { envJson: JSON.stringify(serializeEnv(parsed.env)) } : {}),
         spaFallback: parsed.spaFallback,
         enableHttps: parsed.enableHttps,
         forceHttps: parsed.forceHttps,
@@ -97,6 +99,7 @@ export class SitesService {
     if (parsed.containerName !== undefined) data['containerName'] = parsed.containerName;
     if (parsed.containerPort !== undefined) data['containerPort'] = parsed.containerPort;
     if (parsed.imageRef !== undefined) data['imageRef'] = parsed.imageRef;
+    if (parsed.env !== undefined) data['envJson'] = JSON.stringify(serializeEnv(parsed.env));
     if (parsed.spaFallback !== undefined) data['spaFallback'] = parsed.spaFallback;
     // Static sites never keep an upstream.
     if (parsed.backendType === 'static') data['upstreamUrl'] = null;
@@ -183,6 +186,7 @@ export function toSummary(s: Site): SiteSummary {
     containerName: s.containerName,
     containerPort: s.containerPort,
     imageRef: s.imageRef,
+    env: parseEnvSummary(s.envJson),
     spaFallback: s.spaFallback,
     currentDeployId: s.currentDeployId,
     enableHttps: s.enableHttps,
@@ -207,4 +211,32 @@ function parseAliases(raw: string | null | undefined): string[] {
     // ignore
   }
   return [];
+}
+
+/** Fold an env-var array into a JSON map (last value wins on duplicate keys). */
+function serializeEnv(pairs: EnvVar[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const { key, value } of pairs) out[key] = value;
+  return out;
+}
+
+/**
+ * Parse the stored envJson map back into the array form the API surfaces.
+ * Mirrors deploy.service.ts parseEnv coercion exactly so what the UI shows
+ * is what the container recreate applies — no behavioral drift.
+ */
+function parseEnvSummary(envJson: string | null | undefined): EnvVar[] {
+  if (!envJson) return [];
+  try {
+    const parsed: unknown = JSON.parse(envJson);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    const out: EnvVar[] = [];
+    for (const [key, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === 'string') out.push({ key, value: v });
+      else if (typeof v === 'number' || typeof v === 'boolean') out.push({ key, value: String(v) });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }

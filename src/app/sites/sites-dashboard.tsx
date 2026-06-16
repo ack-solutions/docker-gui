@@ -53,6 +53,7 @@ interface SiteSummary {
   containerName: string | null;
   containerPort: number | null;
   imageRef: string | null;
+  env: { key: string; value: string }[];
   spaFallback: boolean;
   currentDeployId: string | null;
   enableHttps: boolean;
@@ -74,6 +75,7 @@ interface SiteForm {
   upstreamUrl: string;
   containerName: string;
   containerPort: string;
+  env: { key: string; value: string }[];
   spaFallback: boolean;
   enableHttps: boolean;
   forceHttps: boolean;
@@ -109,6 +111,7 @@ const EMPTY_FORM: SiteForm = {
   upstreamUrl: "",
   containerName: "",
   containerPort: "",
+  env: [],
   spaFallback: false,
   enableHttps: true,
   forceHttps: true,
@@ -125,6 +128,7 @@ function siteToForm(s: SiteSummary): SiteForm {
     upstreamUrl: s.upstreamUrl ?? "",
     containerName: s.containerName ?? "",
     containerPort: s.containerPort != null ? String(s.containerPort) : "",
+    env: s.env.map((e) => ({ ...e })),
     spaFallback: s.spaFallback,
     enableHttps: s.enableHttps,
     forceHttps: s.forceHttps,
@@ -290,7 +294,11 @@ function SitesInner({ user }: { user: PublicUser }) {
             ? {
                 backendType: "container" as const,
                 containerName: form.containerName.trim(),
-                containerPort: Number(form.containerPort) || undefined
+                containerPort: Number(form.containerPort) || undefined,
+                // Drop empty rows; trim keys. Values pass through as-is.
+                env: form.env
+                  .filter((p) => p.key.trim())
+                  .map((p) => ({ key: p.key.trim(), value: p.value }))
               }
             : { backendType: "external" as const, upstreamUrl: form.upstreamUrl.trim() };
       const payload = {
@@ -650,28 +658,102 @@ function SitesInner({ user }: { user: PublicUser }) {
               </Typography>
 
               {form.backendType === "container" && (
-                <Stack direction="row" spacing={2}>
-                  <TextField
-                    label="Container name"
-                    placeholder="app-myproject"
-                    value={form.containerName}
-                    onChange={(e) => setForm({ ...form, containerName: e.target.value })}
-                    disabled={submitting}
-                    required
-                    fullWidth
-                    helperText="Stable name the panel runs your image under."
-                  />
-                  <TextField
-                    label="Port"
-                    placeholder="8080"
-                    value={form.containerPort}
-                    onChange={(e) => setForm({ ...form, containerPort: e.target.value })}
-                    disabled={submitting}
-                    required
-                    sx={{ width: 140 }}
-                    helperText="App listen port."
-                  />
-                </Stack>
+                <>
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      label="Container name"
+                      placeholder="app-myproject"
+                      value={form.containerName}
+                      onChange={(e) => setForm({ ...form, containerName: e.target.value })}
+                      disabled={submitting}
+                      required
+                      fullWidth
+                      helperText="Stable name the panel runs your image under."
+                    />
+                    <TextField
+                      label="Port"
+                      placeholder="8080"
+                      value={form.containerPort}
+                      onChange={(e) => setForm({ ...form, containerPort: e.target.value })}
+                      disabled={submitting}
+                      required
+                      sx={{ width: 140 }}
+                      helperText="App listen port."
+                    />
+                  </Stack>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                      Environment variables
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Stored in plaintext and applied on the next deploy — saving here does not
+                      restart a running container.
+                    </Typography>
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {form.env.map((pair, i) => (
+                        <Stack direction="row" spacing={1} key={i} alignItems="center">
+                          <TextField
+                            label="Key"
+                            value={pair.key}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                env: form.env.map((p, j) =>
+                                  j === i ? { ...p, key: e.target.value } : p
+                                )
+                              })
+                            }
+                            disabled={submitting}
+                            size="small"
+                            sx={{ flex: 1 }}
+                            placeholder="NODE_ENV"
+                          />
+                          <TextField
+                            label="Value"
+                            value={pair.value}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                env: form.env.map((p, j) =>
+                                  j === i ? { ...p, value: e.target.value } : p
+                                )
+                              })
+                            }
+                            disabled={submitting}
+                            size="small"
+                            sx={{ flex: 2 }}
+                            placeholder="production"
+                          />
+                          <Tooltip title="Remove">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  setForm({ ...form, env: form.env.filter((_, j) => j !== i) })
+                                }
+                                disabled={submitting}
+                              >
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      ))}
+                      <Box>
+                        <Button
+                          size="small"
+                          startIcon={<AddIcon />}
+                          onClick={() =>
+                            setForm({ ...form, env: [...form.env, { key: "", value: "" }] })
+                          }
+                          disabled={submitting}
+                        >
+                          Add variable
+                        </Button>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </>
               )}
 
               {form.backendType === "static" && (

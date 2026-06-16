@@ -28,6 +28,19 @@ const containerNameSchema = z
   .max(255)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/, 'Invalid container name');
 
+// One environment variable for a container backend. Names follow the POSIX
+// shape; values are arbitrary strings (stored in plaintext, applied on the
+// next deploy — they are config, not sealed secrets).
+export const envVarSchema = z.object({
+  key: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'Invalid env var name'),
+  value: z.string().max(8192),
+});
+export type EnvVar = z.infer<typeof envVarSchema>;
+
 export const siteSummarySchema = z.object({
   id: z.string(),
   primaryDomain: z.string(),
@@ -37,6 +50,7 @@ export const siteSummarySchema = z.object({
   containerName: z.string().nullable(),
   containerPort: z.number().int().nullable(),
   imageRef: z.string().nullable(),
+  env: z.array(envVarSchema),
   spaFallback: z.boolean(),
   currentDeployId: z.string().nullable(),
   enableHttps: z.boolean(),
@@ -62,6 +76,8 @@ const siteFields = z.object({
   containerName: containerNameSchema.optional(),
   containerPort: z.number().int().min(1).max(65535).optional(),
   imageRef: z.string().max(512).optional(),
+  // Optional (not .default([])) so PATCH can tell "omit" from "clear".
+  env: z.array(envVarSchema).max(100).optional(),
   spaFallback: z.boolean().default(false),
   enableHttps: z.boolean().default(true),
   forceHttps: z.boolean().default(true),
